@@ -6,7 +6,7 @@ resource "proxmox_virtual_environment_vm" "test_vm" {
     on_boot   = false
     machine   = "q35"
     tags      = ["terraform", "ubuntu"]
-    bios = "ovmf"
+    bios      = "ovmf"
 
     clone {
         vm_id = 1000
