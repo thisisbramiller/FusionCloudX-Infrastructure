@@ -21,6 +21,11 @@ resource "proxmox_virtual_environment_vm" "test_vm" {
         dedicated = 1024
     }
 
+    cpu {
+        cores = 2
+        type  = "x86-64-v2-AES"
+    }
+
     efi_disk {
       datastore_id = "local"
       file_format  = "qcow2"
