@@ -17,7 +17,7 @@ resource "proxmox_virtual_environment_vm" "test_vm" {
   }
 
   memory {
-    dedicated = 1024
+    dedicated = 2048
   }
 
   cpu {
