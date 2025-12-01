@@ -2,7 +2,6 @@ resource "proxmox_virtual_environment_vm" "test_vm" {
   name      = "test-vm"
   node_name = "zero"
   started   = true
-  reboot    = true
   on_boot   = false
   machine   = "q35"
   tags      = ["terraform", "ubuntu"]
