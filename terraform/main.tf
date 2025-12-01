@@ -43,6 +43,8 @@ resource "proxmox_virtual_environment_vm" "test_vm" {
         address = "dhcp"
       }
     }
+
+    user_data_file_id = proxmox_virtual_environment_file.user_data_cloud_config.id
   }
 
   operating_system {
