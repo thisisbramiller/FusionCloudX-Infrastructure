@@ -1,0 +1,5 @@
+- name: Apply common configuration
+  hosts: all
+  become: true
+  roles:
+    - common

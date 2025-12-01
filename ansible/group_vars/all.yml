@@ -1,0 +1,3 @@
+---
+# Global variables for Ansible runs
+example_var: "value"

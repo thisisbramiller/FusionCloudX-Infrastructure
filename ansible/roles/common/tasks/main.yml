@@ -1,0 +1,22 @@
+- name: Update apt cache (Debian/Ubuntu)
+  become: true
+  apt:
+    update_cache: yes
+  when: ansible_facts['os_family'] == 'Debian'
+
+- name: Ensure nginx is installed
+  package:
+    name: nginx
+    state: present
+
+- name: Ensure example user exists
+  user:
+    name: fusionuser
+    state: present
+    groups: sudo
+
+- name: Ensure nginx service is started and enabled
+  service:
+    name: nginx
+    state: started
+    enabled: yes
