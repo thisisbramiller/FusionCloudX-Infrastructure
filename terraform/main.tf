@@ -1,22 +1,3 @@
-terraform {
-  required_providers {
-    proxmox = {
-      source  = "bpg/proxmox"
-      version = "0.88.0"
-    }
-  }
-}
-
-provider "proxmox" {
-  endpoint = "https://zero.fusioncloudx.home:8006/"
-  insecure = true
-
-  ssh {
-    agent    = true
-    username = "terraform"
-  }
-}
-
 resource "proxmox_virtual_environment_vm" "test_vm" {
     name      = "test-vm"
     node_name = "zero"
