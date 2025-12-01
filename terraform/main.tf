@@ -7,6 +7,7 @@ resource "proxmox_virtual_environment_vm" "test_vm" {
   machine   = "q35"
   tags      = ["terraform", "ubuntu"]
   bios      = "ovmf"
+  stop_on_destroy = true
 
   clone {
     vm_id = 1000
