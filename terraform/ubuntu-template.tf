@@ -8,6 +8,8 @@ resource "proxmox_virtual_environment_vm" "ubuntu-template" {
   bios     = "seabios"
   template = true
 
+  boot_order = ["scsi1"]
+
   initialization {
     datastore_id = "vm-data"
     interface    = "scsi0"
@@ -28,7 +30,6 @@ resource "proxmox_virtual_environment_vm" "ubuntu-template" {
   disk {
     datastore_id = "vm-data"
     interface    = "scsi1"
-    iothread = true
     import_from = proxmox_virtual_environment_download_file.ubuntu-cloud-image.id
     size = 32
   }
