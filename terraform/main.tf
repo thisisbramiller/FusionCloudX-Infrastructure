@@ -16,7 +16,7 @@ resource "proxmox_virtual_environment_vm" "test_vm" {
   }
 
   agent {
-    enabled = false
+    enabled = true
   }
 
   memory {
