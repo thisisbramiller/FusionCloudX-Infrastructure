@@ -8,6 +8,8 @@ resource "proxmox_virtual_environment_vm" "test_vm" {
   tags      = ["terraform", "ubuntu"]
   bios      = "seabios"
 
+  depends_on = [ proxmox_virtual_environment_vm.ubuntu-template ]
+
   clone {
     vm_id = 1000
     full  = true

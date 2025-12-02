@@ -17,5 +17,12 @@ resource "proxmox_virtual_environment_vm" "ubuntu-template" {
         address = "dhcp"
       }
     }
+
+  }
+  
+  disk {
+    datastore_id = "vm-data"
+    interface    = "virtio"
   }
 }
+
