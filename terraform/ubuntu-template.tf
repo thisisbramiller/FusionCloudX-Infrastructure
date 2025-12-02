@@ -8,6 +8,10 @@ resource "proxmox_virtual_environment_vm" "ubuntu-template" {
   template = true
 
   initialization {
+    datastore_id = "vm-data"
+    interface = "scsi0"
+    file_format  = "qcow2"
+    
     user_account {
       username = "fcx"
     }
@@ -20,9 +24,9 @@ resource "proxmox_virtual_environment_vm" "ubuntu-template" {
 
   }
   
-  disk {
-    datastore_id = "vm-data"
-    interface    = "virtio"
-  }
+#   disk {
+#     datastore_id = "vm-data"
+#     interface    = "virtio0"
+#   }
 }
 
