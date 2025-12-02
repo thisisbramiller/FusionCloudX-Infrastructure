@@ -4,7 +4,6 @@ resource "proxmox_virtual_environment_vm" "test_vm" {
   started   = true
   on_boot   = false
   # machine   = "q35"
-  reboot = true
   tags      = ["terraform", "ubuntu"]
   bios      = "seabios"
 
