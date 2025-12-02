@@ -3,9 +3,10 @@ resource "proxmox_virtual_environment_vm" "test_vm" {
   node_name = "zero"
   started   = true
   on_boot   = false
-  machine   = "q35"
+  # machine   = "q35"
+  reboot = true
   tags      = ["terraform", "ubuntu"]
-  bios      = "ovmf"
+  bios      = "seabios"
 
   clone {
     vm_id = 1000
@@ -25,12 +26,12 @@ resource "proxmox_virtual_environment_vm" "test_vm" {
     type  = "x86-64-v2-AES"
   }
 
-  efi_disk {
-    datastore_id      = "local"
-    file_format       = "qcow2"
-    type              = "4m"
-    pre_enrolled_keys = true
-  }
+  # efi_disk {
+  #   datastore_id      = "local"
+  #   file_format       = "qcow2"
+  #   type              = "4m"
+  #   pre_enrolled_keys = true
+  # }
 
   initialization {
     datastore_id = "vm-data"
@@ -54,5 +55,5 @@ resource "proxmox_virtual_environment_vm" "test_vm" {
 }
 
 output "vm_ipv4_address" {
-  value = proxmox_virtual_environment_vm.test_vm.ipv4_addresses
+  value = proxmox_virtual_environment_vm.test_vm.ipv4_addresses[1][0]
 }
