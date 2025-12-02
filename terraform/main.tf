@@ -28,13 +28,6 @@ resource "proxmox_virtual_environment_vm" "test_vm" {
     type  = "x86-64-v2-AES"
   }
 
-  # efi_disk {
-  #   datastore_id      = "local"
-  #   file_format       = "qcow2"
-  #   type              = "4m"
-  #   pre_enrolled_keys = true
-  # }
-
   initialization {
     datastore_id = "vm-data"
     file_format  = "qcow2"
