@@ -23,7 +23,8 @@ resource "proxmox_virtual_environment_vm" "ubuntu-template" {
     }
 
   }
-  
+
+  serial_device {}
 #   disk {
 #     datastore_id = "vm-data"
 #     interface    = "virtio0"
