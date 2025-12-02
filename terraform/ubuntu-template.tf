@@ -9,9 +9,9 @@ resource "proxmox_virtual_environment_vm" "ubuntu-template" {
 
   initialization {
     datastore_id = "vm-data"
-    interface = "scsi0"
+    interface    = "scsi0"
     file_format  = "qcow2"
-    
+
     user_account {
       username = "fcx"
     }
@@ -24,10 +24,24 @@ resource "proxmox_virtual_environment_vm" "ubuntu-template" {
 
   }
 
+  disk {
+    datastore_id = "vm-data"
+    interface    = "scsi1"
+    iothread = true
+    import_from = proxmox_virtual_environment_download_file.ubuntu-cloud-image.id
+    size = 32
+  }
+
   serial_device {}
-#   disk {
-#     datastore_id = "vm-data"
-#     interface    = "virtio0"
-#   }
+
+}
+
+resource "proxmox_virtual_environment_download_file" "ubuntu-cloud-image" {
+    node_name = "zero"
+    datastore_id = "nas-infrastructure"
+    content_type = "import"
+    url = "https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img"
+
+    file_name = "noble-server-cloudimg-amd64.qcow2"
 }
 
