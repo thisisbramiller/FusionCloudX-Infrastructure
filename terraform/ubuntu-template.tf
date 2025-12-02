@@ -1,6 +1,7 @@
 resource "proxmox_virtual_environment_vm" "ubuntu-template" {
   name      = "ubuntu-template"
   node_name = "zero"
+  vm_id = 1000
 
   started  = false
   tags     = ["template", "ubuntu"]
@@ -33,6 +34,18 @@ resource "proxmox_virtual_environment_vm" "ubuntu-template" {
   }
 
   serial_device {}
+
+  vga {
+    type = "serial0"
+  }
+
+  cpu {
+    type = "x86-64-v2-AES"
+  }
+
+  network_device {
+    bridge = "vmbr0"
+  }
 
 }
 
