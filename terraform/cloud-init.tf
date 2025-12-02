@@ -15,6 +15,7 @@ resource "proxmox_virtual_environment_file" "user_data_cloud_config" {
               - sudo
             shell: /bin/bash
             sudo: ALL=(ALL) NOPASSWD:ALL
+        ssh_import_id: ['gh:thisisbramiller']
         package_update: true
         packages:
           - qemu-guest-agent
