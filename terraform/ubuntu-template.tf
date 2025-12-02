@@ -54,7 +54,7 @@ resource "proxmox_virtual_environment_download_file" "ubuntu-cloud-image" {
     datastore_id = "nas-infrastructure"
     content_type = "import"
     url = "https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img"
-
+    
     file_name = "noble-server-cloudimg-amd64.qcow2"
 }
 
