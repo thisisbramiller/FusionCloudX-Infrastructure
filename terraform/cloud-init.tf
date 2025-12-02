@@ -10,7 +10,7 @@ resource "proxmox_virtual_environment_file" "user_data_cloud_config" {
         timezone: America/Chicago
         users:
           - default
-          - name: ubuntu
+          - name: fcx
             groups:
               - sudo
             shell: /bin/bash
@@ -21,8 +21,8 @@ resource "proxmox_virtual_environment_file" "user_data_cloud_config" {
           - net-tools
           - curl
         runcmd:
-          - systemctl enable qemu guest-agent
-          - systemctl start qemu guest-agent
+          - systemctl enable qemu-guest-agent
+          - systemctl start qemu-guest-agent
           - echo "done" > /tmp/cloud-config.done
         EOF
 
