@@ -60,7 +60,7 @@ resource "proxmox_virtual_environment_download_file" "ubuntu-cloud-image" {
 
     provisioner "remote-exec" {
         inline = [
-            "virt-customize -a /mnt/pve/nas-infrastructure/import/${proxmox_virtual_environment_download_file.ubuntu-cloud-image.file_name} --run-command 'apt update && apt install -y qemu-guest-agent'"
+            "virt-customize -a /mnt/pve/nas-infrastructure/import/${proxmox_virtual_environment_download_file.ubuntu-cloud-image.file_name} --run-command 'apt update && apt install -y qemu-guest-agent --truncate /etc/machine-id'"
         ]
         connection {
             type        = "ssh"
