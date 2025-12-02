@@ -6,9 +6,10 @@ resource "proxmox_virtual_environment_file" "user_data_cloud_config" {
     source_raw {
         data = <<-EOF
         #cloud-config
-        hostname: test{{count.index + 1}}
+        hostname: test
         timezone: America/Chicago
         users:
+          - default
           - name: fcx
             groups:
               - sudo
@@ -16,6 +17,7 @@ resource "proxmox_virtual_environment_file" "user_data_cloud_config" {
             sudo: ALL=(ALL) NOPASSWD:ALL
             ssh_import_id: 
               - gh:thisisbramiller
+            lock_passwd: true
         package_update: true
         packages:
           - qemu-guest-agent
