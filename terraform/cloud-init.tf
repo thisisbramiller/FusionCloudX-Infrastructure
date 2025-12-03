@@ -1,10 +1,10 @@
 resource "proxmox_virtual_environment_file" "user_data_cloud_config" {
-    content_type = "snippets"
-    datastore_id = "nas-infrastructure"
-    node_name    = "zero"
+  content_type = "snippets"
+  datastore_id = "nas-infrastructure"
+  node_name    = "zero"
 
-    source_raw {
-        data = <<-EOF
+  source_raw {
+    data = <<-EOF
         #cloud-config
         # Hostname will be set by Proxmox from VM name
         timezone: America/Chicago
@@ -30,6 +30,6 @@ resource "proxmox_virtual_environment_file" "user_data_cloud_config" {
           - echo "done" > /tmp/cloud-config.done
         EOF
 
-        file_name = "user-data-cloud-config.yaml"
-    }
+    file_name = "user-data-cloud-config.yaml"
+  }
 }

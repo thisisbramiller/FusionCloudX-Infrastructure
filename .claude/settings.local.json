@@ -3,7 +3,11 @@
     "allow": [
       "Bash(test:*)",
       "Bash(cat:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(gh pr view:*)",
+      "Bash(terraform fmt:*)"
     ],
     "deny": [],
     "ask": []

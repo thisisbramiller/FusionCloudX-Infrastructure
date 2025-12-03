@@ -1,7 +1,7 @@
 resource "proxmox_virtual_environment_vm" "ubuntu-template" {
   name      = "ubuntu-template"
   node_name = "zero"
-  vm_id = 1000
+  vm_id     = 1000
 
   started  = false
   tags     = ["template", "ubuntu"]
@@ -30,8 +30,8 @@ resource "proxmox_virtual_environment_vm" "ubuntu-template" {
   disk {
     datastore_id = "vm-data"
     interface    = "scsi1"
-    import_from = proxmox_virtual_environment_download_file.ubuntu-cloud-image.id
-    size = 32
+    import_from  = proxmox_virtual_environment_download_file.ubuntu-cloud-image.id
+    size         = 32
   }
 
   serial_device {}
@@ -51,11 +51,11 @@ resource "proxmox_virtual_environment_vm" "ubuntu-template" {
 }
 
 resource "proxmox_virtual_environment_download_file" "ubuntu-cloud-image" {
-    node_name = "zero"
-    datastore_id = "nas-infrastructure"
-    content_type = "import"
-    url = "https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img"
-    
-    file_name = "noble-server-cloudimg-amd64.qcow2"
+  node_name    = "zero"
+  datastore_id = "nas-infrastructure"
+  content_type = "import"
+  url          = "https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img"
+
+  file_name = "noble-server-cloudimg-amd64.qcow2"
 }
 
