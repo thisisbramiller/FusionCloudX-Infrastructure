@@ -16,7 +16,7 @@ resource "proxmox_virtual_environment_vm" "qemu-vm" {
   clone {
     vm_id = 1000
     full  = each.value.full_clone
-    retries = 2
+    retries = 3
   }
 
   agent {
