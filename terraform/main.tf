@@ -1,10 +1,15 @@
-resource "proxmox_virtual_environment_vm" "test_vm" {
-  name      = "test-vm"
+resource "proxmox_virtual_environment_vm" "qemu-vm" {
+  for_each = var.vm_configs
+
+  vm_id = each.value.vm_id
+  name      = each.value.name
   node_name = "zero"
-  started   = true
+  started   = each.value.started
   on_boot   = false
   tags      = ["terraform", "ubuntu"]
   bios      = "seabios"
+
+
 
   depends_on = [proxmox_virtual_environment_vm.ubuntu-template]
 
@@ -18,11 +23,11 @@ resource "proxmox_virtual_environment_vm" "test_vm" {
   }
 
   memory {
-    dedicated = 2048
+    dedicated = each.value.memory_mb
   }
 
   cpu {
-    cores = 4
+    cores = each.value.cpu_cores
     type  = "x86-64-v2-AES"
   }
 
