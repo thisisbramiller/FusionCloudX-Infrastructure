@@ -35,5 +35,12 @@ variable vm_configs {
       cpu_cores = 2
       started   = true
     }
+    "immich" = {
+      vm_id     = 1104
+      name      = "immich"
+      memory_mb = 4096
+      cpu_cores = 2
+      started   = false
+    }
   }
 }
