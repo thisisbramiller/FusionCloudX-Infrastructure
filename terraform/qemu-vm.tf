@@ -16,7 +16,7 @@ resource "proxmox_virtual_environment_vm" "qemu-vm" {
   clone {
     vm_id = 1000
     full  = each.value.full_clone
-    retries = 3
+    retries = 4
   }
 
   agent {
@@ -43,6 +43,7 @@ resource "proxmox_virtual_environment_vm" "qemu-vm" {
     }
 
     user_data_file_id = proxmox_virtual_environment_file.user_data_cloud_config[each.key].id
+    vendor_data_file_id = proxmox_virtual_environment_file.vendor_data_cloud_config.id
   }
 
   operating_system {

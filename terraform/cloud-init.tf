@@ -8,7 +8,6 @@ resource "proxmox_virtual_environment_file" "user_data_cloud_config" {
     data = <<-EOF
         #cloud-config
         hostname: ${each.value.name}
-        timezone: America/Chicago
         users:
           - default
           - name: fcx
@@ -20,6 +19,21 @@ resource "proxmox_virtual_environment_file" "user_data_cloud_config" {
             ssh_import_id: 
               - gh:thisisbramiller
             lock_passwd: true
+        EOF
+
+    file_name = "user-data-cloud-config-${each.value.name}.yaml"
+  }
+}
+
+resource "proxmox_virtual_environment_file" "vendor_data_cloud_config" {
+  content_type = "snippets"
+  datastore_id = "nas-infrastructure"
+  node_name    = "zero"
+
+  source_raw {
+    data = <<-EOF
+        #cloud-config
+        timezone: America/Chicago
         package_update: true
         packages:
           - qemu-guest-agent
@@ -31,6 +45,6 @@ resource "proxmox_virtual_environment_file" "user_data_cloud_config" {
           - echo "done" > /tmp/cloud-config.done
         EOF
 
-    file_name = "user-data-cloud-config-${each.value.name}.yaml"
+    file_name = "vendor-data-cloud-config.yaml"
   }
 }
