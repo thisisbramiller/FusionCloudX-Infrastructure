@@ -7,7 +7,13 @@
       "Bash(git commit:*)",
       "Bash(git push:*)",
       "Bash(gh pr view:*)",
-      "Bash(terraform fmt:*)"
+      "Bash(terraform fmt:*)",
+      "Bash(gh api:*)",
+      "Bash(gh pr merge:*)",
+      "Bash(git checkout:*)",
+      "Bash(git pull:*)",
+      "Bash(git stash:*)",
+      "Bash(git branch:*)"
     ],
     "deny": [],
     "ask": []
