@@ -21,7 +21,7 @@ variable vm_configs {
       memory_mb = 2048
       cpu_cores = 2
       started   = true
-      full_clone = false
+      full_clone = true
     }
     "ansible" = {
       vm_id     = 1102
@@ -29,7 +29,7 @@ variable vm_configs {
       memory_mb = 2048
       cpu_cores = 2
       started   = true
-      full_clone = false
+      full_clone = true
     }
     "wazuh" = {
       vm_id     = 1103
@@ -37,15 +37,15 @@ variable vm_configs {
       memory_mb = 4096
       cpu_cores = 2
       started   = true
-      full_clone = false
+      full_clone = true
     }
     "immich" = {
       vm_id     = 1104
       name      = "immich"
       memory_mb = 4096
       cpu_cores = 2
-      started   = false
-      full_clone = false
+      started   = true
+      full_clone = true
     }
   }
 }
