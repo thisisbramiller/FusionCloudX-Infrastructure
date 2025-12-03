@@ -1,0 +1,22 @@
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+*.tfvars.json
+crash.log
+
+# Backup files
+*.backup
+
+# Ansible
+.vagrant/
+*.retry
+
+# Python
+venv/
+.env
+__pycache__/
+
+# OS
+Thumbs.db
+.DS_Store
