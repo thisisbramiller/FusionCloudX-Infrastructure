@@ -8,11 +8,10 @@ crash.log
 
 # Backup files
 *.backup
-*.retry
 
 # Ansible
-ansible.cfg
 .vagrant/
+*.retry
 
 # Python
 venv/
@@ -22,3 +21,6 @@ __pycache__/
 # OS
 Thumbs.db
 .DS_Store
+
+# Claude Code local settings
+.claude/settings.local.json

@@ -1,4 +1,6 @@
 terraform {
+  required_version = ">= 1.0"
+
   required_providers {
     proxmox = {
       source  = "bpg/proxmox"
@@ -7,14 +9,9 @@ terraform {
   }
 }
 
-variable proxmox_api_url {
-    type = string
-    default = "https://zero.fusioncloudx.home:8006/"
-    description = "Proxmox VE API URL"
-}
-
 provider "proxmox" {
   endpoint = var.proxmox_api_url
+  # TODO: Set up proper SSL certificates for production. See README for details.
   insecure = true
 
   ssh {

@@ -3,7 +3,6 @@ resource "proxmox_virtual_environment_vm" "test_vm" {
   node_name = "zero"
   started   = true
   on_boot   = false
-  # machine   = "q35"
   tags      = ["terraform", "ubuntu"]
   bios      = "seabios"
 

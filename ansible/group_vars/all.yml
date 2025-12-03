@@ -1,3 +1,9 @@
 ---
-# Global variables for Ansible runs
-example_var: "value"
+# Global variables for all Ansible hosts
+
+# User created by cloud-init (Terraform provisioning)
+ansible_user: fcx
+ansible_become: true
+
+# NOTE: Ansible roles are placeholder/example implementations
+# This file will be expanded as Ansible is actively developed

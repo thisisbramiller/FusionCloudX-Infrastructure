@@ -9,6 +9,8 @@
     name: nginx
     state: present
 
+# NOTE: Placeholder user creation for testing. Cloud-init creates 'fcx' user.
+# This role is not actively implemented yet and serves as an example.
 - name: Ensure example user exists
   user:
     name: fusionuser
