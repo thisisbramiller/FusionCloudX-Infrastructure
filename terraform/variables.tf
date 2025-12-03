@@ -11,6 +11,7 @@ variable vm_configs {
     memory_mb = number
     cpu_cores = number
     started = bool
+    full_clone = optional(bool, false)
   }))
 
   default = {
@@ -20,6 +21,7 @@ variable vm_configs {
       memory_mb = 2048
       cpu_cores = 2
       started   = true
+      full_clone = false
     }
     "ansible" = {
       vm_id     = 1102
@@ -27,6 +29,7 @@ variable vm_configs {
       memory_mb = 2048
       cpu_cores = 2
       started   = true
+      full_clone = false
     }
     "wazuh" = {
       vm_id     = 1103
@@ -34,6 +37,7 @@ variable vm_configs {
       memory_mb = 4096
       cpu_cores = 2
       started   = true
+      full_clone = false
     }
     "immich" = {
       vm_id     = 1104
@@ -41,6 +45,7 @@ variable vm_configs {
       memory_mb = 4096
       cpu_cores = 2
       started   = false
+      full_clone = false
     }
   }
 }
