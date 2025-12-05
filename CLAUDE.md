@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-FusionCloudX Infrastructure is an Infrastructure-as-Code repository for managing Proxmox Virtual Environment (PVE) resources using Terraform and Ansible. The repository provisions Ubuntu VMs from cloud images and configures them with Ansible.
+FusionCloudX Infrastructure is an Infrastructure-as-Code repository for managing **homelab/development** infrastructure on Proxmox Virtual Environment (PVE) using Terraform and Ansible. This repository provisions Ubuntu VMs for testing and development purposes. **Production workloads will be deployed separately on AWS infrastructure.**
 
 ## Architecture
 
@@ -15,10 +15,10 @@ The Terraform configuration is split into logical files:
 - `provider.tf` - Proxmox provider configuration using the `bpg/proxmox` provider (v0.88.0). Authentication uses SSH agent with user `terraform`. The provider connects to node `zero.fusioncloudx.home:8006`
 - `backend.tf` - Local state backend (stores state in `terraform.tfstate` at project root)
 - `ubuntu-template.tf` - Creates a VM template (ID 1000) from Ubuntu Noble cloud image. This downloads the image to `nas-infrastructure` datastore and creates a template with SCSI disk on `vm-data`
-- `cloud-init.tf` - Defines cloud-init user data configuration stored as a snippet on `nas-infrastructure` datastore
-- `main.tf` - Creates VM instances by cloning the template. VMs depend on the template being created first
-- `outputs.tf` - Exports VM IPv4 address from the QEMU guest agent (index [1][0])
-- `variables.tf` - Currently minimal/empty but exists for future variable definitions
+- `cloud-init.tf` - Defines cloud-init configuration with split user_data (per-VM) and vendor_data (shared). Stored as snippets on `nas-infrastructure` datastore
+- `qemu-vm.tf` - Creates VM instances using `for_each` loop pattern to dynamically provision multiple VMs from the template. Uses 10 retries for clone operations to handle storage lock contention
+- `outputs.tf` - Exports VM IPv4 addresses as a map (VM name → IP address) from QEMU guest agent
+- `variables.tf` - Defines `vm_configs` map with VM specifications (ID, name, memory, CPU, started, on_boot, full_clone)
 
 ### Key Terraform Resources
 
@@ -28,16 +28,32 @@ The Terraform configuration is split into logical files:
 3. Template is marked with `template = true` and `started = false`
 
 **VM Provisioning Flow:**
-1. `proxmox_virtual_environment_file.user_data_cloud_config` creates cloud-init configuration
-2. `proxmox_virtual_environment_vm.test_vm` clones template 1000 with full clone
-3. Cloud-init runs with custom user data (creates `fcx` user, installs packages, enables qemu-guest-agent)
+1. `proxmox_virtual_environment_file.user_data_cloud_config` creates per-VM cloud-init user_data (hostname, users)
+2. `proxmox_virtual_environment_file.vendor_data_cloud_config` creates shared cloud-init vendor_data (packages, timezone, commands)
+3. `proxmox_virtual_environment_vm.qemu-vm` uses `for_each` to clone template 1000 with full clone for each VM in `vm_configs`
+4. Cloud-init runs with split configuration on each VM
+
+**Current VMs Provisioned (4 total):**
+- **teleport** (VM ID 1101) - 2GB RAM, 2 CPU cores - Remote access service (planned)
+- **semaphore** (VM ID 1102) - 2GB RAM, 2 CPU cores - Ansible UI/automation (planned)
+- **wazuh** (VM ID 1103) - 4GB RAM, 2 CPU cores - SIEM/security monitoring (planned)
+- **immich** (VM ID 1104) - 4GB RAM, 2 CPU cores - Photo management (planned)
+
+All VMs are provisioned and running Ubuntu Noble base OS. Services are NOT yet installed - VMs are blank systems ready for service deployment.
 
 ### Cloud-Init Configuration
 
-The cloud-init config in `cloud-init.tf`:
-- Sets hostname to "test" and timezone to America/Chicago
-- Creates user `fcx` with sudo access (NOPASSWD) and SSH key import from GitHub user `thisisbramiller`
+The cloud-init config uses **split configuration** for flexibility:
+
+**User Data (per-VM in `cloud-init.tf`):**
+- Sets hostname to VM name (teleport, semaphore, wazuh, immich)
+- Creates user `fcx` with sudo access (NOPASSWD - appropriate for homelab/dev)
+- SSH key import from GitHub user `thisisbramiller`
 - Password authentication disabled (`lock_passwd: true`)
+
+**Vendor Data (shared across all VMs):**
+- Timezone: America/Chicago
+- Package updates enabled
 - Installs: qemu-guest-agent, net-tools, curl
 - Enables and starts qemu-guest-agent service
 
@@ -101,9 +117,9 @@ ansible all -m shell -a "uptime"
 - API endpoint uses self-signed certificates (`insecure = true`)
 
 ### Resource Dependencies
-- VMs in `main.tf` depend on the template in `ubuntu-template.tf` via `depends_on`
+- VMs in `qemu-vm.tf` depend on the template in `ubuntu-template.tf` via `depends_on`
 - The template must exist before cloning VMs from it
-- Cloud-init file must be created before VM initialization references it
+- Cloud-init files (user_data and vendor_data) must be created before VM initialization references them
 
 ### Datastores
 - `nas-infrastructure` - Used for cloud images and cloud-init snippets
@@ -111,9 +127,11 @@ ansible all -m shell -a "uptime"
 
 ### VM Specifications
 - Template: VM ID 1000, named "ubuntu-template", on node "zero"
-- VMs are full clones (not linked clones) of the template
-- Default VM config: 4 cores (x86-64-v2-AES), 2GB RAM, DHCP networking
-- Serial console enabled for all VMs
+- VMs are full clones (not linked clones) of the template by default
+- VM configs are defined in `variables.tf` with individual CPU, memory, and startup settings
+- All VMs: x86-64-v2-AES CPU type, DHCP networking, serial console enabled
+- Clone operations use 10 retries to handle storage lock contention
+- VMs auto-start on Proxmox host boot by default (`on_boot = true`)
 
 ### State Management
 - Terraform state is stored locally in the project root as `terraform.tfstate`
@@ -131,4 +149,8 @@ ansible all -m shell -a "uptime"
 
 ## Current Branch
 
-The working branch is `vm-clone`. The main branch for PRs is `main`.
+The working branch is `multi-vm`. The main branch for PRs is `main`.
+
+## Environment Context
+
+**This repository manages homelab/development infrastructure, not production.** VMs are provisioned for testing and development of services. Production infrastructure will be deployed separately on AWS using dedicated Terraform configurations.

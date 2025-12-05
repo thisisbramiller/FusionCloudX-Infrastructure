@@ -1,5 +1,5 @@
 resource "proxmox_virtual_environment_file" "user_data_cloud_config" {
-  for_each = var.vm_configs
+  for_each     = var.vm_configs
   content_type = "snippets"
   datastore_id = "nas-infrastructure"
   node_name    = "zero"
@@ -14,7 +14,9 @@ resource "proxmox_virtual_environment_file" "user_data_cloud_config" {
             groups:
               - sudo
             shell: /bin/bash
-            # NOTE: Passwordless sudo for lab/dev environments. Restrict for production use.
+            # NOTE: Passwordless sudo - appropriate for homelab/development infrastructure.
+            # These VMs are for testing and development, not production workloads.
+            # Production infrastructure will be deployed separately on AWS.
             sudo: ALL=(ALL) NOPASSWD:ALL
             ssh_import_id: 
               - gh:thisisbramiller
