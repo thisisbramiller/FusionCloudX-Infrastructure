@@ -20,7 +20,12 @@
       "mcp__clickup__clickup_get_workspace_tasks",
       "mcp__clickup__clickup_get_task",
       "mcp__clickup__clickup_search",
-      "mcp__clickup__clickup_get_task_comments"
+      "mcp__clickup__clickup_get_task_comments",
+      "Bash(find:*)",
+      "mcp__clickup__clickup_get_list",
+      "mcp__clickup__clickup_create_task_comment",
+      "mcp__clickup__clickup_create_task",
+      "mcp__clickup__clickup_create_list"
     ],
     "deny": [],
     "ask": []
