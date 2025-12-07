@@ -50,5 +50,11 @@ resource "proxmox_virtual_environment_vm" "qemu-vm" {
 
   serial_device {}
 
+  lifecycle {
+    ignore_changes = [
+      initialization,          # Ignore cloud-init state changes
+    ]
+  }
+
 }
 

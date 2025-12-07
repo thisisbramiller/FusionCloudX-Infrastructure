@@ -9,18 +9,23 @@ resource "proxmox_virtual_environment_file" "user_data_cloud_config" {
         #cloud-config
         hostname: ${each.value.name}
         users:
-          - default
-          - name: fcx
+          - name: ansible
             groups:
               - sudo
             shell: /bin/bash
-            # NOTE: Passwordless sudo - appropriate for homelab/development infrastructure.
-            # These VMs are for testing and development, not production workloads.
-            # Production infrastructure will be deployed separately on AWS.
             sudo: ALL=(ALL) NOPASSWD:ALL
             ssh_import_id: 
               - gh:thisisbramiller
             lock_passwd: true
+        ssh_pwauth: false
+        disable_root: true
+        growpart:
+          mode: auto
+          devices: ['/']
+        write_files:
+          - path: /var/lib/cloud-init.provision.ready
+            content: "Cloud-init provisioning complete.\n"
+            permissions: '0644'
         EOF
 
     file_name = "user-data-cloud-config-${each.value.name}.yaml"
