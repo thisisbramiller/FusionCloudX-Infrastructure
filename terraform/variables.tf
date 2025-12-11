@@ -19,9 +19,9 @@ variable "vm_configs" {
     "semaphore-ui" = {
       vm_id      = 1102
       name       = "semaphore-ui"
-      memory_mb  = 2048
+      memory_mb  = 4096
       cpu_cores  = 2
-      started    = false
+      started    = true
       full_clone = true
     }
   }

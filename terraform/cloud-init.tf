@@ -10,10 +10,10 @@ resource "proxmox_virtual_environment_file" "user_data_cloud_config" {
         hostname: ${each.value.name}
         users:
           - name: ansible
-            groups:
-              - sudo
+            gecos: Ansible User
             shell: /bin/bash
-            sudo: ALL=(ALL) NOPASSWD:ALL
+            groups: [sudo, users]
+            sudo: "ALL=(ALL) NOPASSWD:ALL"
             ssh_import_id: 
               - gh:thisisbramiller
             lock_passwd: true
