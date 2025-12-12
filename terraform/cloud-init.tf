@@ -46,6 +46,9 @@ resource "proxmox_virtual_environment_file" "vendor_data_cloud_config" {
           - qemu-guest-agent
           - net-tools
           - curl
+          # Python for Ansible management (ALL VMs need this)
+          - python3
+          - python3-pip
         runcmd:
           - systemctl enable qemu-guest-agent
           - systemctl start qemu-guest-agent
@@ -75,10 +78,7 @@ resource "proxmox_virtual_environment_file" "semaphore_vendor_data_cloud_config"
         package_update: true
         package_upgrade: true
         packages:
-          # Base system packages
-          - qemu-guest-agent
-          - net-tools
-          - curl
+          # Control plane specific packages (base packages inherited from standard vendor_data)
           - wget
           - git
           - unzip
@@ -86,10 +86,9 @@ resource "proxmox_virtual_environment_file" "semaphore_vendor_data_cloud_config"
           - software-properties-common
           - apt-transport-https
           - ca-certificates
-          # Python for Ansible
-          - python3
-          - python3-pip
-          - python3-venv
+          # Ansible (via apt, not pip - stable and maintained by Ubuntu)
+          - ansible
+          - ansible-core
           # Build tools (for some Ansible modules)
           - build-essential
           - libssl-dev
@@ -102,43 +101,7 @@ resource "proxmox_virtual_environment_file" "semaphore_vendor_data_cloud_config"
             content: "Infrastructure repository will be cloned here\n"
             permissions: '0644'
 
-          # Placeholder for environment variables (will be configured by Ansible)
-          - path: /etc/environment.d/semaphore.conf
-            content: |
-              # 1Password and Proxmox environment variables
-              # These will be configured by the bootstrap Ansible playbook
-              # OP_SERVICE_ACCOUNT_TOKEN=<to-be-configured>
-              # PROXMOX_VE_ENDPOINT=https://zero.fusioncloudx.home:8006
-            permissions: '0644'
-
-          # SSH config for ansible user (will be updated by bootstrap)
-          - path: /home/ansible/.ssh/config
-            content: |
-              # SSH Configuration for Infrastructure Management
-              Host github.com
-                HostName github.com
-                User git
-                IdentityFile ~/.ssh/github_deploy_key
-                StrictHostKeyChecking accept-new
-
-              Host proxmox zero.fusioncloudx.home
-                HostName zero.fusioncloudx.home
-                User terraform
-                IdentityFile ~/.ssh/proxmox_terraform_key
-                StrictHostKeyChecking accept-new
-
-              Host 192.168.*
-                User ansible
-                IdentityFile ~/.ssh/id_ed25519
-                StrictHostKeyChecking accept-new
-            owner: ansible:ansible
-            permissions: '0600'
-
         runcmd:
-          # Enable and start qemu-guest-agent
-          - systemctl enable qemu-guest-agent
-          - systemctl start qemu-guest-agent
-
           # Create ansible user home directories
           - mkdir -p /home/ansible/.ssh
           - mkdir -p /home/ansible/.ansible
@@ -147,9 +110,16 @@ resource "proxmox_virtual_environment_file" "semaphore_vendor_data_cloud_config"
           # Set proper ownership for infrastructure directory
           - chown -R ansible:ansible /opt/infrastructure
 
-          # Install Ansible via pip (latest stable version)
-          - python3 -m pip install --upgrade pip
-          - python3 -m pip install ansible ansible-core
+          # Smoke tests - verify installations
+          - |
+            echo "=== Semaphore-UI Cloud-Init Verification ===" > /var/log/cloud-init-verify.log
+            echo "Timestamp: $(date)" >> /var/log/cloud-init-verify.log
+            echo "" >> /var/log/cloud-init-verify.log
+            ansible --version >> /var/log/cloud-init-verify.log 2>&1 || echo "FAIL: ansible not installed" >> /var/log/cloud-init-verify.log
+            python3 --version >> /var/log/cloud-init-verify.log 2>&1 || echo "FAIL: python3 not installed" >> /var/log/cloud-init-verify.log
+            git --version >> /var/log/cloud-init-verify.log 2>&1 || echo "FAIL: git not installed" >> /var/log/cloud-init-verify.log
+            echo "" >> /var/log/cloud-init-verify.log
+            echo "=== Verification Complete ===" >> /var/log/cloud-init-verify.log
 
           # Create marker file
           - echo "Semaphore-UI cloud-init complete - $(date)" > /var/lib/cloud-init.semaphore.ready
