@@ -1,0 +1,44 @@
+---
+# ==============================================================================
+# Host Variables - postgresql-wazuh
+# ==============================================================================
+# PostgreSQL instance dedicated to Wazuh (SIEM)
+# ==============================================================================
+
+# Instance-specific PostgreSQL tuning
+# Override group_vars settings for this 4GB RAM instance
+postgresql_instance_config:
+  shared_buffers: "1GB"  # ~25% of 4GB RAM
+  effective_cache_size: "3GB"  # ~75% of 4GB RAM
+  work_mem: "16MB"
+  maintenance_work_mem: "256MB"
+  max_connections: 200  # Wazuh may need more connections
+
+# Database Configuration
+postgresql_databases:
+  - name: "wazuh"
+    owner: "wazuh"
+    encoding: "UTF-8"
+    lc_collate: "en_US.UTF-8"
+    lc_ctype: "en_US.UTF-8"
+    template: "template0"
+
+# Database Users
+postgresql_users:
+  - name: "wazuh"
+    password: "{{ vault_wazuh_db_password }}"
+    database: "wazuh"
+    priv: "ALL"
+    role_attr_flags: "CREATEDB,NOSUPERUSER,NOCREATEROLE"
+
+# Firewall Rules (if using ufw)
+postgresql_firewall_rules:
+  - rule: "allow"
+    port: "5432"
+    proto: "tcp"
+    from_ip: "192.168.0.0/16"  # Allow from local network
+    comment: "PostgreSQL for Wazuh"
+
+# Backup Configuration (for future implementation)
+postgresql_backup_enabled: true
+postgresql_backup_retention_days: 30  # Longer retention for security logs

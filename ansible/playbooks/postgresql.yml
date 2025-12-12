@@ -1,0 +1,67 @@
+---
+# ==============================================================================
+# PostgreSQL Deployment Playbook
+# ==============================================================================
+# Deploys and configures PostgreSQL database servers
+# ==============================================================================
+
+- name: Deploy PostgreSQL Database Servers
+  hosts: postgresql
+  become: yes
+  gather_facts: yes
+
+  pre_tasks:
+    - name: Display target hosts
+      debug:
+        msg: "Deploying PostgreSQL to {{ inventory_hostname }} ({{ ansible_host }})"
+      tags: ['always']
+
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600
+      tags: ['always']
+
+    - name: Set timezone
+      timezone:
+        name: "{{ timezone | default('America/Chicago') }}"
+      tags: ['always']
+
+  roles:
+    - role: postgresql
+      tags: ['postgresql']
+
+  post_tasks:
+    - name: Verify PostgreSQL is running
+      systemd:
+        name: postgresql
+        state: started
+      register: postgresql_status
+      tags: ['verify']
+
+    - name: Display PostgreSQL version
+      command: psql --version
+      become: yes
+      become_user: postgres
+      register: postgresql_version_output
+      changed_when: false
+      tags: ['verify']
+
+    - name: Show PostgreSQL version
+      debug:
+        msg: "{{ postgresql_version_output.stdout }}"
+      tags: ['verify']
+
+    - name: Display deployment summary
+      debug:
+        msg:
+          - "========================================"
+          - "PostgreSQL Deployment Complete!"
+          - "========================================"
+          - "Host: {{ inventory_hostname }}"
+          - "IP Address: {{ ansible_host }}"
+          - "PostgreSQL Version: {{ postgresql_version_output.stdout }}"
+          - "Databases: {{ postgresql_databases | map(attribute='name') | list | join(', ') | default('None') }}"
+          - "Users: {{ postgresql_users | map(attribute='name') | list | join(', ') | default('None') }}"
+          - "========================================"
+      tags: ['always']

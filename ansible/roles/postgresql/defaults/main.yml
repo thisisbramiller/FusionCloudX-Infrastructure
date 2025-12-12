@@ -1,0 +1,55 @@
+---
+# ==============================================================================
+# PostgreSQL Role - Default Variables
+# ==============================================================================
+# These are fallback defaults - actual configuration comes from group_vars
+# ==============================================================================
+
+# PostgreSQL Version
+postgresql_version: "15"
+
+# PostgreSQL Packages
+postgresql_packages:
+  - "postgresql-{{ postgresql_version }}"
+  - "postgresql-contrib-{{ postgresql_version }}"
+  - "postgresql-client-{{ postgresql_version }}"
+  - "python3-psycopg2"
+
+# Service
+postgresql_service_name: "postgresql"
+
+# Directories
+postgresql_data_directory: "/var/lib/postgresql/{{ postgresql_version }}/main"
+postgresql_conf_path: "/etc/postgresql/{{ postgresql_version }}/main/postgresql.conf"
+postgresql_hba_path: "/etc/postgresql/{{ postgresql_version }}/main/pg_hba.conf"
+postgresql_log_directory: "/var/log/postgresql"
+
+# Default databases (usually overridden in host_vars)
+postgresql_databases: []
+
+# Default users (usually overridden in host_vars)
+postgresql_users: []
+
+# Default global config (can be overridden)
+postgresql_global_config:
+  listen_addresses: "'localhost'"
+  port: 5432
+  max_connections: 100
+
+# Default HBA entries (can be overridden)
+postgresql_hba_entries:
+  - type: "local"
+    database: "all"
+    user: "all"
+    method: "peer"
+  - type: "host"
+    database: "all"
+    user: "all"
+    address: "127.0.0.1/32"
+    method: "scram-sha-256"
+
+# Instance-specific config (merged with global config)
+postgresql_instance_config: {}
+
+# Firewall
+postgresql_firewall_rules: []

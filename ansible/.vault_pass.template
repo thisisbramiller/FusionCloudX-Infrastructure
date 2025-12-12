@@ -1,0 +1,16 @@
+# ==============================================================================
+# Ansible Vault Password File Template
+# ==============================================================================
+#
+# INSTRUCTIONS:
+# 1. Copy this file to .vault_pass (without .template extension)
+# 2. Replace this content with your actual vault password
+# 3. Ensure .vault_pass is in .gitignore (already configured)
+# 4. Keep this password secure and backed up!
+#
+# Generate a strong password with:
+#   openssl rand -base64 32
+#
+# ==============================================================================
+
+YOUR_SECURE_VAULT_PASSWORD_HERE

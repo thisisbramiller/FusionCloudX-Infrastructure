@@ -1,0 +1,99 @@
+---
+# ==============================================================================
+# PostgreSQL Group Variables
+# ==============================================================================
+# Shared configuration for all PostgreSQL database servers
+# ==============================================================================
+
+# PostgreSQL Version
+postgresql_version: "15"  # Debian 12 default is PostgreSQL 15
+
+# PostgreSQL Global Configuration
+postgresql_global_config:
+  # Connection Settings
+  listen_addresses: "'*'"  # Listen on all interfaces (firewall controls access)
+  port: 5432
+  max_connections: 100
+
+  # Memory Settings (conservative defaults - tune per host if needed)
+  shared_buffers: "256MB"
+  effective_cache_size: "1GB"
+  work_mem: "4MB"
+  maintenance_work_mem: "64MB"
+
+  # WAL Settings
+  wal_buffers: "8MB"
+  max_wal_size: "1GB"
+  min_wal_size: "80MB"
+
+  # Query Planning
+  random_page_cost: 4.0
+  effective_io_concurrency: 2
+
+  # Logging
+  logging_collector: "on"
+  log_directory: "'/var/log/postgresql'"
+  log_filename: "'postgresql-%Y-%m-%d_%H%M%S.log'"
+  log_rotation_age: "1d"
+  log_rotation_size: "100MB"
+  log_line_prefix: "'%t [%p]: [%l-1] user=%u,db=%d,app=%a,client=%h '"
+  log_timezone: "'America/Chicago'"
+
+  # Locale
+  datestyle: "'iso, mdy'"
+  timezone: "'America/Chicago'"
+  lc_messages: "'en_US.UTF-8'"
+  lc_monetary: "'en_US.UTF-8'"
+  lc_numeric: "'en_US.UTF-8'"
+  lc_time: "'en_US.UTF-8'"
+  default_text_search_config: "'pg_catalog.english'"
+
+# PostgreSQL Authentication (pg_hba.conf)
+postgresql_hba_entries:
+  # Local connections
+  - type: "local"
+    database: "all"
+    user: "all"
+    method: "peer"
+
+  # IPv4 local connections
+  - type: "host"
+    database: "all"
+    user: "all"
+    address: "127.0.0.1/32"
+    method: "scram-sha-256"
+
+  # IPv6 local connections
+  - type: "host"
+    database: "all"
+    user: "all"
+    address: "::1/128"
+    method: "scram-sha-256"
+
+  # Allow connections from local network (adjust as needed)
+  - type: "host"
+    database: "all"
+    user: "all"
+    address: "192.168.0.0/16"
+    method: "scram-sha-256"
+
+# Default Admin User (postgres superuser)
+postgresql_admin_user: "postgres"
+# Password is defined in vault - see group_vars/vault.yml
+
+# Packages to install
+postgresql_packages:
+  - "postgresql-{{ postgresql_version }}"
+  - "postgresql-contrib-{{ postgresql_version }}"
+  - "postgresql-client-{{ postgresql_version }}"
+  - "python3-psycopg2"  # Required for Ansible PostgreSQL modules
+
+# Service name
+postgresql_service_name: "postgresql"
+
+# Data directory
+postgresql_data_directory: "/var/lib/postgresql/{{ postgresql_version }}/main"
+
+# Configuration files
+postgresql_conf_path: "/etc/postgresql/{{ postgresql_version }}/main/postgresql.conf"
+postgresql_hba_path: "/etc/postgresql/{{ postgresql_version }}/main/pg_hba.conf"

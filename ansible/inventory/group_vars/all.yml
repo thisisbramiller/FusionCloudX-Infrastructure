@@ -1,0 +1,30 @@
+---
+# ==============================================================================
+# Global Variables - All Hosts
+# ==============================================================================
+# Variables that apply to ALL hosts in the infrastructure
+# ==============================================================================
+
+# Timezone Configuration
+timezone: "America/Chicago"
+
+# DNS Configuration
+dns_nameservers:
+  - "1.1.1.1"
+  - "1.0.0.1"
+
+# NTP Configuration
+ntp_servers:
+  - "time.cloudflare.com"
+  - "0.pool.ntp.org"
+  - "1.pool.ntp.org"
+
+# Security Settings
+firewall_enabled: true
+automatic_security_updates: true
+
+# Monitoring (for future use)
+monitoring_enabled: false
+
+# Backup Configuration (for future use)
+backup_enabled: false

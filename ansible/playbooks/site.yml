@@ -1,0 +1,47 @@
+---
+# ==============================================================================
+# Site Playbook - FusionCloudX Infrastructure
+# ==============================================================================
+# Main playbook that orchestrates all infrastructure configuration
+# ==============================================================================
+
+- name: FusionCloudX Infrastructure - Complete Deployment
+  hosts: all
+  gather_facts: yes
+
+  tasks:
+    - name: Display infrastructure overview
+      debug:
+        msg:
+          - "========================================"
+          - "FusionCloudX Infrastructure Deployment"
+          - "========================================"
+          - "Total hosts: {{ groups['all'] | length }}"
+          - "PostgreSQL servers: {{ groups['postgresql'] | length if 'postgresql' in groups else 0 }}"
+          - "========================================"
+      run_once: yes
+      tags: ['always']
+
+# ==============================================================================
+# Database Servers
+# ==============================================================================
+
+- name: Deploy PostgreSQL Database Servers
+  import_playbook: postgresql.yml
+  tags: ['postgresql', 'databases']
+
+# ==============================================================================
+# Application Servers (future)
+# ==============================================================================
+
+# - name: Deploy Application Servers
+#   import_playbook: applications.yml
+#   tags: ['applications']
+
+# ==============================================================================
+# Monitoring (future)
+# ==============================================================================
+
+# - name: Deploy Monitoring Stack
+#   import_playbook: monitoring.yml
+#   tags: ['monitoring']

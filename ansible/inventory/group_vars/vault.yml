@@ -1,0 +1,28 @@
+---
+# ==============================================================================
+# Vault - Encrypted Secrets
+# ==============================================================================
+# This file contains encrypted secrets using ansible-vault
+#
+# To encrypt this file:
+#   ansible-vault encrypt group_vars/vault.yml
+#
+# To edit this file:
+#   ansible-vault edit group_vars/vault.yml
+#
+# To decrypt this file (temporary):
+#   ansible-vault decrypt group_vars/vault.yml
+#
+# IMPORTANT: This file should be encrypted before committing to git!
+# ==============================================================================
+
+# PostgreSQL Admin Password (postgres superuser)
+vault_postgresql_admin_password: "ChangeMe_PostgreSQL_Admin_Pass"
+
+# PostgreSQL Application User Passwords
+# These are referenced in host_vars for each database instance
+vault_semaphore_db_password: "ChangeMe_Semaphore_DB_Pass"
+vault_wazuh_db_password: "ChangeMe_Wazuh_DB_Pass"
+
+# Future secrets can be added here
+# vault_other_service_password: "ChangeMe"
