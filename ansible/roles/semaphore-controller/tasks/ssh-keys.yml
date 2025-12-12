@@ -1,0 +1,172 @@
+---
+# ==============================================================================
+# SSH Key Generation and Distribution
+# ==============================================================================
+# Generates SSH keys for:
+# 1. Management key (ansible@semaphore-ui) - for accessing managed hosts
+# 2. GitHub deploy key - for repository access
+# 3. Proxmox key - for Terraform Proxmox provider
+# ==============================================================================
+
+- name: Ensure .ssh directory exists for ansible user
+  ansible.builtin.file:
+    path: "{{ ansible_user_home }}/.ssh"
+    state: directory
+    owner: "{{ ansible_user_name }}"
+    group: "{{ ansible_user_name }}"
+    mode: '0700'
+  become: true
+
+# ==============================================================================
+# Generate Management SSH Key (for accessing managed hosts)
+# ==============================================================================
+
+- name: Check if management SSH key exists
+  ansible.builtin.stat:
+    path: "{{ ssh_management_key_path }}"
+  register: management_key_stat
+
+- name: Generate management SSH key
+  community.crypto.openssh_keypair:
+    path: "{{ ssh_management_key_path }}"
+    type: "{{ ssh_key_type }}"
+    comment: "{{ ssh_key_comment }}"
+    owner: "{{ ansible_user_name }}"
+    group: "{{ ansible_user_name }}"
+    mode: '0600'
+  become: true
+  when: not management_key_stat.stat.exists
+
+- name: Read management public key
+  ansible.builtin.slurp:
+    src: "{{ ssh_management_key_path }}.pub"
+  register: management_public_key_content
+  become: true
+
+- name: Display management public key
+  ansible.builtin.debug:
+    msg:
+      - "Management SSH Public Key:"
+      - "{{ management_public_key_content['content'] | b64decode }}"
+      - ""
+      - "This key should be added to managed hosts' ~/.ssh/authorized_keys"
+
+# ==============================================================================
+# Generate GitHub Deploy Key (for repository access)
+# ==============================================================================
+
+- name: Check if GitHub deploy key exists
+  ansible.builtin.stat:
+    path: "{{ ssh_github_deploy_key_path }}"
+  register: github_key_stat
+
+- name: Generate GitHub deploy key
+  community.crypto.openssh_keypair:
+    path: "{{ ssh_github_deploy_key_path }}"
+    type: "{{ ssh_key_type }}"
+    comment: "semaphore-ui-deploy-key@fusioncloudx"
+    owner: "{{ ansible_user_name }}"
+    group: "{{ ansible_user_name }}"
+    mode: '0600'
+  become: true
+  when: not github_key_stat.stat.exists
+
+- name: Read GitHub deploy public key
+  ansible.builtin.slurp:
+    src: "{{ ssh_github_deploy_key_path }}.pub"
+  register: github_public_key_content
+  become: true
+
+- name: Display GitHub deploy key
+  ansible.builtin.debug:
+    msg:
+      - "GitHub Deploy Key (Public):"
+      - "{{ github_public_key_content['content'] | b64decode }}"
+      - ""
+      - "Add this key to GitHub repository deploy keys:"
+      - "Repository Settings > Deploy keys > Add deploy key"
+      - "Allow write access if you want to push changes from Semaphore"
+
+# ==============================================================================
+# Generate Proxmox SSH Key (for Terraform provider)
+# ==============================================================================
+
+- name: Check if Proxmox SSH key exists
+  ansible.builtin.stat:
+    path: "{{ ssh_proxmox_key_path }}"
+  register: proxmox_key_stat
+
+- name: Generate Proxmox SSH key
+  community.crypto.openssh_keypair:
+    path: "{{ ssh_proxmox_key_path }}"
+    type: "{{ ssh_key_type }}"
+    comment: "semaphore-terraform@proxmox"
+    owner: "{{ ansible_user_name }}"
+    group: "{{ ansible_user_name }}"
+    mode: '0600'
+  become: true
+  when: not proxmox_key_stat.stat.exists
+
+- name: Read Proxmox public key
+  ansible.builtin.slurp:
+    src: "{{ ssh_proxmox_key_path }}.pub"
+  register: proxmox_public_key_content
+  become: true
+
+- name: Display Proxmox key
+  ansible.builtin.debug:
+    msg:
+      - "Proxmox SSH Public Key:"
+      - "{{ proxmox_public_key_content['content'] | b64decode }}"
+      - ""
+      - "Add this key to Proxmox 'terraform' user authorized_keys:"
+      - "ssh root@zero.fusioncloudx.home"
+      - "mkdir -p /root/.ssh"
+      - "echo '<public-key>' >> /root/.ssh/authorized_keys"
+
+# ==============================================================================
+# Configure SSH client
+# ==============================================================================
+
+- name: Configure SSH client for ansible user
+  ansible.builtin.template:
+    src: ssh_config.j2
+    dest: "{{ ansible_user_home }}/.ssh/config"
+    owner: "{{ ansible_user_name }}"
+    group: "{{ ansible_user_name }}"
+    mode: '0600'
+  become: true
+
+# ==============================================================================
+# Distribute Management Key to Managed Hosts
+# ==============================================================================
+
+- name: Distribute SSH key to managed hosts
+  ansible.posix.authorized_key:
+    user: "{{ ansible_user_name }}"
+    state: present
+    key: "{{ management_public_key_content['content'] | b64decode }}"
+  delegate_to: "{{ item.ansible_host }}"
+  loop: "{{ managed_hosts }}"
+  when: managed_hosts | length > 0
+  ignore_errors: true
+
+- name: Start SSH agent
+  ansible.builtin.shell: |
+    eval $(ssh-agent -s)
+    echo "SSH_AUTH_SOCK=$SSH_AUTH_SOCK" > {{ ansible_user_home }}/.ssh/agent.env
+    echo "SSH_AGENT_PID=$SSH_AGENT_PID" >> {{ ansible_user_home }}/.ssh/agent.env
+  args:
+    creates: "{{ ansible_user_home }}/.ssh/agent.env"
+  become: true
+  become_user: "{{ ansible_user_name }}"
+
+- name: Add SSH keys to agent
+  ansible.builtin.shell: |
+    source {{ ansible_user_home }}/.ssh/agent.env
+    ssh-add {{ ssh_management_key_path }}
+    ssh-add {{ ssh_github_deploy_key_path }}
+    ssh-add {{ ssh_proxmox_key_path }}
+  become: true
+  become_user: "{{ ansible_user_name }}"
+  changed_when: false

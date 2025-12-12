@@ -1,0 +1,84 @@
+---
+# ==============================================================================
+# Install Terraform
+# ==============================================================================
+# Installs Terraform using HashiCorp's official APT repository
+# ==============================================================================
+
+- name: Check if Terraform is already installed
+  ansible.builtin.command: terraform version
+  register: terraform_version_check
+  changed_when: false
+  failed_when: false
+
+- name: Display current Terraform version
+  ansible.builtin.debug:
+    msg: "Terraform is already installed: {{ terraform_version_check.stdout_lines[0] }}"
+  when: terraform_version_check.rc == 0
+
+- name: Install Terraform
+  when: terraform_version_check.rc != 0 or terraform_version_check.stdout is not search(terraform_version)
+  block:
+    - name: Download HashiCorp GPG key
+      ansible.builtin.get_url:
+        url: "{{ terraform_gpg_key_url }}"
+        dest: /usr/share/keyrings/hashicorp-archive-keyring.asc
+        mode: '0644'
+      become: true
+
+    - name: Add HashiCorp repository
+      ansible.builtin.apt_repository:
+        repo: "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.asc] {{ terraform_repo_url }} {{ ansible_distribution_release }} main"
+        state: present
+        filename: hashicorp
+      become: true
+
+    - name: Update apt cache
+      ansible.builtin.apt:
+        update_cache: true
+      become: true
+
+    - name: Install Terraform
+      ansible.builtin.apt:
+        name: "terraform={{ terraform_version }}"
+        state: present
+      become: true
+
+- name: Verify Terraform installation
+  ansible.builtin.command: terraform version
+  register: terraform_verify
+  changed_when: false
+
+- name: Display Terraform version
+  ansible.builtin.debug:
+    msg: "{{ terraform_verify.stdout_lines }}"
+
+# ==============================================================================
+# Install Terraform 1Password Provider
+# ==============================================================================
+
+- name: Create Terraform plugins directory
+  ansible.builtin.file:
+    path: "{{ ansible_user_home }}/.terraform.d/plugins"
+    state: directory
+    owner: "{{ ansible_user_name }}"
+    group: "{{ ansible_user_name }}"
+    mode: '0755'
+  become: true
+
+- name: Initialize Terraform providers (will download on first use)
+  ansible.builtin.debug:
+    msg: "Terraform providers will be downloaded automatically when terraform init is run"
+
+# ==============================================================================
+# Configure Terraform CLI
+# ==============================================================================
+
+- name: Create Terraform CLI config
+  ansible.builtin.template:
+    src: terraformrc.j2
+    dest: "{{ ansible_user_home }}/.terraformrc"
+    owner: "{{ ansible_user_name }}"
+    group: "{{ ansible_user_name }}"
+    mode: '0644'
+  become: true
