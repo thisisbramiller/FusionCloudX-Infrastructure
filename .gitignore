@@ -11,6 +11,10 @@ crash.log
 # Ansible
 .vagrant/
 *.retry
+ansible/.vault_pass
+ansible/inventory/hosts.ini.backup.*
+ansible/.ansible_facts/
+ansible/*.log
 
 # Python
 venv/
