@@ -18,15 +18,16 @@
           - "========================================"
           - "Total hosts: {{ groups['all'] | length }}"
           - "PostgreSQL servers: {{ groups['postgresql'] | length if 'postgresql' in groups else 0 }}"
+          - "Note: Single PostgreSQL instance hosts multiple databases"
           - "========================================"
       run_once: yes
       tags: ['always']
 
 # ==============================================================================
-# Database Servers
+# Database Server
 # ==============================================================================
 
-- name: Deploy PostgreSQL Database Servers
+- name: Deploy PostgreSQL Database Server
   import_playbook: postgresql.yml
   tags: ['postgresql', 'databases']
 

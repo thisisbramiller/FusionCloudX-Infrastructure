@@ -68,11 +68,11 @@
 - name: Set PostgreSQL admin (postgres) user password
   postgresql_user:
     name: "{{ postgresql_admin_user }}"
-    password: "{{ vault_postgresql_admin_password }}"
+    password: "{{ postgresql_admin_password }}"
     encrypted: yes
   become: yes
   become_user: postgres
-  when: vault_postgresql_admin_password is defined
+  when: postgresql_admin_password is defined
   tags: ['postgresql', 'users']
   no_log: true  # Don't log passwords
 

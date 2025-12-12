@@ -1,8 +1,9 @@
 # ==============================================================================
 # Update Ansible Inventory from Terraform Outputs (PowerShell)
 # ==============================================================================
-# This script extracts PostgreSQL LXC container IPs from Terraform and
+# This script extracts the PostgreSQL LXC container IP from Terraform and
 # updates the Ansible inventory file
+# Note: Single PostgreSQL container hosting multiple databases
 # ==============================================================================
 
 $ErrorActionPreference = "Stop"
@@ -15,6 +16,8 @@ $InventoryFile = Join-Path $ScriptDir "inventory\hosts.ini"
 
 Write-Host "========================================" -ForegroundColor Blue
 Write-Host "Updating Ansible Inventory from Terraform" -ForegroundColor Blue
+Write-Host "========================================" -ForegroundColor Blue
+Write-Host "Single PostgreSQL container architecture" -ForegroundColor Blue
 Write-Host "========================================" -ForegroundColor Blue
 
 # Check if terraform directory exists
@@ -38,8 +41,8 @@ try {
 
     $PostgresqlJson = terraform output -json ansible_inventory_postgresql 2>$null
 
-    if (-not $PostgresqlJson -or $PostgresqlJson -eq "{}") {
-        Write-Host "Warning: No PostgreSQL containers found in Terraform outputs" -ForegroundColor Yellow
+    if (-not $PostgresqlJson -or $PostgresqlJson -eq "{}" -or $PostgresqlJson -eq "null") {
+        Write-Host "Warning: PostgreSQL container not found in Terraform outputs" -ForegroundColor Yellow
         Write-Host "Make sure you've run 'terraform apply' first" -ForegroundColor Yellow
         exit 1
     }
@@ -48,14 +51,19 @@ try {
     Write-Host "Parsing container information..." -ForegroundColor Blue
     $PostgresqlData = $PostgresqlJson | ConvertFrom-Json
 
-    # Build inventory entries
-    $PostgresqlEntries = @()
-    foreach ($key in $PostgresqlData.PSObject.Properties.Name) {
-        $container = $PostgresqlData.$key
-        $ip = $container.ip -replace '/24$', ''
-        $entry = "$key ansible_host=$ip"
-        $PostgresqlEntries += $entry
-    }
+    $Hostname = $PostgresqlData.hostname
+    $IP = $PostgresqlData.ip -replace '/24$', ''
+    $VmId = $PostgresqlData.vm_id
+    $Databases = ($PostgresqlData.databases.name -join ', ')
+
+    Write-Host "Found PostgreSQL container:" -ForegroundColor Green
+    Write-Host "  Hostname: $Hostname"
+    Write-Host "  IP: $IP"
+    Write-Host "  VM ID: $VmId"
+    Write-Host "  Databases: $Databases"
+
+    # Create inventory entry
+    $PostgresqlEntry = "$Hostname ansible_host=$IP"
 
     # Read current inventory
     $InventoryContent = Get-Content $InventoryFile -Raw
@@ -71,7 +79,7 @@ try {
     $Lines = $InventoryContent -split "`r?`n"
     $NewLines = @()
     $InPostgresql = $false
-    $AddedEntries = $false
+    $AddedEntry = $false
 
     foreach ($Line in $Lines) {
         if ($Line -match '^\[postgresql\]') {
@@ -81,21 +89,24 @@ try {
         }
 
         if ($Line -match '^\[.*\]' -and $InPostgresql) {
-            # End of postgresql section - add entries if not already added
-            if (-not $AddedEntries) {
-                $NewLines += $PostgresqlEntries
-                $AddedEntries = $true
+            # End of postgresql section - add entry if not already added
+            if (-not $AddedEntry) {
+                $NewLines += $PostgresqlEntry
+                $AddedEntry = $true
             }
             $InPostgresql = $false
         }
 
         if ($InPostgresql) {
-            # Skip old entries (non-comment lines that don't start with ansible_)
-            if ($Line -match '^[a-zA-Z]' -and $Line -notmatch '^#' -and $Line -notmatch '^ansible_') {
+            # Keep comments, blank lines, and ansible_ variables
+            if ($Line -match '^#' -or $Line.Trim() -eq '' -or $Line -match '^ansible_') {
+                $NewLines += $Line
+            }
+            # Skip old host entries (non-comment, non-blank, non-ansible_ lines)
+            elseif ($Line -match '^[a-zA-Z]' -and $Line -notmatch '^ansible_') {
                 continue
             }
-            # Keep comments and variable definitions
-            if ($Line -match '^#' -or $Line -match '^ansible_' -or $Line.Trim() -eq '') {
+            else {
                 $NewLines += $Line
             }
         } else {
@@ -104,8 +115,8 @@ try {
     }
 
     # If we're still in postgresql section at end of file
-    if ($InPostgresql -and -not $AddedEntries) {
-        $NewLines += $PostgresqlEntries
+    if ($InPostgresql -and -not $AddedEntry) {
+        $NewLines += $PostgresqlEntry
     }
 
     # Write updated inventory
@@ -115,13 +126,19 @@ try {
     Write-Host "Inventory update complete!" -ForegroundColor Green
     Write-Host "========================================" -ForegroundColor Green
     Write-Host ""
-    Write-Host "PostgreSQL containers added:" -ForegroundColor White
-    $PostgresqlEntries | ForEach-Object { Write-Host $_ }
+    Write-Host "PostgreSQL container added:" -ForegroundColor White
+    Write-Host "  $PostgresqlEntry"
+    Write-Host "  (Hosting databases: $Databases)"
     Write-Host ""
     Write-Host "Next steps:" -ForegroundColor Blue
     Write-Host "1. Review the updated inventory: cat $InventoryFile"
     Write-Host "2. Test connectivity: ansible postgresql -m ping"
     Write-Host "3. Deploy PostgreSQL: ansible-playbook playbooks/postgresql.yml"
+    Write-Host ""
+    Write-Host "Important:" -ForegroundColor Yellow
+    Write-Host "- This is a SINGLE container hosting MULTIPLE databases"
+    Write-Host "- Ensure 1Password CLI is installed and authenticated"
+    Write-Host "- Database credentials are managed via 1Password"
     Write-Host ""
 
 } finally {

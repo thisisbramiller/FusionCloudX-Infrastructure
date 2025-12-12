@@ -2,7 +2,8 @@
 # ==============================================================================
 # PostgreSQL Group Variables
 # ==============================================================================
-# Shared configuration for all PostgreSQL database servers
+# Shared configuration for the PostgreSQL database server
+# Note: This is a SINGLE container hosting MULTIPLE databases
 # ==============================================================================
 
 # PostgreSQL Version
@@ -13,18 +14,18 @@ postgresql_global_config:
   # Connection Settings
   listen_addresses: "'*'"  # Listen on all interfaces (firewall controls access)
   port: 5432
-  max_connections: 100
+  max_connections: 200  # Increased for multiple services
 
-  # Memory Settings (conservative defaults - tune per host if needed)
-  shared_buffers: "256MB"
-  effective_cache_size: "1GB"
-  work_mem: "4MB"
-  maintenance_work_mem: "64MB"
+  # Memory Settings (optimized for 4GB RAM container with multiple databases)
+  shared_buffers: "1GB"  # ~25% of 4GB RAM
+  effective_cache_size: "3GB"  # ~75% of 4GB RAM
+  work_mem: "16MB"  # Conservative for multiple concurrent queries
+  maintenance_work_mem: "256MB"
 
   # WAL Settings
-  wal_buffers: "8MB"
-  max_wal_size: "1GB"
-  min_wal_size: "80MB"
+  wal_buffers: "16MB"  # Increased for multiple databases
+  max_wal_size: "2GB"  # Increased for multiple databases
+  min_wal_size: "512MB"
 
   # Query Planning
   random_page_cost: 4.0
@@ -70,7 +71,7 @@ postgresql_hba_entries:
     address: "::1/128"
     method: "scram-sha-256"
 
-  # Allow connections from local network (adjust as needed)
+  # Allow connections from local network (homelab)
   - type: "host"
     database: "all"
     user: "all"
@@ -79,7 +80,7 @@ postgresql_hba_entries:
 
 # Default Admin User (postgres superuser)
 postgresql_admin_user: "postgres"
-# Password is defined in vault - see group_vars/vault.yml
+# Password is retrieved from 1Password (see host_vars/postgresql.yml)
 
 # Packages to install
 postgresql_packages:
@@ -97,3 +98,13 @@ postgresql_data_directory: "/var/lib/postgresql/{{ postgresql_version }}/main"
 # Configuration files
 postgresql_conf_path: "/etc/postgresql/{{ postgresql_version }}/main/postgresql.conf"
 postgresql_hba_path: "/etc/postgresql/{{ postgresql_version }}/main/pg_hba.conf"
+
+# ==============================================================================
+# Important Notes
+# ==============================================================================
+# - This configuration is for a SINGLE PostgreSQL instance
+# - The instance hosts MULTIPLE databases (semaphore, wazuh, etc.)
+# - Tuning is balanced for multiple concurrent services
+# - Per-database configuration is in host_vars/postgresql.yml
+# - Credentials are managed via 1Password lookups
+# ==============================================================================

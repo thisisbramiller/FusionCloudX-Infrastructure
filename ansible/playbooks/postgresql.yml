@@ -2,18 +2,33 @@
 # ==============================================================================
 # PostgreSQL Deployment Playbook
 # ==============================================================================
-# Deploys and configures PostgreSQL database servers
+# Deploys and configures SINGLE PostgreSQL database server
+# This server hosts MULTIPLE databases (semaphore, wazuh, etc.)
 # ==============================================================================
 
-- name: Deploy PostgreSQL Database Servers
+- name: Deploy PostgreSQL Database Server
   hosts: postgresql
   become: yes
   gather_facts: yes
 
   pre_tasks:
-    - name: Display target hosts
+    - name: Display target host
       debug:
         msg: "Deploying PostgreSQL to {{ inventory_hostname }} ({{ ansible_host }})"
+      tags: ['always']
+
+    - name: Verify 1Password CLI is available
+      command: op --version
+      register: op_version
+      changed_when: false
+      failed_when: false
+      delegate_to: localhost
+      become: no
+      tags: ['always']
+
+    - name: Display 1Password CLI status
+      debug:
+        msg: "{{ '1Password CLI available: ' + op_version.stdout if op_version.rc == 0 else 'WARNING: 1Password CLI not found - credential lookups will fail' }}"
       tags: ['always']
 
     - name: Update apt cache
@@ -52,6 +67,16 @@
         msg: "{{ postgresql_version_output.stdout }}"
       tags: ['verify']
 
+    - name: Test database connectivity
+      postgresql_query:
+        db: postgres
+        login_user: postgres
+        query: "SELECT datname FROM pg_database WHERE datistemplate = false;"
+      become: yes
+      become_user: postgres
+      register: databases_list
+      tags: ['verify']
+
     - name: Display deployment summary
       debug:
         msg:
@@ -61,7 +86,11 @@
           - "Host: {{ inventory_hostname }}"
           - "IP Address: {{ ansible_host }}"
           - "PostgreSQL Version: {{ postgresql_version_output.stdout }}"
-          - "Databases: {{ postgresql_databases | map(attribute='name') | list | join(', ') | default('None') }}"
-          - "Users: {{ postgresql_users | map(attribute='name') | list | join(', ') | default('None') }}"
+          - "Databases Created: {{ postgresql_databases | map(attribute='name') | list | join(', ') | default('None') }}"
+          - "Database Users: {{ postgresql_users | map(attribute='name') | list | join(', ') | default('None') }}"
+          - "Active Databases: {{ databases_list.query_result | map(attribute='datname') | list | join(', ') }}"
+          - "========================================"
+          - "This is a SINGLE instance hosting MULTIPLE databases"
+          - "Credentials managed via 1Password"
           - "========================================"
       tags: ['always']
