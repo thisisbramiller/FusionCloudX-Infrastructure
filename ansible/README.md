@@ -55,36 +55,79 @@ ansible/
 
 ### 1. Install Prerequisites
 
-**1Password CLI:**
+**Ansible and Required Collections:**
 
 ```bash
+# Install Ansible (if not already installed)
 # macOS
-brew install 1password-cli
+brew install ansible
 
 # Linux
-# See: https://developer.1password.com/docs/cli/get-started/
+sudo apt install ansible  # Debian/Ubuntu
+sudo yum install ansible   # RHEL/CentOS
 
-# Windows
-# Download from: https://1password.com/downloads/command-line/
+# Install required Ansible collections
+cd ansible
+ansible-galaxy collection install -r requirements.yml
 ```
 
-**Ansible 1Password Collection:**
+This installs the official **1Password Connect collection** (`onepassword.connect`).
+
+### 2. Setup 1Password Authentication
+
+The official 1Password Connect collection supports two authentication methods:
+
+#### Option A: 1Password Connect Server (Recommended for Homelab)
+
+1. Deploy 1Password Connect Server (self-hosted):
+   - Follow: https://developer.1password.com/docs/connect/get-started/
+
+2. Set environment variables:
 
 ```bash
-ansible-galaxy collection install community.general
+export OP_CONNECT_HOST="http://your-connect-server:8080"
+export OP_CONNECT_TOKEN="your-connect-token"
 ```
 
-### 2. Authenticate with 1Password
+#### Option B: 1Password Service Account (Simpler Alternative)
+
+1. Create a Service Account in 1Password:
+   - Go to: https://start.1password.com/integrations/infrastructure
+
+2. Set environment variable:
 
 ```bash
-# Sign in to 1Password
-eval $(op signin)
-
-# Verify authentication
-op account list
+export OP_SERVICE_ACCOUNT_TOKEN="ops_your_service_account_token"
 ```
 
-### 3. Update Inventory from Terraform
+**Verify Authentication:**
+
+```bash
+# Test lookup
+ansible localhost -m debug -a "msg={{ lookup('onepassword.connect.generic_item', 'PostgreSQL Admin (postgres)', field='password', vault='FusionCloudX Infrastructure') }}"
+```
+
+### 3. Configure Environment Variables (Persistence)
+
+For persistent authentication, add to your shell profile:
+
+```bash
+# ~/.bashrc or ~/.zshrc (Linux/macOS)
+export OP_SERVICE_ACCOUNT_TOKEN="ops_your_service_account_token"
+
+# Or for Connect Server
+export OP_CONNECT_HOST="http://your-connect-server:8080"
+export OP_CONNECT_TOKEN="your-connect-token"
+```
+
+On Windows (PowerShell):
+
+```powershell
+# $PROFILE
+$env:OP_SERVICE_ACCOUNT_TOKEN = "ops_your_service_account_token"
+```
+
+### 4. Update Inventory from Terraform
 
 After deploying the LXC container with Terraform, update the Ansible inventory:
 
@@ -100,7 +143,7 @@ cd ansible
 
 This script extracts the PostgreSQL container IP from Terraform outputs and updates `inventory/hosts.ini`.
 
-### 4. Test Connectivity
+### 5. Test Connectivity
 
 Verify Ansible can connect to the PostgreSQL host:
 
@@ -115,7 +158,7 @@ ansible postgresql -m ping
 # }
 ```
 
-### 5. Deploy PostgreSQL
+### 6. Deploy PostgreSQL
 
 Run the PostgreSQL deployment playbook:
 
@@ -132,7 +175,15 @@ ansible-playbook playbooks/postgresql.yml -v
 
 ## 🔐 1Password Integration
 
-All credentials are managed via **1Password** (NOT ansible-vault).
+All credentials are managed via **1Password Connect** (NOT ansible-vault or 1Password CLI).
+
+### Authentication Methods
+
+This configuration uses the **official 1Password Connect Ansible collection** (`onepassword.connect`):
+- **Connect Server**: Self-hosted 1Password Connect (recommended for homelab)
+- **Service Account**: Direct API access via token (simpler setup)
+
+See the Quick Start section for authentication setup.
 
 ### Required 1Password Items
 
@@ -151,17 +202,23 @@ Create these items in the **"FusionCloudX Infrastructure"** vault:
 
 ### Credential Lookup in Ansible
 
-Variables use the 1Password lookup plugin:
+Variables use the **official 1Password Connect lookup plugin**:
 
 ```yaml
-password: "{{ lookup('community.general.onepassword', 'ITEM_NAME', field='password', vault='FusionCloudX Infrastructure') }}"
+password: "{{ lookup('onepassword.connect.generic_item', 'ITEM_NAME', field='password', vault='FusionCloudX Infrastructure') }}"
 ```
 
 ### Testing 1Password Lookups
 
 ```bash
+# Ensure environment variables are set
+export OP_SERVICE_ACCOUNT_TOKEN="ops_your_token"
+# OR
+export OP_CONNECT_HOST="http://connect-server:8080"
+export OP_CONNECT_TOKEN="your-token"
+
 # Test lookup manually
-ansible localhost -m debug -a "msg={{ lookup('community.general.onepassword', 'PostgreSQL Admin (postgres)', field='password', vault='FusionCloudX Infrastructure') }}"
+ansible localhost -m debug -a "msg={{ lookup('onepassword.connect.generic_item', 'PostgreSQL Admin (postgres)', field='password', vault='FusionCloudX Infrastructure') }}"
 ```
 
 ## 📊 PostgreSQL Role
@@ -211,10 +268,10 @@ postgresql_databases:
 ```yaml
 postgresql_users:
   - name: "semaphore"
-    password: "{{ lookup('community.general.onepassword', '...') }}"
+    password: "{{ lookup('onepassword.connect.generic_item', '...') }}"
     # ...
   - name: "wazuh"
-    password: "{{ lookup('community.general.onepassword', '...') }}"
+    password: "{{ lookup('onepassword.connect.generic_item', '...') }}"
     # ...
 ```
 
@@ -277,16 +334,22 @@ terraform apply
 cd ../ansible
 ./update-inventory.sh  # or update-inventory.ps1 on Windows
 
-# 3. Authenticate with 1Password
-eval $(op signin)
+# 3. Configure 1Password authentication
+export OP_SERVICE_ACCOUNT_TOKEN="ops_your_token"
+# OR use Connect Server
+export OP_CONNECT_HOST="http://connect-server:8080"
+export OP_CONNECT_TOKEN="your-token"
 
-# 4. Test connectivity
+# 4. Install Ansible collections
+ansible-galaxy collection install -r requirements.yml
+
+# 5. Test connectivity
 ansible postgresql -m ping
 
-# 5. Deploy PostgreSQL
+# 6. Deploy PostgreSQL
 ansible-playbook playbooks/postgresql.yml
 
-# 6. Verify deployment
+# 7. Verify deployment
 ansible-playbook playbooks/postgresql.yml --tags verify
 ```
 
@@ -344,7 +407,7 @@ postgresql_databases:
 postgresql_users:
   # ... existing ...
   - name: "newapp"
-    password: "{{ lookup('community.general.onepassword', 'PostgreSQL - NewApp DB User', field='password', vault='FusionCloudX Infrastructure') }}"
+    password: "{{ lookup('onepassword.connect.generic_item', 'PostgreSQL - NewApp DB User', field='password', vault='FusionCloudX Infrastructure') }}"
     database: "newapp"
     priv: "ALL"
     role_attr_flags: "CREATEDB,NOSUPERUSER,NOCREATEROLE"
@@ -414,17 +477,20 @@ ansible-playbook playbooks/postgresql.yml --tags databases,users
 ### 1Password Authentication Issues
 
 ```bash
-# Check 1Password CLI
-op --version
+# Check environment variables
+echo $OP_SERVICE_ACCOUNT_TOKEN
+# OR
+echo $OP_CONNECT_HOST
+echo $OP_CONNECT_TOKEN
 
-# Sign in
-eval $(op signin)
+# Test lookup with official collection
+ansible localhost -m debug -a "msg={{ lookup('onepassword.connect.generic_item', 'PostgreSQL Admin (postgres)', field='password', vault='FusionCloudX Infrastructure') }}"
 
-# Test lookup
-ansible localhost -m debug -a "msg={{ lookup('community.general.onepassword', 'PostgreSQL Admin (postgres)', field='password', vault='FusionCloudX Infrastructure') }}"
+# Verify collection is installed
+ansible-galaxy collection list | grep onepassword
 
-# List vaults
-op vault list
+# Reinstall if needed
+ansible-galaxy collection install onepassword.connect --force
 ```
 
 ### Connection Issues
@@ -476,15 +542,22 @@ terraform output -json ansible_inventory_postgresql | jq '.'
 
 ## 🚨 Migration Notes
 
-**Previous Architecture (Deprecated - 2025-12-12):**
+**Previous Architecture v1 (Deprecated - 2025-12-12):**
 - Multiple PostgreSQL containers (postgresql-semaphore, postgresql-wazuh)
 - Each service had its own dedicated container
 - Used ansible-vault for credentials
 
+**Previous Architecture v2 (Deprecated - 2025-12-12):**
+- Used community.general.onepassword (1Password CLI integration)
+- Required op CLI tool installed and signed in
+- Direct CLI command execution
+
 **Current Architecture:**
 - **SINGLE** PostgreSQL container (hostname: `postgresql`)
 - Multiple databases on one instance
-- 1Password for credential management
+- **Official 1Password Connect collection** (`onepassword.connect`)
+- Service Account or Connect Server authentication
+- No 1Password CLI required
 - Simplified inventory and configuration
 
 **Deleted files:**
@@ -493,12 +566,19 @@ terraform output -json ansible_inventory_postgresql | jq '.'
 - `inventory/group_vars/vault.yml`
 - `setup-vault.sh`
 
+**Migrated from:**
+- `community.general.onepassword` → `onepassword.connect.generic_item`
+- 1Password CLI authentication → Service Account or Connect Server
+- Manual `op signin` → Environment variables (OP_SERVICE_ACCOUNT_TOKEN or OP_CONNECT_HOST/TOKEN)
+
 ## 📚 Additional Resources
 
 - [Ansible Documentation](https://docs.ansible.com/)
 - [PostgreSQL 15 Documentation](https://www.postgresql.org/docs/15/)
-- [1Password CLI Documentation](https://developer.1password.com/docs/cli/)
-- [Ansible 1Password Lookup Plugin](https://docs.ansible.com/ansible/latest/collections/community/general/onepassword_lookup.html)
+- [1Password Connect Documentation](https://developer.1password.com/docs/connect/)
+- [1Password Connect Ansible Collection](https://github.com/1Password/ansible-onepasswordconnect-collection)
+- [1Password Connect Ansible Collection Usage Guide](https://github.com/1Password/ansible-onepasswordconnect-collection/blob/main/USAGEGUIDE.md)
+- [1Password Service Accounts](https://developer.1password.com/docs/service-accounts/)
 - [PostgreSQL Performance Tuning](https://wiki.postgresql.org/wiki/Performance_Optimization)
 
 ## 🤝 Contributing

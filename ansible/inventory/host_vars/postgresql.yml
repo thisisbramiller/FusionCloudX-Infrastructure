@@ -47,19 +47,19 @@ postgresql_databases:
 
 # PostgreSQL admin (postgres) user password
 # Retrieved from 1Password item: "PostgreSQL Admin (postgres)"
-postgresql_admin_password: "{{ lookup('community.general.onepassword', 'PostgreSQL Admin (postgres)', field='password', vault='FusionCloudX Infrastructure') }}"
+postgresql_admin_password: "{{ lookup('onepassword.connect.generic_item', 'PostgreSQL Admin (postgres)', field='password', vault='FusionCloudX Infrastructure') }}"
 
 # Database user configurations
 postgresql_users:
   - name: "semaphore"
-    password: "{{ lookup('community.general.onepassword', 'PostgreSQL - Semaphore DB User', field='password', vault='FusionCloudX Infrastructure') }}"
+    password: "{{ lookup('onepassword.connect.generic_item', 'PostgreSQL - Semaphore DB User', field='password', vault='FusionCloudX Infrastructure') }}"
     database: "semaphore"
     priv: "ALL"
     role_attr_flags: "CREATEDB,NOSUPERUSER,NOCREATEROLE"
     description: "Semaphore database user"
 
   - name: "wazuh"
-    password: "{{ lookup('community.general.onepassword', 'PostgreSQL - Wazuh DB User', field='password', vault='FusionCloudX Infrastructure') }}"
+    password: "{{ lookup('onepassword.connect.generic_item', 'PostgreSQL - Wazuh DB User', field='password', vault='FusionCloudX Infrastructure') }}"
     database: "wazuh"
     priv: "ALL"
     role_attr_flags: "CREATEDB,NOSUPERUSER,NOCREATEROLE"
