@@ -52,7 +52,7 @@ resource "proxmox_virtual_environment_vm" "qemu-vm" {
 
   lifecycle {
     ignore_changes = [
-      initialization,          # Ignore cloud-init state changes
+      initialization, # Ignore cloud-init state changes
     ]
   }
 
