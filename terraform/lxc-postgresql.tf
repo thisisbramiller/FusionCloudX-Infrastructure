@@ -10,14 +10,15 @@
 resource "proxmox_virtual_environment_download_file" "debian12_lxc_template" {
   content_type = "vztmpl"
   datastore_id = "nas-infrastructure"
-  node_name    = "zero"
+  node_name    = "pve"
 
   # Debian 12 Standard template from official Proxmox repository
   # You can find available templates at: http://download.proxmox.com/images/system/
-  url = "http://download.proxmox.com/images/system/debian-12-standard_12.7-1_amd64.tar.zst"
+  # url = "http://download.proxmox.com/images/system/debian-12-standard_12.7-1_amd64.tar.zst"
+  url = "http://download.proxmox.com/images/system/debian-12-standard_12.12-1_amd64.tar.zst"
 
   # Alternative: Download from your Proxmox web UI (recommended)
-  # Navigate to: Datacenter > zero > nas-infrastructure > CT Templates > Download
+  # Navigate to: Datacenter > pve > nas-infrastructure > CT Templates > Download
   # Select: debian-12-standard (latest version)
 
   # Only download once - don't re-download on subsequent runs
@@ -29,7 +30,7 @@ resource "proxmox_virtual_environment_download_file" "debian12_lxc_template" {
 # Create single PostgreSQL LXC container
 # This container will host multiple databases for different services
 resource "proxmox_virtual_environment_container" "postgresql" {
-  node_name = "zero"
+  node_name = "pve"
   vm_id     = var.postgresql_lxc_config.vm_id
 
   # Container basic settings
@@ -85,12 +86,12 @@ resource "proxmox_virtual_environment_container" "postgresql" {
       }
     }
 
-    user_account {
-      keys = [
-        # SSH public key for ansible/terraform user - replace with your key
-        trimspace(file("~/.ssh/id_rsa.pub"))
-      ]
-    }
+    # user_account {
+    #   keys = [
+    #     # SSH public key for ansible/terraform user - replace with your key
+    #     trimspace(file("~/.ssh/id_rsa.pub"))
+    #   ]
+    # }
   }
 
   # Features

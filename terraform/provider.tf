@@ -4,7 +4,7 @@ terraform {
   required_providers {
     proxmox = {
       source  = "bpg/proxmox"
-      version = "0.88.0"
+      version = "0.93.0"
     }
     onepassword = {
       source  = "1Password/onepassword"
@@ -16,11 +16,12 @@ terraform {
 provider "proxmox" {
   endpoint = var.proxmox_api_url
   # TODO: Set up proper SSL certificates for production. See README for details.
-  insecure = true
+  insecure = false
 
   ssh {
     agent    = true
     username = "terraform"
+    agent_socket = "/Users/fcx/Library/Group Containers/2BUA8C4S2C.com.1password/t/agent.sock"
   }
 }
 

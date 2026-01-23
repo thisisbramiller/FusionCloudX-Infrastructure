@@ -3,7 +3,7 @@ resource "proxmox_virtual_environment_vm" "qemu-vm" {
 
   vm_id     = each.value.vm_id
   name      = each.value.name
-  node_name = "zero"
+  node_name = "pve"
   started   = each.value.started
   on_boot   = try(each.value.on_boot, true)
   tags      = ["terraform", "ubuntu"]

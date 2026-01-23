@@ -2,7 +2,7 @@ resource "proxmox_virtual_environment_file" "user_data_cloud_config" {
   for_each     = var.vm_configs
   content_type = "snippets"
   datastore_id = "nas-infrastructure"
-  node_name    = "zero"
+  node_name    = "pve"
 
   source_raw {
     data = <<-EOF
@@ -35,7 +35,7 @@ resource "proxmox_virtual_environment_file" "user_data_cloud_config" {
 resource "proxmox_virtual_environment_file" "vendor_data_cloud_config" {
   content_type = "snippets"
   datastore_id = "nas-infrastructure"
-  node_name    = "zero"
+  node_name    = "pve"
 
   source_raw {
     data = <<-EOF
@@ -69,7 +69,7 @@ resource "proxmox_virtual_environment_file" "vendor_data_cloud_config" {
 resource "proxmox_virtual_environment_file" "semaphore_vendor_data_cloud_config" {
   content_type = "snippets"
   datastore_id = "nas-infrastructure"
-  node_name    = "zero"
+  node_name    = "pve"
 
   source_raw {
     data = <<-EOF
@@ -78,6 +78,7 @@ resource "proxmox_virtual_environment_file" "semaphore_vendor_data_cloud_config"
         package_update: true
         package_upgrade: true
         packages:
+          - qemu-guest-agent
           # Control plane specific packages (base packages inherited from standard vendor_data)
           - wget
           - git
@@ -102,6 +103,8 @@ resource "proxmox_virtual_environment_file" "semaphore_vendor_data_cloud_config"
             permissions: '0644'
 
         runcmd:
+          - systemctl enable qemu-guest-agent
+          - systemctl start qemu-guest-agent
           # Create ansible user home directories
           - mkdir -p /home/ansible/.ssh
           - mkdir -p /home/ansible/.ansible
@@ -123,6 +126,7 @@ resource "proxmox_virtual_environment_file" "semaphore_vendor_data_cloud_config"
 
           # Create marker file
           - echo "Semaphore-UI cloud-init complete - $(date)" > /var/lib/cloud-init.semaphore.ready
+          - echo "done" > /tmp/cloud-config.done
         EOF
 
     file_name = "vendor-data-cloud-config-semaphore.yaml"

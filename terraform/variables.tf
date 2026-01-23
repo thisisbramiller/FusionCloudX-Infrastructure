@@ -1,6 +1,6 @@
 variable "proxmox_api_url" {
   type        = string
-  default     = "https://zero.fusioncloudx.home:8006/"
+  default     = "https://192.168.40.206:8006/"
   description = "Proxmox VE API URL"
 }
 
@@ -19,8 +19,8 @@ variable "vm_configs" {
     "semaphore-ui" = {
       vm_id      = 1102
       name       = "semaphore-ui"
-      memory_mb  = 4096
-      cpu_cores  = 2
+      memory_mb  = 8192
+      cpu_cores  = 8
       started    = true
       full_clone = true
     }
