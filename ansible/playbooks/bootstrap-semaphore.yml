@@ -45,7 +45,7 @@
     onepassword_service_account_token: ""
 
     # Proxmox configuration
-    proxmox_api_url: "https://zero.fusioncloudx.home:8006"
+    proxmox_api_url: "https://192.168.40.206:8006"
 
     # Environment variables to configure
     environment_vars:
@@ -157,7 +157,7 @@
           - "2. CONFIGURE PROXMOX SSH ACCESS:"
           - "   • Copy the Proxmox public key displayed during setup"
           - "   • Add to Proxmox 'terraform' user authorized_keys"
-          - "   • Test: ssh -i ~/.ssh/proxmox_terraform_key terraform@zero.fusioncloudx.home"
+          - "   • Test: ssh -i ~/.ssh/proxmox_terraform_key terraform@192.168.40.206"
           - ""
           - "3. INITIAL SEMAPHORE SETUP:"
           - "   • Open http://{{ ansible_host }}:3000 in browser"

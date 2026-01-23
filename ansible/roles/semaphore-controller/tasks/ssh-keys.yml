@@ -120,7 +120,7 @@
       - "{{ proxmox_public_key_content['content'] | b64decode }}"
       - ""
       - "Add this key to Proxmox 'terraform' user authorized_keys:"
-      - "ssh root@zero.fusioncloudx.home"
+      - "ssh root@192.168.40.206"
       - "mkdir -p /root/.ssh"
       - "echo '<public-key>' >> /root/.ssh/authorized_keys"
 

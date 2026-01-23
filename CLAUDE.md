@@ -4,153 +4,370 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-FusionCloudX Infrastructure is an Infrastructure-as-Code repository for managing **homelab/development** infrastructure on Proxmox Virtual Environment (PVE) using Terraform and Ansible. This repository provisions Ubuntu VMs for testing and development purposes. **Production workloads will be deployed separately on AWS infrastructure.**
+FusionCloudX Infrastructure is an Infrastructure-as-Code repository for managing **homelab/development** infrastructure on Proxmox Virtual Environment (PVE) using Terraform and Ansible. The repository follows a **Control Plane architecture** where the `semaphore-ui` VM serves as a centralized automation hub running Terraform and Ansible through a web interface.
 
-## Architecture
+## Control Plane Architecture
 
-### Terraform Structure
+### Overview
 
-The Terraform configuration is split into logical files:
+The infrastructure uses Semaphore UI (running on `semaphore-ui` VM) as the control plane:
+- All Terraform/Ansible operations run through Semaphore web UI
+- Infrastructure repository cloned to `/opt/infrastructure` on semaphore-ui
+- 1Password CLI integration for secrets management
+- Three SSH keys for different purposes (management, GitHub, Proxmox)
+- PostgreSQL LXC container hosts databases (semaphore, wazuh, etc.)
 
-- `provider.tf` - Proxmox provider configuration using the `bpg/proxmox` provider (v0.88.0). Authentication uses SSH agent with user `terraform`. The provider connects to node `zero.fusioncloudx.home:8006`
-- `backend.tf` - Local state backend (stores state in `terraform.tfstate` at project root)
-- `ubuntu-template.tf` - Creates a VM template (ID 1000) from Ubuntu Noble cloud image. This downloads the image to `nas-infrastructure` datastore and creates a template with SCSI disk on `vm-data`
-- `cloud-init.tf` - Defines cloud-init configuration with split user_data (per-VM) and vendor_data (shared). Stored as snippets on `nas-infrastructure` datastore
-- `qemu-vm.tf` - Creates VM instances using `for_each` loop pattern to dynamically provision multiple VMs from the template. Uses 10 retries for clone operations to handle storage lock contention
-- `outputs.tf` - Exports VM IPv4 addresses as a map (VM name → IP address) from QEMU guest agent
-- `variables.tf` - Defines `vm_configs` map with VM specifications (ID, name, memory, CPU, started, on_boot, full_clone)
+### Key Components
 
-### Key Terraform Resources
+**Control Plane VM (semaphore-ui)**:
+- VM ID 1102, 8GB RAM, 8 CPU cores
+- Runs Semaphore UI on port 3000
+- Hosts: Terraform 1.10+, Ansible 2.18+, 1Password CLI
+- Repository path: `/opt/infrastructure`
+- User: `ansible` (NOPASSWD sudo)
 
-**Template Creation Flow:**
-1. `proxmox_virtual_environment_download_file.ubuntu-cloud-image` downloads Ubuntu Noble cloud image
-2. `proxmox_virtual_environment_vm.ubuntu-template` creates template (VM ID 1000) from the downloaded image
-3. Template is marked with `template = true` and `started = false`
+**Database Server (postgresql)**:
+- LXC container ID 2001, 4GB RAM, 2 CPU cores
+- Debian 12 unprivileged container
+- Hosts multiple databases: semaphore, wazuh
+- Managed by Ansible role `postgresql`
 
-**VM Provisioning Flow:**
-1. `proxmox_virtual_environment_file.user_data_cloud_config` creates per-VM cloud-init user_data (hostname, users)
-2. `proxmox_virtual_environment_file.vendor_data_cloud_config` creates shared cloud-init vendor_data (packages, timezone, commands)
-3. `proxmox_virtual_environment_vm.qemu-vm` uses `for_each` to clone template 1000 with full clone for each VM in `vm_configs`
-4. Cloud-init runs with split configuration on each VM
+**SSH Key Strategy**:
+1. `~/.ssh/id_ed25519` - Management key for all managed hosts
+2. `~/.ssh/github_deploy_key` - GitHub repository access
+3. `~/.ssh/proxmox_terraform_key` - Terraform authentication to Proxmox
 
-**Current VMs Provisioned (4 total):**
-- **teleport** (VM ID 1101) - 2GB RAM, 2 CPU cores - Remote access service (planned)
-- **semaphore** (VM ID 1102) - 2GB RAM, 2 CPU cores - Ansible UI/automation (planned)
-- **wazuh** (VM ID 1103) - 4GB RAM, 2 CPU cores - SIEM/security monitoring (planned)
-- **immich** (VM ID 1104) - 4GB RAM, 2 CPU cores - Photo management (planned)
+### Bootstrap Process
 
-All VMs are provisioned and running Ubuntu Noble base OS. Services are NOT yet installed - VMs are blank systems ready for service deployment.
+**Three-phase bootstrap**:
+1. **Cloud-init** (automatic): Installs base packages via enhanced vendor_data for semaphore-ui
+2. **Workstation bootstrap** (one-time): Run `./scripts/bootstrap-control-plane.sh` or manually execute `ansible/playbooks/bootstrap-semaphore.yml`
+3. **Self-management** (ongoing): All operations run through Semaphore UI
 
-### Cloud-Init Configuration
+After bootstrap, update Semaphore UI with repository, create task templates, and manage infrastructure through the web interface. See `docs/CONTROL-PLANE.md` for detailed architecture documentation.
 
-The cloud-init config uses **split configuration** for flexibility:
+## Terraform Structure
 
-**User Data (per-VM in `cloud-init.tf`):**
-- Sets hostname to VM name (teleport, semaphore, wazuh, immich)
-- Creates user `fcx` with sudo access (NOPASSWD - appropriate for homelab/dev)
-- SSH key import from GitHub user `thisisbramiller`
-- Password authentication disabled (`lock_passwd: true`)
+Configuration files in `terraform/`:
 
-**Vendor Data (shared across all VMs):**
-- Timezone: America/Chicago
-- Package updates enabled
-- Installs: qemu-guest-agent, net-tools, curl
-- Enables and starts qemu-guest-agent service
+- `provider.tf` - Proxmox provider (bpg/proxmox v0.93.0) + 1Password provider. Uses Proxmox API (`endpoint`) for most operations, SSH with agent auth (user `terraform`) for certain actions like file uploads. Connects to `192.168.40.206:8006`
+- `backend.tf` - Local state backend (`terraform.tfstate` at project root)
+- `variables.tf` - Defines `vm_configs` (QEMU VMs), `postgresql_lxc_config` (single LXC), `postgresql_databases` (database list), and `onepassword_vault_id`
+- `ubuntu-template.tf` - Creates VM template (ID 1000) from Ubuntu Noble cloud image
+- `cloud-init.tf` - Split cloud-init: per-VM user_data + shared vendor_data. **Special**: `semaphore_vendor_data_cloud_config` has enhanced packages for control plane
+- `qemu-vm.tf` - Creates VMs using `for_each`. Semaphore-ui gets special vendor_data. Uses 10 retries for clone operations
+- `lxc-postgresql.tf` - Single Debian 12 LXC for PostgreSQL + 1Password items for database credentials
+- `outputs.tf` - VM IPv4 addresses map from QEMU guest agent
 
-### Ansible Structure
+### Key Terraform Patterns
 
-- `ansible.cfg` - Points to `./inventory/hosts.ini`, disables host key checking and retry files
-- `inventory/hosts.ini` - Currently configured for localhost only with commented examples for remote hosts
-- `group_vars/all.yml` - Global variables (currently minimal)
-- `playbooks/site.yml` - Main playbook applying the `common` role to all hosts
-- `roles/common/` - Basic role that updates apt, installs nginx, creates fusionuser, and ensures nginx is running
+**VM Provisioning Flow**:
+1. Download Ubuntu Noble cloud image → create template (ID 1000)
+2. For each VM in `vm_configs`: create user_data, reference vendor_data (standard or semaphore-specific)
+3. Clone template with full clone, apply cloud-init
+4. QEMU guest agent reports IP address to outputs
+
+**LXC Container Pattern**:
+- Single PostgreSQL LXC hosts multiple databases (not one LXC per database)
+- Unprivileged container for security
+- Ansible handles PostgreSQL installation and database creation
+- 1Password items created via Terraform for each database user
+
+**1Password Integration**:
+- Terraform creates 1Password items for database passwords
+- Ansible retrieves secrets via `onepassword.connect` collection
+- Service account token passed via `OP_SERVICE_ACCOUNT_TOKEN` environment variable
+
+**Current Infrastructure** (from `variables.tf`):
+- **VMs**: `semaphore-ui` (ID 1102, 8GB/8 cores) - control plane
+- **LXC**: `postgresql` (ID 2001, 4GB/2 cores) - database server
+- **Databases**: semaphore, wazuh (defined in `postgresql_databases` variable)
+
+## Ansible Structure
+
+Configuration in `ansible/`:
+
+- `ansible.cfg` - Uses `./inventory/hosts.ini`, disables host key checking
+- `requirements.yml` - Collections: `onepassword.connect`, `community.general`, `community.postgresql`
+- `inventory/hosts.ini` - Groups: `[postgresql]`, `[application_servers]`, `[monitoring]`, meta-group `[homelab]`
+- `inventory/group_vars/vault.yml` - Ansible Vault encrypted secrets (fallback for 1Password)
+- `inventory/group_vars/postgresql.yml` - PostgreSQL-specific variables
+- `inventory/host_vars/postgresql.yml` - Database definitions and user configuration
+- `playbooks/bootstrap-semaphore.yml` - **One-time** control plane bootstrap playbook
+- `playbooks/postgresql.yml` - PostgreSQL installation and database setup
+- `playbooks/site.yml` - Main playbook (orchestrates all roles)
+- `roles/semaphore-controller/` - Installs Terraform, 1Password CLI, Semaphore UI, SSH keys, clones repo
+- `roles/postgresql/` - Installs PostgreSQL, creates databases/users, configures remote access
+
+### Ansible Vault vs 1Password
+
+**1Password (preferred)**:
+- Use for production secrets
+- Ansible collection: `onepassword.connect`
+- Service account token in environment variable
+- Secrets retrieved at playbook runtime
+
+**Ansible Vault (fallback)**:
+- File: `inventory/group_vars/vault.yml`
+- Encrypt: `ansible-vault encrypt group_vars/vault.yml`
+- Edit: `ansible-vault edit group_vars/vault.yml`
+- Variables prefixed with `vault_` (e.g., `vault_postgresql_admin_password`)
+
+### Key Ansible Roles
+
+**semaphore-controller** (bootstrap only):
+- Tasks: install-terraform, install-onepassword, install-semaphore, install-ansible-collections, ssh-keys, clone-repo, configure-environment, verify-installation
+- Generates 3 SSH keys, installs Terraform 1.10.3, 1Password CLI 2.30.3, Semaphore UI
+- Clones repo to `/opt/infrastructure`, configures systemd service
+- Run once from workstation to bootstrap control plane
+
+**postgresql**:
+- Installs PostgreSQL 15+ on Debian 12 LXC
+- Creates databases and users from `postgresql_databases` variable
+- Configures `pg_hba.conf` for remote access (homelab network)
+- Templates: `postgresql.conf.j2`, `pg_hba.conf.j2`
+- Handlers: restart PostgreSQL on config changes
 
 ## Common Commands
 
-### Terraform
+### Initial Setup (One-Time Bootstrap)
 
-Work from the `terraform/` directory:
+Bootstrap the control plane from your workstation:
 
 ```bash
-# Initialize Terraform and download providers
+# Guided bootstrap script (recommended)
+./scripts/bootstrap-control-plane.sh
+
+# Manual bootstrap (if script fails)
+cd ansible/
+ansible-playbook \
+  -i 'SEMAPHORE_IP,' \
+  -u ansible \
+  playbooks/bootstrap-semaphore.yml \
+  -e "onepassword_service_account_token=YOUR_TOKEN"
+
+# After bootstrap, configure GitHub deploy key
+ssh ansible@SEMAPHORE_IP 'cat ~/.ssh/github_deploy_key.pub'
+# Add to GitHub: Repository → Settings → Deploy keys
+
+# Configure Proxmox SSH access
+ssh ansible@SEMAPHORE_IP 'cat ~/.ssh/proxmox_terraform_key.pub'
+# Add to Proxmox terraform user's authorized_keys
+```
+
+### Terraform (from Control Plane or Workstation)
+
+Work from `terraform/` directory:
+
+```bash
+# Initialize and download providers
 terraform init
 
 # Plan infrastructure changes
 terraform plan
 
-# Apply infrastructure changes
+# Apply infrastructure (provisions VMs/LXCs, creates 1Password items)
 terraform apply
 
-# Show current state
-terraform show
+# Get VM IP addresses
+terraform output vm_ipv4_addresses
 
-# Get outputs (e.g., VM IP address)
-terraform output
+# Get specific output
+terraform output postgresql_lxc_ipv4_address
 
-# Destroy infrastructure
+# Destroy specific resource
+terraform destroy -target=proxmox_virtual_environment_vm.qemu-vm[\"semaphore-ui\"]
+
+# Destroy all infrastructure (use with caution)
 terraform destroy
 ```
 
-### Ansible
+### Ansible (from Control Plane or Workstation)
 
-Work from the `ansible/` directory:
+Work from `ansible/` directory:
 
 ```bash
-# Run the main site playbook
+# Install required collections
+ansible-galaxy collection install -r requirements.yml
+
+# Run main site playbook (all hosts, all roles)
 ansible-playbook playbooks/site.yml
 
-# Run playbook with specific inventory
-ansible-playbook -i inventory/hosts.ini playbooks/site.yml
+# Run specific playbook
+ansible-playbook playbooks/postgresql.yml
 
-# Check connectivity
+# Limit to specific host or group
+ansible-playbook playbooks/site.yml --limit postgresql
+
+# Check connectivity to all hosts
 ansible all -m ping
 
-# Run ad-hoc commands
-ansible all -m shell -a "uptime"
+# Check specific group
+ansible postgresql -m ping
+
+# Ad-hoc command on all hosts
+ansible all -a "uptime"
+
+# Use vault password for encrypted variables
+ansible-playbook playbooks/site.yml --ask-vault-pass
+
+# Edit vault-encrypted file
+ansible-vault edit inventory/group_vars/vault.yml
+```
+
+### Inventory Management
+
+Update Ansible inventory with Terraform-provisioned IPs:
+
+```bash
+# PowerShell version (Windows)
+./ansible/update-inventory.ps1
+
+# Bash version (Linux/Mac)
+./ansible/update-inventory.sh
+
+# Manual approach
+cd terraform/
+terraform output -json > /tmp/tf-outputs.json
+# Parse JSON and update ansible/inventory/hosts.ini
+```
+
+### Control Plane Operations (via Semaphore UI)
+
+After bootstrap, use Semaphore UI at `http://semaphore-ui:3000`:
+
+1. **Update repository**: Task template or manual `git pull` in `/opt/infrastructure`
+2. **Deploy infrastructure**: Run Terraform task template (plan/apply)
+3. **Configure hosts**: Run Ansible playbook task template
+4. **Scheduled tasks**: Configure cron-like schedules in Semaphore
+
+### 1Password CLI (on Control Plane)
+
+```bash
+# List vaults
+op vault list
+
+# Get secret from 1Password
+op item get "database-password" --vault "homelab" --fields password
+
+# Test service account token
+echo $OP_SERVICE_ACCOUNT_TOKEN
+op vault list  # Should succeed if token is valid
 ```
 
 ## Important Notes
 
 ### Proxmox Authentication
-- The Terraform provider uses SSH agent authentication with the `terraform` user
-- Ensure SSH agent is running and has the appropriate key loaded before running Terraform commands
-- API endpoint uses self-signed certificates (`insecure = true`)
+- **Primary**: Proxmox API via HTTPS endpoint (`192.168.40.206:8006`)
+- **Secondary**: SSH agent authentication for specific operations (file uploads, etc.)
+  - User: `terraform` on Proxmox host
+  - On control plane: Uses dedicated SSH key at `~/.ssh/proxmox_terraform_key`
+  - SSH agent must have key loaded (or 1Password SSH agent integration)
+- Provider configuration: `insecure = false` for SSL verification (update if using self-signed certs)
+- Most resources use API; SSH only for operations requiring direct file access
+
+### 1Password Integration
+- **Terraform**: Uses 1Password provider to create credential items (e.g., database passwords)
+- **Ansible**: Uses `onepassword.connect` collection to retrieve secrets
+- Service account token required: Set `OP_SERVICE_ACCOUNT_TOKEN` environment variable
+- Vault ID required: Set `TF_VAR_onepassword_vault_id` for Terraform
+- Ansible Vault is fallback for secrets when 1Password unavailable
 
 ### Resource Dependencies
-- VMs in `qemu-vm.tf` depend on the template in `ubuntu-template.tf` via `depends_on`
-- The template must exist before cloning VMs from it
-- Cloud-init files (user_data and vendor_data) must be created before VM initialization references them
+- VMs depend on template (ID 1000) via `depends_on` in `qemu-vm.tf`
+- LXC depends on Debian 12 template download
+- Cloud-init files must exist before VM initialization
+- PostgreSQL LXC must be provisioned before running `postgresql.yml` playbook
+- Semaphore-ui must be bootstrapped before managing infrastructure through UI
 
-### Datastores
-- `nas-infrastructure` - Used for cloud images and cloud-init snippets
-- `vm-data` - Used for VM disks and cloud-init configs during initialization
+### Infrastructure Specifics
 
-### VM Specifications
-- Template: VM ID 1000, named "ubuntu-template", on node "zero"
-- VMs are full clones (not linked clones) of the template by default
-- VM configs are defined in `variables.tf` with individual CPU, memory, and startup settings
-- All VMs: x86-64-v2-AES CPU type, DHCP networking, serial console enabled
-- Clone operations use 10 retries to handle storage lock contention
-- VMs auto-start on Proxmox host boot by default (`on_boot = true`)
+**Datastores**:
+- `nas-infrastructure` - Cloud images, cloud-init snippets, LXC templates
+- `vm-data` - VM/LXC disks, runtime cloud-init configs
+
+**VM Specifications**:
+- Template: VM ID 1000, Ubuntu Noble, node "pve"
+- VMs: Full clones (not linked), x86-64-v2-AES CPU, DHCP networking
+- Clone operations: 10 retries for storage lock handling
+- Auto-start: `on_boot = true` by default (VMs start with Proxmox host)
+
+**LXC Specifications**:
+- PostgreSQL: Unprivileged container, Debian 12, VM ID 2001
+- Network: DHCP on vmbr0
+- Features: Nesting enabled (for potential Docker use)
+
+**Cloud-Init Behavior**:
+- **Standard VMs**: Basic vendor_data (qemu-guest-agent, python3, pip)
+- **semaphore-ui**: Enhanced vendor_data (ansible, terraform, git, build-essential)
+- User: `ansible` with NOPASSWD sudo, SSH keys from GitHub (`thisisbramiller`)
+- Marker files: `/var/lib/cloud-init.provision.ready` (all VMs), `/var/lib/cloud-init.semaphore.ready` (control plane)
 
 ### State Management
-- Terraform state is stored locally in the project root as `terraform.tfstate`
-- The state file is excluded from git via `.gitignore`
-- Be cautious when working in teams - local state doesn't support locking or collaboration
+- Terraform state: Local backend (`terraform.tfstate` at project root)
+- State file is gitignored
+- No locking or collaboration support (use remote backend for teams)
+- Control plane approach: Run Terraform from semaphore-ui to centralize state
+
+### Secrets Management Strategy
+
+**DO**:
+- Store passwords/tokens in 1Password
+- Use `no_log: true` in Ansible for secret handling
+- Rotate 1Password service account tokens periodically
+- Encrypt `vault.yml` with ansible-vault as fallback
+
+**DON'T**:
+- Commit secrets to git (use `.gitignore` for sensitive files)
+- Share service account tokens between environments
+- Log secrets in Semaphore/Ansible output
+- Use Ansible Vault as primary secrets store (1Password preferred)
 
 ## Development Workflow
+
+### Day-to-Day (Control Plane Approach)
+
+1. **Make changes on workstation**: Edit Terraform/Ansible files, commit to git
+2. **Update control plane**: SSH to semaphore-ui, `git pull` in `/opt/infrastructure`, or use Semaphore task
+3. **Execute via Semaphore UI**: Run Terraform plan/apply or Ansible playbook through web interface
+4. **Monitor and verify**: View logs in Semaphore, check infrastructure state
+
+### Traditional Workflow (Without Control Plane)
 
 1. Modify Terraform configurations in `terraform/` directory
 2. Run `terraform plan` to preview changes
 3. Run `terraform apply` to provision infrastructure
-4. Use Terraform outputs to get VM IP addresses
-5. Update Ansible inventory with provisioned VM IPs
-6. Run Ansible playbooks from `ansible/` directory to configure VMs
+4. Get VM IPs: `terraform output vm_ipv4_addresses`
+5. Update Ansible inventory: `./ansible/update-inventory.sh`
+6. Run Ansible playbooks: `ansible-playbook playbooks/site.yml`
+
+### Adding New Infrastructure
+
+**Add VM**:
+1. Update `variables.tf` → add entry to `vm_configs` map
+2. `terraform apply` → provisions VM with cloud-init
+3. Update inventory → run update script or manual edit
+4. Configure with Ansible → `ansible-playbook playbooks/site.yml`
+
+**Add Database**:
+1. Update `variables.tf` → add entry to `postgresql_databases` list
+2. `terraform apply` → creates 1Password item for credentials
+3. Update `host_vars/postgresql.yml` → define database and user
+4. Run playbook → `ansible-playbook playbooks/postgresql.yml`
+
+**Add Ansible Role**:
+1. Create role in `ansible/roles/role-name/`
+2. Define tasks, handlers, defaults, templates
+3. Include role in `playbooks/site.yml` or dedicated playbook
+4. Run playbook via Semaphore or command line
 
 ## Current Branch
 
-The working branch is `multi-vm`. The main branch for PRs is `main`.
+Current branch: `semaphore-ui` (active development of control plane)
+Main branch for PRs: `main`
 
 ## Environment Context
 
-**This repository manages homelab/development infrastructure, not production.** VMs are provisioned for testing and development of services. Production infrastructure will be deployed separately on AWS using dedicated Terraform configurations.
+**Homelab/Development Infrastructure**: This repository manages Proxmox-based homelab infrastructure for testing and development. Services deployed: Semaphore (automation), PostgreSQL (databases), planned services (Teleport, Wazuh, Immich). Production workloads will use separate AWS infrastructure.
+
+**Security Posture**: Appropriate for homelab (NOPASSWD sudo, self-signed certs, `insecure = true`). Review security settings before adapting for production use.

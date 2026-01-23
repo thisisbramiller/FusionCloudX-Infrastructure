@@ -212,7 +212,7 @@ ssh ansible@SEMAPHORE_IP 'cat ~/.ssh/github_deploy_key.pub'
 ssh ansible@SEMAPHORE_IP 'cat ~/.ssh/proxmox_terraform_key.pub'
 
 # Add to Proxmox
-ssh root@zero.fusioncloudx.home
+ssh root@192.168.40.206
 mkdir -p /root/.ssh
 echo 'PUBLIC_KEY' >> /root/.ssh/authorized_keys
 ```
@@ -282,15 +282,15 @@ Host github.com
 
 **Configuration**:
 ```bash
-Host proxmox zero.fusioncloudx.home
-  HostName zero.fusioncloudx.home
+Host proxmox 192.168.40.206
+  HostName 192.168.40.206
   User terraform
   IdentityFile ~/.ssh/proxmox_terraform_key
 ```
 
 **Proxmox Setup**:
 ```bash
-ssh root@zero.fusioncloudx.home
+ssh root@192.168.40.206
 mkdir -p /root/.ssh
 chmod 700 /root/.ssh
 echo 'PUBLIC_KEY' >> /root/.ssh/authorized_keys
@@ -569,7 +569,7 @@ First time visiting `http://semaphore:3000`:
   {
     "ANSIBLE_HOST_KEY_CHECKING": "False",
     "ANSIBLE_FORCE_COLOR": "True",
-    "TF_VAR_proxmox_api_url": "https://zero.fusioncloudx.home:8006"
+    "TF_VAR_proxmox_api_url": "https://192.168.40.206:8006"
   }
   ```
 
@@ -831,10 +831,10 @@ cat ~/.ssh/config | grep -A5 github.com
 
 ```bash
 # Test SSH to Proxmox
-ssh -i ~/.ssh/proxmox_terraform_key terraform@zero.fusioncloudx.home
+ssh -i ~/.ssh/proxmox_terraform_key terraform@192.168.40.206
 
 # Verify key is in authorized_keys on Proxmox
-ssh root@zero.fusioncloudx.home 'cat /root/.ssh/authorized_keys'
+ssh root@192.168.40.206 'cat /root/.ssh/authorized_keys'
 
 # Check environment variable
 echo $PROXMOX_VE_ENDPOINT

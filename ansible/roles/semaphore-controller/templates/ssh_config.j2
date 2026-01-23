@@ -11,8 +11,8 @@ Host github.com
   StrictHostKeyChecking accept-new
   UserKnownHostsFile {{ ansible_user_home }}/.ssh/known_hosts
 
-Host proxmox zero.fusioncloudx.home
-  HostName zero.fusioncloudx.home
+Host proxmox 192.168.40.206
+  HostName 192.168.40.206
   User terraform
   IdentityFile {{ ssh_proxmox_key_path }}
   StrictHostKeyChecking accept-new

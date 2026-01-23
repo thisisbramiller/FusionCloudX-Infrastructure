@@ -51,7 +51,7 @@ ssh ansible@SEMAPHORE_IP 'cat ~/.ssh/proxmox_terraform_key.pub'
 
 Add to Proxmox:
 ```bash
-ssh root@zero.fusioncloudx.home
+ssh root@192.168.40.206
 echo 'PUBLIC_KEY' >> /root/.ssh/authorized_keys
 ```
 
@@ -78,7 +78,7 @@ Settings → Environments → New:
 ```json
 {
   "ANSIBLE_HOST_KEY_CHECKING": "False",
-  "TF_VAR_proxmox_api_url": "https://zero.fusioncloudx.home:8006"
+  "TF_VAR_proxmox_api_url": "https://192.168.40.206:8006"
 }
 ```
 

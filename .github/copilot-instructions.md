@@ -7,7 +7,7 @@ This is an Infrastructure as Code (IaC) repository for managing Proxmox Virtual 
 - **Company**: TyDell Miller Projects, LLC DBA FusionCloud Innovations (FusionCloudX)
 - **Purpose**: Production infrastructure provisioning and configuration management
 - **Tech Stack**: Terraform (bpg/proxmox provider), Ansible, Cloud-init
-- **Target Platform**: Proxmox VE on node "zero.fusioncloudx.home"
+- **Target Platform**: Proxmox VE on node "192.168.40.206"
 
 ## Code Style & Conventions
 

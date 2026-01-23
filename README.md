@@ -17,7 +17,7 @@ This repository automates the provisioning and configuration of Ubuntu VMs on Pr
 
 ### Proxmox Requirements
 
-- Proxmox VE node named `zero` (or update configurations accordingly)
+- Proxmox VE node named `pve` (or update configurations accordingly)
 - User account named `terraform` with appropriate API permissions
 - SSH access configured for the `terraform` user
 - Two datastores:
@@ -163,7 +163,7 @@ Example:
 ```hcl
 resource "proxmox_virtual_environment_vm" "web_server" {
   name      = "web-server-01"
-  node_name = "zero"
+  node_name = "pve"
   started   = true
 
   clone {
@@ -203,7 +203,7 @@ terraform destroy
 If Terraform cannot connect to Proxmox:
 
 - Verify SSH agent is running: `ssh-add -l`
-- Test SSH connection: `ssh terraform@zero.fusioncloudx.home`
+- Test SSH connection: `ssh terraform@192.168.40.206`
 - Check Proxmox user permissions
 
 ### VM Not Getting IP Address
