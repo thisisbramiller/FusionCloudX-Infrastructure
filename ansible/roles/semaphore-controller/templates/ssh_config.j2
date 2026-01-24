@@ -1,0 +1,38 @@
+# ==============================================================================
+# SSH Configuration for Infrastructure Management
+# ==============================================================================
+# Managed by Ansible - semaphore-controller role
+# ==============================================================================
+
+Host github.com
+  HostName github.com
+  User git
+  IdentityFile {{ ssh_github_deploy_key_path }}
+  StrictHostKeyChecking accept-new
+  UserKnownHostsFile {{ ansible_user_home }}/.ssh/known_hosts
+
+Host proxmox zero.fusioncloudx.home
+  HostName zero.fusioncloudx.home
+  User terraform
+  IdentityFile {{ ssh_proxmox_key_path }}
+  StrictHostKeyChecking accept-new
+  UserKnownHostsFile {{ ansible_user_home }}/.ssh/known_hosts
+
+# Managed hosts (internal network)
+Host 192.168.*
+  User {{ ansible_user_name }}
+  IdentityFile {{ ssh_management_key_path }}
+  StrictHostKeyChecking accept-new
+  UserKnownHostsFile {{ ansible_user_home }}/.ssh/known_hosts
+
+# PostgreSQL database
+Host {{ semaphore_db_host }}
+  User {{ ansible_user_name }}
+  IdentityFile {{ ssh_management_key_path }}
+  StrictHostKeyChecking accept-new
+
+# Default settings
+Host *
+  ServerAliveInterval 60
+  ServerAliveCountMax 3
+  Compression yes

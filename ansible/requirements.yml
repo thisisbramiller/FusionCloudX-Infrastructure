@@ -1,0 +1,13 @@
+---
+# ==============================================================================
+# Ansible Collections Requirements
+# ==============================================================================
+# Install with: ansible-galaxy collection install -r requirements.yml
+# ==============================================================================
+
+collections:
+  # Official 1Password Connect collection for secret management
+  # Docs: https://developer.1password.com/docs/connect/ansible-collection
+  # GitHub: https://github.com/1Password/ansible-onepasswordconnect-collection
+  - name: onepassword.connect
+    version: ">=2.3.1"

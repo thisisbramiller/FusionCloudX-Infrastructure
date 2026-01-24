@@ -1,0 +1,19 @@
+# ==============================================================================
+# Terraform CLI Configuration
+# ==============================================================================
+# Managed by Ansible - semaphore-controller role
+# ==============================================================================
+
+# Provider installation configuration
+provider_installation {
+  # Use the official HashiCorp provider registry
+  direct {
+    exclude = []
+  }
+}
+
+# Credentials for 1Password provider (if needed)
+# This will use environment variable: OP_SERVICE_ACCOUNT_TOKEN
+
+# Disable upgrade and telemetry checks
+disable_checkpoint = true

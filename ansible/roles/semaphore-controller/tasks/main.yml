@@ -1,0 +1,133 @@
+---
+# ==============================================================================
+# Semaphore Controller Role - Main Tasks
+# ==============================================================================
+# Configures semaphore-ui VM as the Infrastructure Control Plane
+# ==============================================================================
+
+- name: Display role information
+  ansible.builtin.debug:
+    msg:
+      - "Configuring {{ inventory_hostname }} as Infrastructure Control Plane"
+      - "This will install Terraform, 1Password CLI, and Semaphore UI"
+      - "Repository: {{ infra_repo_url }}"
+      - "Installation path: {{ infra_repo_path }}"
+
+# ==============================================================================
+# Phase 1: System Prerequisites
+# ==============================================================================
+
+- name: Update apt cache
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 3600
+  become: true
+
+- name: Install prerequisite packages
+  ansible.builtin.apt:
+    name:
+      - git
+      - curl
+      - wget
+      - unzip
+      - gnupg
+      - software-properties-common
+      - apt-transport-https
+      - ca-certificates
+      - python3-pip
+      - python3-venv
+    state: present
+  become: true
+
+# ==============================================================================
+# Phase 2: SSH Key Management
+# ==============================================================================
+
+- name: Generate and distribute SSH keys
+  ansible.builtin.include_tasks: ssh-keys.yml
+  tags:
+    - ssh
+    - keys
+
+# ==============================================================================
+# Phase 3: Install Infrastructure Tools
+# ==============================================================================
+
+- name: Install Terraform
+  ansible.builtin.include_tasks: install-terraform.yml
+  tags:
+    - terraform
+
+- name: Install 1Password CLI
+  ansible.builtin.include_tasks: install-onepassword.yml
+  tags:
+    - onepassword
+    - secrets
+
+# ==============================================================================
+# Phase 4: Install Ansible Collections
+# ==============================================================================
+
+- name: Install Ansible collections
+  ansible.builtin.include_tasks: install-ansible-collections.yml
+  tags:
+    - ansible
+    - collections
+
+# ==============================================================================
+# Phase 5: Clone Infrastructure Repository
+# ==============================================================================
+
+- name: Clone infrastructure repository
+  ansible.builtin.include_tasks: clone-repo.yml
+  tags:
+    - repo
+    - git
+
+# ==============================================================================
+# Phase 6: Configure Environment Variables
+# ==============================================================================
+
+- name: Configure environment variables
+  ansible.builtin.include_tasks: configure-environment.yml
+  tags:
+    - environment
+    - config
+
+# ==============================================================================
+# Phase 7: Install and Configure Semaphore UI
+# ==============================================================================
+
+- name: Install and configure Semaphore UI
+  ansible.builtin.include_tasks: install-semaphore.yml
+  tags:
+    - semaphore
+    - ui
+
+# ==============================================================================
+# Phase 8: Final Verification
+# ==============================================================================
+
+- name: Verify installation
+  ansible.builtin.include_tasks: verify-installation.yml
+  tags:
+    - verify
+    - test
+
+- name: Display success message
+  ansible.builtin.debug:
+    msg:
+      - "=========================================="
+      - "Semaphore Control Plane Configuration Complete!"
+      - "=========================================="
+      - "Semaphore UI: http://{{ ansible_host }}:{{ semaphore_port }}"
+      - "Infrastructure Repo: {{ infra_repo_path }}"
+      - "Terraform: {{ terraform_install_path }}/terraform"
+      - "1Password CLI: {{ onepassword_cli_install_path }}/op"
+      - ""
+      - "Next Steps:"
+      - "1. Access Semaphore UI and complete initial setup"
+      - "2. Configure repository in Semaphore"
+      - "3. Create task templates for Ansible and Terraform"
+      - "4. Test running a playbook from Semaphore"
+      - "=========================================="

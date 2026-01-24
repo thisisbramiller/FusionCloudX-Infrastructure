@@ -25,7 +25,13 @@
       "mcp__clickup__clickup_get_list",
       "mcp__clickup__clickup_create_task_comment",
       "mcp__clickup__clickup_create_task",
-      "mcp__clickup__clickup_create_list"
+      "mcp__clickup__clickup_create_list",
+      "mcp__terraform__get_provider_capabilities",
+      "mcp__terraform__search_providers",
+      "mcp__terraform__get_provider_details",
+      "mcp__terraform__search_modules",
+      "mcp__terraform__get_latest_provider_version",
+      "Bash(terraform validate:*)"
     ],
     "deny": [],
     "ask": []

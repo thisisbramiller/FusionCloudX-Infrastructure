@@ -1,6 +1,6 @@
 variable "proxmox_api_url" {
   type        = string
-  default     = "https://zero.fusioncloudx.home:8006/"
+  default     = "https://192.168.40.206:8006/"
   description = "Proxmox VE API URL"
 }
 
@@ -16,45 +16,90 @@ variable "vm_configs" {
   }))
 
   default = {
-    "teleport" = {
-      vm_id      = 1101
-      name       = "teleport"
-      memory_mb  = 2048
-      cpu_cores  = 2
-      started    = true
-      full_clone = true
-    }
-    "semaphore" = {
+    "semaphore-ui" = {
       vm_id      = 1102
-      name       = "semaphore"
-      memory_mb  = 2048
-      cpu_cores  = 2
-      started    = true
-      full_clone = true
-    }
-    "wazuh" = {
-      vm_id      = 1103
-      name       = "wazuh"
-      memory_mb  = 4096
-      cpu_cores  = 2
-      started    = true
-      full_clone = true
-    }
-    "immich" = {
-      vm_id      = 1104
-      name       = "immich"
-      memory_mb  = 4096
-      cpu_cores  = 2
-      started    = true
-      full_clone = true
-    }
-    "pi-hole" = {
-      vm_id      = 1105
-      name       = "pi-hole"
-      memory_mb  = 1024
-      cpu_cores  = 1
+      name       = "semaphore-ui"
+      memory_mb  = 8192
+      cpu_cores  = 8
       started    = true
       full_clone = true
     }
   }
+}
+
+# ==============================================================================
+# PostgreSQL LXC Container Configuration
+# ==============================================================================
+# Single PostgreSQL container hosting multiple databases
+# ==============================================================================
+
+variable "postgresql_lxc_config" {
+  type = object({
+    vm_id       = number
+    hostname    = string
+    description = string
+    memory_mb   = number
+    cpu_cores   = number
+    disk_gb     = number
+    started     = bool
+    on_boot     = optional(bool, true)
+    tags        = optional(list(string), [])
+  })
+
+  description = "Configuration for single PostgreSQL LXC container (hosts multiple databases)"
+
+  default = {
+    vm_id       = 2001
+    hostname    = "postgresql"
+    description = "Centralized PostgreSQL database server for homelab services (semaphore, wazuh, etc.)"
+    memory_mb   = 4096 # 4GB RAM for multiple databases
+    cpu_cores   = 2
+    disk_gb     = 64 # 64GB disk for multiple databases and growth
+    started     = true
+    on_boot     = true
+    tags        = ["database", "postgresql", "homelab"]
+  }
+}
+
+# ==============================================================================
+# PostgreSQL Database Configurations
+# ==============================================================================
+# Defines which databases should be created on the PostgreSQL instance
+# Ansible will use this configuration to create databases and users
+# ==============================================================================
+
+variable "postgresql_databases" {
+  type = list(object({
+    name        = string
+    description = string
+    owner       = string # Database owner (user)
+  }))
+
+  description = "List of databases to create on the PostgreSQL instance"
+
+  default = [
+    {
+      name        = "semaphore"
+      description = "Database for Semaphore (Ansible UI)"
+      owner       = "semaphore"
+    },
+    {
+      name        = "wazuh"
+      description = "Database for Wazuh (SIEM)"
+      owner       = "wazuh"
+    }
+  ]
+}
+
+# ==============================================================================
+# 1Password Configuration
+# ==============================================================================
+
+variable "onepassword_vault_id" {
+  type        = string
+  description = "1Password Vault ID for storing database credentials"
+
+  # This should be provided via environment variable or tfvars file:
+  # export TF_VAR_onepassword_vault_id="your-vault-uuid"
+  # OR: Create terraform.tfvars with: onepassword_vault_id = "your-vault-uuid"
 }

@@ -3,7 +3,7 @@ resource "proxmox_virtual_environment_vm" "qemu-vm" {
 
   vm_id     = each.value.vm_id
   name      = each.value.name
-  node_name = "zero"
+  node_name = "pve"
   started   = each.value.started
   on_boot   = try(each.value.on_boot, true)
   tags      = ["terraform", "ubuntu"]
@@ -40,8 +40,9 @@ resource "proxmox_virtual_environment_vm" "qemu-vm" {
       }
     }
 
-    user_data_file_id   = proxmox_virtual_environment_file.user_data_cloud_config[each.key].id
-    vendor_data_file_id = proxmox_virtual_environment_file.vendor_data_cloud_config.id
+    user_data_file_id = proxmox_virtual_environment_file.user_data_cloud_config[each.key].id
+    # Use semaphore-specific vendor_data for semaphore-ui VM, standard for others
+    vendor_data_file_id = each.key == "semaphore-ui" ? proxmox_virtual_environment_file.semaphore_vendor_data_cloud_config.id : proxmox_virtual_environment_file.vendor_data_cloud_config.id
   }
 
   operating_system {
@@ -49,6 +50,12 @@ resource "proxmox_virtual_environment_vm" "qemu-vm" {
   }
 
   serial_device {}
+
+  lifecycle {
+    ignore_changes = [
+      initialization, # Ignore cloud-init state changes
+    ]
+  }
 
 }
 

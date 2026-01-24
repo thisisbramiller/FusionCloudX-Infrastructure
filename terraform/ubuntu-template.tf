@@ -1,6 +1,6 @@
 resource "proxmox_virtual_environment_vm" "ubuntu-template" {
   name      = "ubuntu-template"
-  node_name = "zero"
+  node_name = "pve"
   vm_id     = 1000
 
   started  = false
@@ -51,7 +51,7 @@ resource "proxmox_virtual_environment_vm" "ubuntu-template" {
 }
 
 resource "proxmox_virtual_environment_download_file" "ubuntu-cloud-image" {
-  node_name    = "zero"
+  node_name    = "pve"
   datastore_id = "nas-infrastructure"
   content_type = "import"
   url          = "https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img"

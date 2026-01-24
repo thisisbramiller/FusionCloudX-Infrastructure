@@ -1,0 +1,153 @@
+---
+# ==============================================================================
+# PostgreSQL Role - Main Tasks
+# ==============================================================================
+# Installs and configures PostgreSQL database server
+# ==============================================================================
+
+- name: Update apt cache
+  apt:
+    update_cache: yes
+    cache_valid_time: 3600
+  tags: ['postgresql', 'install']
+
+- name: Install PostgreSQL packages
+  apt:
+    name: "{{ postgresql_packages }}"
+    state: present
+  tags: ['postgresql', 'install']
+  notify: restart postgresql
+
+- name: Ensure PostgreSQL service is started and enabled
+  systemd:
+    name: "{{ postgresql_service_name }}"
+    state: started
+    enabled: yes
+  tags: ['postgresql', 'service']
+
+- name: Wait for PostgreSQL to be ready
+  wait_for:
+    port: 5432
+    host: localhost
+    timeout: 30
+  tags: ['postgresql', 'service']
+
+- name: Check if postgresql.conf exists
+  stat:
+    path: "{{ postgresql_conf_path }}"
+  register: postgresql_conf_stat
+  tags: ['postgresql', 'config']
+
+- name: Configure PostgreSQL - postgresql.conf
+  template:
+    src: postgresql.conf.j2
+    dest: "{{ postgresql_conf_path }}"
+    owner: postgres
+    group: postgres
+    mode: '0644'
+    backup: yes
+  when: postgresql_conf_stat.stat.exists
+  tags: ['postgresql', 'config']
+  notify: restart postgresql
+
+- name: Configure PostgreSQL authentication - pg_hba.conf
+  template:
+    src: pg_hba.conf.j2
+    dest: "{{ postgresql_hba_path }}"
+    owner: postgres
+    group: postgres
+    mode: '0640'
+    backup: yes
+  tags: ['postgresql', 'config']
+  notify: reload postgresql
+
+- name: Ensure PostgreSQL is restarted if configuration changed
+  meta: flush_handlers
+  tags: ['postgresql', 'config']
+
+- name: Set PostgreSQL admin (postgres) user password
+  postgresql_user:
+    name: "{{ postgresql_admin_user }}"
+    password: "{{ postgresql_admin_password }}"
+    encrypted: yes
+  become: yes
+  become_user: postgres
+  when: postgresql_admin_password is defined
+  tags: ['postgresql', 'users']
+  no_log: true  # Don't log passwords
+
+- name: Create PostgreSQL databases
+  postgresql_db:
+    name: "{{ item.name }}"
+    owner: "{{ item.owner | default(omit) }}"
+    encoding: "{{ item.encoding | default('UTF-8') }}"
+    lc_collate: "{{ item.lc_collate | default('en_US.UTF-8') }}"
+    lc_ctype: "{{ item.lc_ctype | default('en_US.UTF-8') }}"
+    template: "{{ item.template | default('template0') }}"
+    state: present
+  become: yes
+  become_user: postgres
+  loop: "{{ postgresql_databases }}"
+  when: postgresql_databases is defined and postgresql_databases | length > 0
+  tags: ['postgresql', 'databases']
+
+- name: Create PostgreSQL users
+  postgresql_user:
+    name: "{{ item.name }}"
+    password: "{{ item.password }}"
+    db: "{{ item.database | default(omit) }}"
+    priv: "{{ item.priv | default(omit) }}"
+    role_attr_flags: "{{ item.role_attr_flags | default(omit) }}"
+    encrypted: yes
+    state: present
+  become: yes
+  become_user: postgres
+  loop: "{{ postgresql_users }}"
+  when: postgresql_users is defined and postgresql_users | length > 0
+  tags: ['postgresql', 'users']
+  no_log: true  # Don't log passwords
+
+- name: Grant database privileges to users
+  postgresql_privs:
+    database: "{{ item.database }}"
+    role: "{{ item.name }}"
+    type: database
+    privs: ALL
+    state: present
+  become: yes
+  become_user: postgres
+  loop: "{{ postgresql_users }}"
+  when: postgresql_users is defined and postgresql_users | length > 0 and item.database is defined
+  tags: ['postgresql', 'users']
+
+- name: Install firewall (ufw)
+  apt:
+    name: ufw
+    state: present
+  when: postgresql_firewall_rules is defined and postgresql_firewall_rules | length > 0
+  tags: ['postgresql', 'firewall']
+
+- name: Configure firewall rules for PostgreSQL
+  ufw:
+    rule: "{{ item.rule }}"
+    port: "{{ item.port }}"
+    proto: "{{ item.proto }}"
+    from_ip: "{{ item.from_ip | default(omit) }}"
+    comment: "{{ item.comment | default(omit) }}"
+  loop: "{{ postgresql_firewall_rules }}"
+  when: postgresql_firewall_rules is defined and postgresql_firewall_rules | length > 0
+  tags: ['postgresql', 'firewall']
+
+- name: Enable firewall
+  ufw:
+    state: enabled
+  when: postgresql_firewall_rules is defined and postgresql_firewall_rules | length > 0
+  tags: ['postgresql', 'firewall']
+
+- name: Display PostgreSQL status
+  debug:
+    msg:
+      - "PostgreSQL {{ postgresql_version }} installation completed"
+      - "Databases created: {{ postgresql_databases | map(attribute='name') | list | join(', ') }}"
+      - "Users created: {{ postgresql_users | map(attribute='name') | list | join(', ') }}"
+  tags: ['postgresql']
