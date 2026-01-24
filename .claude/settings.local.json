@@ -31,7 +31,11 @@
       "mcp__terraform__get_provider_details",
       "mcp__terraform__search_modules",
       "mcp__terraform__get_latest_provider_version",
-      "Bash(terraform validate:*)"
+      "Bash(terraform validate:*)",
+      "mcp__clickup__clickup_update_task",
+      "Bash(cd:*)",
+      "Bash(ls:*)",
+      "Bash(git log:*)"
     ],
     "deny": [],
     "ask": []

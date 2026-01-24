@@ -41,7 +41,7 @@ onepassword_connect_token: ""
 # Environment variables
 environment_vars:
   OP_SERVICE_ACCOUNT_TOKEN: "{{ onepassword_service_account_token | default('') }}"
-  PROXMOX_VE_ENDPOINT: "{{ proxmox_api_url | default('https://zero.fusioncloudx.home:8006') }}"
+  PROXMOX_VE_ENDPOINT: "{{ proxmox_api_url | default('https://192.168.40.206:8006') }}"
   ANSIBLE_HOST_KEY_CHECKING: "False"
 
 # Semaphore UI configuration
