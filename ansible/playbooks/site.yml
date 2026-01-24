@@ -18,7 +18,9 @@
           - "========================================"
           - "Total hosts: {{ groups['all'] | length }}"
           - "PostgreSQL servers: {{ groups['postgresql'] | length if 'postgresql' in groups else 0 }}"
-          - "Note: Single PostgreSQL instance hosts multiple databases"
+          - "Control Plane servers: {{ groups['control_plane'] | length if 'control_plane' in groups else 0 }}"
+          - "Semaphore UI: {{ groups['semaphore'] | length if 'semaphore' in groups else 0 }}"
+          - "GitLab: {{ groups['gitlab'] | length if 'gitlab' in groups else 0 }}"
           - "========================================"
       run_once: yes
       tags: ['always']
@@ -30,6 +32,21 @@
 - name: Deploy PostgreSQL Database Server
   import_playbook: postgresql.yml
   tags: ['postgresql', 'databases']
+
+# ==============================================================================
+# Control Plane - GitLab
+# ==============================================================================
+
+- name: Deploy GitLab
+  import_playbook: gitlab.yml
+  tags: ['gitlab', 'control-plane']
+
+# ==============================================================================
+# Control Plane - Semaphore (runs separately via bootstrap)
+# ==============================================================================
+
+# Note: Semaphore bootstrap runs separately via bootstrap-semaphore.yml
+# This playbook imports postgresql.yml and gitlab.yml for application server setup
 
 # ==============================================================================
 # Application Servers (future)
@@ -46,3 +63,4 @@
 # - name: Deploy Monitoring Stack
 #   import_playbook: monitoring.yml
 #   tags: ['monitoring']
+

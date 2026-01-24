@@ -19,8 +19,16 @@ variable "vm_configs" {
     "semaphore-ui" = {
       vm_id      = 1102
       name       = "semaphore-ui"
+      memory_mb  = 4096
+      cpu_cores  = 2
+      started    = true
+      full_clone = true
+    }
+    "gitlab" = {
+      vm_id      = 1103
+      name       = "gitlab"
       memory_mb  = 8192
-      cpu_cores  = 8
+      cpu_cores  = 4
       started    = true
       full_clone = true
     }
@@ -87,6 +95,11 @@ variable "postgresql_databases" {
       name        = "wazuh"
       description = "Database for Wazuh (SIEM)"
       owner       = "wazuh"
+    },
+    {
+      name        = "gitlabhq_production"
+      description = "Database for GitLab"
+      owner       = "gitlab"
     }
   ]
 }

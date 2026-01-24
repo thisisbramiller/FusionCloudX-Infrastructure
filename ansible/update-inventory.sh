@@ -1,10 +1,10 @@
-#!/bin/bash
+#!/usr/bin/env zsh
 # ==============================================================================
 # Update Ansible Inventory from Terraform Outputs
 # ==============================================================================
-# This script extracts the PostgreSQL LXC container IP from Terraform and
-# updates the Ansible inventory file
-# Note: Single PostgreSQL container hosting multiple databases
+# This script extracts VM IPs from Terraform and updates the Ansible inventory
+# Handles multiple VMs: semaphore-ui, gitlab, postgresql
+# Compatible with bash and zsh on macOS and Linux
 # ==============================================================================
 
 set -euo pipefail
@@ -16,17 +16,24 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-# Paths
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Paths - compatible with both bash and zsh
+if [[ -n "${ZSH_VERSION:-}" ]]; then
+    # zsh
+    SCRIPT_DIR="${0:a:h}"
+else
+    # bash
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+fi
+
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 TERRAFORM_DIR="$PROJECT_ROOT/terraform"
 INVENTORY_FILE="$SCRIPT_DIR/inventory/hosts.ini"
-TEMP_INVENTORY="/tmp/hosts.ini.tmp"
+TEMP_INVENTORY="/tmp/hosts.ini.tmp.$$"
 
 echo -e "${BLUE}========================================"
 echo "Updating Ansible Inventory from Terraform"
 echo "========================================"
-echo "Single PostgreSQL container architecture"
+echo "Discovering: semaphore-ui, gitlab, postgresql"
 echo -e "========================================${NC}"
 
 # Check if terraform directory exists
@@ -47,71 +54,131 @@ fi
 # Get Terraform outputs
 echo -e "${BLUE}Fetching Terraform outputs...${NC}"
 
-# Extract PostgreSQL container information (single container)
+# Extract VM and container information
+SEMAPHORE_JSON=$(terraform output -json ansible_inventory_semaphore 2>/dev/null || echo "{}")
+GITLAB_JSON=$(terraform output -json ansible_inventory_gitlab 2>/dev/null || echo "{}")
 POSTGRESQL_JSON=$(terraform output -json ansible_inventory_postgresql 2>/dev/null || echo "{}")
 
-if [ "$POSTGRESQL_JSON" = "{}" ] || [ "$POSTGRESQL_JSON" = "null" ]; then
-    echo -e "${YELLOW}Warning: PostgreSQL container not found in Terraform outputs${NC}"
-    echo -e "${YELLOW}Make sure you've run 'terraform apply' first${NC}"
-    exit 1
+# Initialize variables
+SEMAPHORE_ENTRY=""
+GITLAB_ENTRY=""
+POSTGRESQL_ENTRY=""
+DATABASES=""
+
+# Parse Semaphore UI
+if [ "$SEMAPHORE_JSON" != "{}" ] && [ "$SEMAPHORE_JSON" != "null" ]; then
+    SEMAPHORE_HOSTNAME=$(echo "$SEMAPHORE_JSON" | jq -r '.hostname')
+    SEMAPHORE_IP=$(echo "$SEMAPHORE_JSON" | jq -r '.ip' | sed 's|/24$||')
+    SEMAPHORE_ENTRY="$SEMAPHORE_HOSTNAME ansible_host=$SEMAPHORE_IP"
+    echo -e "${GREEN}Found Semaphore UI:${NC}"
+    echo "  Hostname: $SEMAPHORE_HOSTNAME"
+    echo "  IP: $SEMAPHORE_IP"
+else
+    echo -e "${YELLOW}Warning: Semaphore UI not found in Terraform outputs${NC}"
 fi
 
-# Parse JSON and extract container details
-echo -e "${BLUE}Parsing container information...${NC}"
-HOSTNAME=$(echo "$POSTGRESQL_JSON" | jq -r '.hostname')
-IP=$(echo "$POSTGRESQL_JSON" | jq -r '.ip' | sed 's|/24$||')
-VM_ID=$(echo "$POSTGRESQL_JSON" | jq -r '.vm_id')
-DATABASES=$(echo "$POSTGRESQL_JSON" | jq -r '.databases[].name' | tr '\n' ',' | sed 's/,$//')
+# Parse GitLab
+if [ "$GITLAB_JSON" != "{}" ] && [ "$GITLAB_JSON" != "null" ]; then
+    GITLAB_HOSTNAME=$(echo "$GITLAB_JSON" | jq -r '.hostname')
+    GITLAB_IP=$(echo "$GITLAB_JSON" | jq -r '.ip' | sed 's|/24$||')
+    GITLAB_ENTRY="$GITLAB_HOSTNAME ansible_host=$GITLAB_IP"
+    echo -e "${GREEN}Found GitLab:${NC}"
+    echo "  Hostname: $GITLAB_HOSTNAME"
+    echo "  IP: $GITLAB_IP"
+else
+    echo -e "${YELLOW}Warning: GitLab not found in Terraform outputs${NC}"
+fi
 
-echo -e "${GREEN}Found PostgreSQL container:${NC}"
-echo "  Hostname: $HOSTNAME"
-echo "  IP: $IP"
-echo "  VM ID: $VM_ID"
-echo "  Databases: $DATABASES"
-
-# Create inventory entry
-POSTGRESQL_ENTRY="$HOSTNAME ansible_host=$IP"
+# Parse PostgreSQL
+if [ "$POSTGRESQL_JSON" != "{}" ] && [ "$POSTGRESQL_JSON" != "null" ]; then
+    POSTGRESQL_HOSTNAME=$(echo "$POSTGRESQL_JSON" | jq -r '.hostname')
+    POSTGRESQL_IP=$(echo "$POSTGRESQL_JSON" | jq -r '.ip' | sed 's|/24$||')
+    POSTGRESQL_ENTRY="$POSTGRESQL_HOSTNAME ansible_host=$POSTGRESQL_IP"
+    DATABASES=$(echo "$POSTGRESQL_JSON" | jq -r '.databases[].name' 2>/dev/null | tr '\n' ',' | sed 's/,$//')
+    echo -e "${GREEN}Found PostgreSQL:${NC}"
+    echo "  Hostname: $POSTGRESQL_HOSTNAME"
+    echo "  IP: $POSTGRESQL_IP"
+    echo "  Databases: $DATABASES"
+else
+    echo -e "${YELLOW}Warning: PostgreSQL not found in Terraform outputs${NC}"
+    exit 1
+fi
 
 # Create temporary inventory file
 cp "$INVENTORY_FILE" "$TEMP_INVENTORY"
 
-# Update the [postgresql] section
 echo -e "${BLUE}Updating inventory file...${NC}"
 
-# Use awk to replace the [postgresql] section
-awk -v entry="$POSTGRESQL_ENTRY" '
-BEGIN { in_postgresql = 0; printed_entry = 0 }
-/^\[postgresql\]/ {
-    print $0
-    in_postgresql = 1
-    next
+# Update the inventory with all VMs using Python for better portability
+python3 << PYSCRIPT
+import sys
+import re
+
+inventory_file = "$INVENTORY_FILE"
+temp_inventory = "$TEMP_INVENTORY"
+
+# Read the inventory file
+with open(inventory_file, 'r') as f:
+    lines = f.readlines()
+
+# Prepare replacement entries
+entries = {
+    'semaphore': "$SEMAPHORE_ENTRY",
+    'gitlab': "$GITLAB_ENTRY",
+    'postgresql': "$POSTGRESQL_ENTRY"
 }
-/^\[.*\]/ {
-    if (in_postgresql == 1 && printed_entry == 0) {
-        print entry
-        printed_entry = 1
-    }
-    in_postgresql = 0
-}
-{
-    if (in_postgresql == 0) {
-        print $0
-    } else if ($0 ~ /^#/ || $0 ~ /^$/) {
-        # Keep comments and blank lines in postgresql section
-        print $0
-    } else if ($0 ~ /^[a-zA-Z]/ && $0 !~ /^ansible_/) {
-        # Skip old host entries (but keep ansible_ variables)
-        next
-    } else {
-        print $0
-    }
-}
-END {
-    if (in_postgresql == 1 && printed_entry == 0) {
-        print entry
-    }
-}
-' "$INVENTORY_FILE" > "$TEMP_INVENTORY"
+
+# Process the file
+output = []
+i = 0
+
+while i < len(lines):
+    line = lines[i]
+    
+    # Check if this is a section header
+    if line.startswith('[') and line.rstrip().endswith(']'):
+        # Extract section name (before any :)
+        match = re.match(r'\[([a-zA-Z_]+)', line)
+        if match:
+            section_name = match.group(1)
+            output.append(line)
+            
+            # If this is a section we need to update
+            if section_name in entries and entries[section_name]:
+                # Skip old entries until next section or vars line
+                i += 1
+                entry_added = False
+                
+                while i < len(lines):
+                    next_line = lines[i]
+                    
+                    # Stop if we hit another section
+                    if next_line.startswith('['):
+                        i -= 1  # Back up one line
+                        break
+                    
+                    # Keep comments, blank lines, and vars lines
+                    if next_line.startswith('#') or next_line.strip() == '' or next_line.startswith('ansible_'):
+                        output.append(next_line)
+                        i += 1
+                    else:
+                        # Skip old host entries
+                        i += 1
+                
+                # Add the new entry if we haven't already
+                if entries[section_name] and not entry_added:
+                    output.append(entries[section_name] + '\n')
+        else:
+            output.append(line)
+    else:
+        output.append(line)
+    
+    i += 1
+
+# Write the updated inventory
+with open(temp_inventory, 'w') as f:
+    f.writelines(output)
+PYSCRIPT
 
 # Backup original inventory
 BACKUP_FILE="$INVENTORY_FILE.backup.$(date +%Y%m%d_%H%M%S)"
@@ -125,17 +192,28 @@ echo -e "${GREEN}========================================"
 echo "Inventory update complete!"
 echo -e "========================================${NC}"
 echo ""
-echo "PostgreSQL container added:"
-echo "  $POSTGRESQL_ENTRY"
-echo "  (Hosting databases: $DATABASES)"
+if [ -n "$SEMAPHORE_ENTRY" ]; then
+    echo "Semaphore UI added: $SEMAPHORE_ENTRY"
+fi
+if [ -n "$GITLAB_ENTRY" ]; then
+    echo "GitLab added: $GITLAB_ENTRY"
+fi
+if [ -n "$POSTGRESQL_ENTRY" ]; then
+    echo "PostgreSQL added: $POSTGRESQL_ENTRY"
+    [ -n "$DATABASES" ] && echo "  (Databases: $DATABASES)"
+fi
 echo ""
 echo -e "${BLUE}Next steps:${NC}"
 echo "1. Review the updated inventory: cat $INVENTORY_FILE"
-echo "2. Test connectivity: ansible postgresql -m ping"
-echo "3. Deploy PostgreSQL: ansible-playbook playbooks/postgresql.yml"
-echo ""
-echo -e "${YELLOW}Important:${NC}"
-echo "- This is a SINGLE container hosting MULTIPLE databases"
-echo "- Ensure 1Password CLI is installed and authenticated"
-echo "- Database credentials are managed via 1Password"
+echo "2. Test connectivity:"
+if [ -n "$SEMAPHORE_ENTRY" ]; then
+    echo "   - ansible semaphore -m ping"
+fi
+if [ -n "$GITLAB_ENTRY" ]; then
+    echo "   - ansible gitlab -m ping"
+fi
+if [ -n "$POSTGRESQL_ENTRY" ]; then
+    echo "   - ansible postgresql -m ping"
+fi
+echo "3. Deploy services: ansible-playbook playbooks/site.yml"
 echo ""

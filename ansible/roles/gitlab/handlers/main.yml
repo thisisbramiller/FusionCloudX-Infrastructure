@@ -1,0 +1,18 @@
+---
+# ==============================================================================
+# GitLab Role - Handlers
+# ==============================================================================
+# Handlers for service management and configuration changes
+# ==============================================================================
+
+- name: reconfigure gitlab
+  command: gitlab-ctl reconfigure
+  tags: ['gitlab']
+
+- name: restart gitlab
+  command: gitlab-ctl restart
+  tags: ['gitlab']
+
+- name: reload gitlab
+  command: gitlab-ctl reload
+  tags: ['gitlab']

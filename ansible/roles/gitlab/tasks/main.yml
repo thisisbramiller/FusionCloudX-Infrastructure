@@ -1,0 +1,105 @@
+---
+# ==============================================================================
+# GitLab Role - Main Tasks
+# ==============================================================================
+# Installs and configures GitLab Omnibus with external PostgreSQL
+# ==============================================================================
+
+- name: Update apt cache
+  apt:
+    update_cache: yes
+    cache_valid_time: 3600
+  tags: ['gitlab', 'install']
+
+- name: Install required packages
+  apt:
+    name:
+      - curl
+      - openssh-server
+      - openssh-client
+      - postfix
+      - ca-certificates
+      - gnupg
+      - tzdata
+      - perl
+    state: present
+  tags: ['gitlab', 'install']
+
+- name: Install QEMU guest agent
+  apt:
+    name: "{{ qemu_guest_agent_package }}"
+    state: present
+  tags: ['gitlab', 'install', 'qemu']
+
+- name: Start and enable QEMU guest agent
+  systemd:
+    name: qemu-guest-agent
+    state: started
+    enabled: yes
+  when: qemu_guest_agent_enabled
+  tags: ['gitlab', 'qemu']
+
+- name: Add GitLab repository key
+  apt_key:
+    url: https://packages.gitlab.com/gpg.key
+    state: present
+  tags: ['gitlab', 'repository']
+
+- name: Add GitLab repository
+  apt_repository:
+    repo: "deb https://packages.gitlab.com/gitlab/gitlab-{{ gitlab_edition }}/ubuntu/ {{ ansible_distribution_release }} main"
+    state: present
+    filename: gitlab
+  tags: ['gitlab', 'repository']
+
+- name: Update apt cache after adding repository
+  apt:
+    update_cache: yes
+    cache_valid_time: 3600
+  tags: ['gitlab', 'install']
+
+- name: Install GitLab packages
+  apt:
+    name: "{{ 'gitlab-ee' if gitlab_edition == 'ee' else 'gitlab-ce' }}"
+    state: present
+  environment:
+    EXTERNAL_URL: "{{ gitlab_external_url }}"
+  tags: ['gitlab', 'install']
+  notify: reconfigure gitlab
+
+- name: Ensure /etc/gitlab directory exists
+  file:
+    path: /etc/gitlab
+    state: directory
+    mode: '0755'
+  tags: ['gitlab', 'config']
+
+- name: Configure GitLab with external PostgreSQL
+  template:
+    src: gitlab.rb.j2
+    dest: /etc/gitlab/gitlab.rb
+    owner: root
+    group: root
+    mode: '0600'
+    backup: yes
+  tags: ['gitlab', 'config']
+  notify: reconfigure gitlab
+
+- name: Flush handlers to ensure GitLab is configured
+  meta: flush_handlers
+  tags: ['gitlab', 'config']
+
+- name: Wait for GitLab to be ready
+  wait_for:
+    port: 80
+    host: localhost
+    timeout: 300
+    delay: 10
+  tags: ['gitlab', 'service']
+
+- name: Enable and start GitLab
+  systemd:
+    name: gitlab-runsvdir
+    state: started
+    enabled: yes
+  tags: ['gitlab', 'service']

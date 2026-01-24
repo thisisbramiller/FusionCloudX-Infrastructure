@@ -86,12 +86,11 @@ resource "proxmox_virtual_environment_container" "postgresql" {
       }
     }
 
-    # user_account {
-    #   keys = [
-    #     # SSH public key for ansible/terraform user - replace with your key
-    #     trimspace(file("~/.ssh/id_rsa.pub"))
-    #   ]
-    # }
+    user_account {
+      keys = [
+        # Will add SSH keys via Ansible after initial connection
+      ]
+    }
   }
 
   # Features
@@ -165,6 +164,25 @@ resource "onepassword_item" "wazuh_db_user" {
   port     = "5432"
   database = "wazuh"
   username = "wazuh"
+
+  password_recipe {
+    length  = 32
+    symbols = true
+  }
+}
+
+# GitLab database user password item in 1Password
+resource "onepassword_item" "gitlab_db_user" {
+  vault    = var.onepassword_vault_id
+  category = "database"
+  title    = "PostgreSQL - GitLab Database User"
+  tags     = ["terraform", "postgresql", "gitlab", "homelab"]
+
+  type     = "postgresql"
+  hostname = "${var.postgresql_lxc_config.hostname}.fusioncloudx.home"
+  port     = "5432"
+  database = "gitlabhq_production"
+  username = "gitlab"
 
   password_recipe {
     length  = 32

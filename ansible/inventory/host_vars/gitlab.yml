@@ -1,0 +1,58 @@
+---
+# ==============================================================================
+# Host Variables - gitlab
+# ==============================================================================
+# GitLab server configuration
+# VM specs: 4 vCPU cores, 8GB RAM, 50GB disk
+# ==============================================================================
+
+# ==============================================================================
+# GitLab Basic Configuration
+# ==============================================================================
+
+gitlab_hostname: "gitlab.fusioncloudx.home"
+gitlab_external_url: "http://{{ gitlab_hostname }}"
+gitlab_edition: "ee"  # Enterprise Edition
+
+# ==============================================================================
+# PostgreSQL Configuration (External Database)
+# ==============================================================================
+# Connected to shared PostgreSQL container at postgresql.fusioncloudx.home:5432
+
+gitlab_postgresql_host: "postgresql"
+gitlab_postgresql_port: 5432
+gitlab_postgresql_database: "gitlabhq_production"
+gitlab_postgresql_username: "gitlab"
+gitlab_postgresql_password: "{{ lookup('onepassword.connect.generic_item', 'PostgreSQL - GitLab Database User', field='password', vault='FusionCloudX Infrastructure') }}"
+
+# ==============================================================================
+# GitLab Runner Configuration
+# ==============================================================================
+# Self-managed runner on the same VM for CI/CD job execution
+
+gitlab_runner_enabled: true
+gitlab_runner_concurrent: 2
+gitlab_runner_check_interval: 0
+
+# ==============================================================================
+# GitLab Features (Optional)
+# ==============================================================================
+
+gitlab_registry_enabled: false
+gitlab_pages_enabled: false
+
+# ==============================================================================
+# QEMU Guest Agent
+# ==============================================================================
+
+qemu_guest_agent_enabled: true
+
+# ==============================================================================
+# Additional Notes
+# ==============================================================================
+# - External PostgreSQL database (shared with Semaphore and Wazuh)
+# - Database credentials managed via 1Password vault
+# - GitLab Runner configured for local CI/CD jobs
+# - Container Registry and Pages disabled for single-VM deployment
+# - To enable features, update variables above and re-run playbook
+# ==============================================================================

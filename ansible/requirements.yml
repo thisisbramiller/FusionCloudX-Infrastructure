@@ -11,3 +11,14 @@ collections:
   # GitHub: https://github.com/1Password/ansible-onepasswordconnect-collection
   - name: onepassword.connect
     version: ">=2.3.1"
+
+  # Official Ansible collection for PostgreSQL management
+  # Docs: https://docs.ansible.com/ansible/latest/collections/community/postgresql/index.html
+  - name: community.postgresql
+    version: ">=3.0.0"
+
+  # alvistack.gitlab - Comprehensive GitLab installation and configuration
+  # Docs: https://github.com/alvistack/ansible-collection-gitlab
+  # Includes roles for Omnibus installation, configuration, and management
+  - name: alvistack.gitlab
+    version: ">=1.0.0"

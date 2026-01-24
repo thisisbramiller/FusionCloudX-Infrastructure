@@ -39,6 +39,14 @@ postgresql_databases:
     template: "template0"
     description: "Database for Wazuh (SIEM)"
 
+  - name: "gitlabhq_production"
+    owner: "gitlab"
+    encoding: "UTF-8"
+    lc_collate: "en_US.UTF-8"
+    lc_ctype: "en_US.UTF-8"
+    template: "template0"
+    description: "Database for GitLab"
+
 # ==============================================================================
 # Database Users (with 1Password Integration)
 # ==============================================================================
@@ -65,6 +73,13 @@ postgresql_users:
     role_attr_flags: "CREATEDB,NOSUPERUSER,NOCREATEROLE"
     description: "Wazuh database user"
 
+  - name: "gitlab"
+    password: "{{ lookup('onepassword.connect.generic_item', 'PostgreSQL - GitLab Database User', field='password', vault='FusionCloudX Infrastructure') }}"
+    database: "gitlabhq_production"
+    priv: "ALL"
+    role_attr_flags: "CREATEDB,NOSUPERUSER,NOCREATEROLE"
+    description: "GitLab database user"
+
 # ==============================================================================
 # Firewall Rules
 # ==============================================================================
@@ -89,6 +104,7 @@ postgresql_backup_retention_days: 30  # 30 days for homelab
 postgresql_backup_databases:
   - semaphore
   - wazuh
+  - gitlabhq_production
 
 # ==============================================================================
 # Additional Notes

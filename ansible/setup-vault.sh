@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # ==============================================================================
 # Setup Ansible Vault
 # ==============================================================================
@@ -14,7 +14,7 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m'
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 VAULT_PASS_FILE="$SCRIPT_DIR/.vault_pass"
 VAULT_FILE="$SCRIPT_DIR/inventory/group_vars/vault.yml"
 

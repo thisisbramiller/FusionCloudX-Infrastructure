@@ -1,0 +1,147 @@
+# ==============================================================================
+# GitLab Omnibus Configuration
+# ==============================================================================
+# External PostgreSQL database configuration
+# This file is managed by Ansible - manual edits may be overwritten
+# ==============================================================================
+
+# External URL
+external_url "{{ gitlab_external_url }}"
+
+# ==============================================================================
+# PostgreSQL Configuration (External Database)
+# ==============================================================================
+# Disable bundled PostgreSQL and use external database
+
+postgresql['enable'] = false
+
+gitlab_rails['db_adapter'] = 'postgresql'
+gitlab_rails['db_host'] = '{{ gitlab_postgresql_host }}'
+gitlab_rails['db_port'] = {{ gitlab_postgresql_port }}
+gitlab_rails['db_database'] = '{{ gitlab_postgresql_database }}'
+gitlab_rails['db_username'] = '{{ gitlab_postgresql_username }}'
+gitlab_rails['db_password'] = '{{ gitlab_postgresql_password }}'
+
+# Connection pool settings for external database
+gitlab_rails['db_prepared_statements'] = false
+gitlab_rails['db_statements_limit'] = 1000
+gitlab_rails['db_pool_size'] = 10
+
+# ==============================================================================
+# Puma Web Server Configuration
+# ==============================================================================
+
+puma['worker_processes'] = 2
+puma['worker_timeout'] = 60
+puma['worker_boot_timeout'] = 30
+
+# ==============================================================================
+# Redis Configuration (Bundled)
+# ==============================================================================
+# Using bundled Redis for simplicity (single VM deployment)
+
+redis['enable'] = true
+
+# ==============================================================================
+# Sidekiq Configuration (Bundled)
+# ==============================================================================
+
+sidekiq['enable'] = true
+sidekiq['concurrency'] = 5
+
+# ==============================================================================
+# GitLab Runner Configuration
+# ==============================================================================
+{% if gitlab_runner_enabled %}
+
+gitlab_runner['enable'] = true
+gitlab_runner['concurrent'] = {{ gitlab_runner_concurrent }}
+gitlab_runner['check_interval'] = {{ gitlab_runner_check_interval }}
+
+{% else %}
+
+gitlab_runner['enable'] = false
+
+{% endif %}
+
+# ==============================================================================
+# Container Registry
+# ==============================================================================
+{% if gitlab_registry_enabled %}
+
+registry['enable'] = true
+registry_external_url "{{ gitlab_registry_external_url }}"
+
+{% else %}
+
+registry['enable'] = false
+
+{% endif %}
+
+# ==============================================================================
+# GitLab Pages
+# ==============================================================================
+{% if gitlab_pages_enabled %}
+
+pages['enable'] = true
+
+{% else %}
+
+pages['enable'] = false
+
+{% endif %}
+
+# ==============================================================================
+# Logging Configuration
+# ==============================================================================
+
+# Log levels
+gitlab_rails['log_level'] = 'info'
+gitlab_rails['sentry_enabled'] = false
+
+# ==============================================================================
+# Security Configuration
+# ==============================================================================
+
+# Use strong SSL protocols
+nginx['ssl_protocols'] = "TLSv1.2 TLSv1.3"
+
+# ==============================================================================
+# Performance and Memory Tuning
+# ==============================================================================
+
+# Unicorn/Puma settings (lightweight for 4 vCPU VM)
+puma['max_threads'] = 4
+puma['min_threads'] = 1
+
+# GitLab shell settings
+gitlab_shell['git_timeout'] = 800
+
+# ==============================================================================
+# Backup Configuration
+# ==============================================================================
+
+# Backup location
+gitlab_rails['backup_path'] = "/var/opt/gitlab/backups"
+
+# ==============================================================================
+# Additional Configuration
+# ==============================================================================
+
+# Timezone
+gitlab_rails['time_zone'] = 'America/Chicago'
+
+# Let's Encrypt integration (optional, set to false for self-signed)
+letsencrypt['enable'] = false
+
+# Nginx settings
+nginx['listen_port'] = 80
+nginx['redirect_http_to_https'] = false
+
+# Monitoring and prometheus (optional)
+prometheus['enable'] = false
+prometheus_monitoring['enable'] = false
+
+# ==============================================================================
+# End of GitLab Configuration
+# ==============================================================================

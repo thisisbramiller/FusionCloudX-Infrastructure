@@ -7,6 +7,32 @@ output "vm_ipv4_addresses" {
 }
 
 # ==============================================================================
+# Semaphore UI VM Outputs
+# ==============================================================================
+
+output "ansible_inventory_semaphore" {
+  value = try({
+    hostname = proxmox_virtual_environment_vm.qemu-vm["semaphore-ui"].name
+    ip       = proxmox_virtual_environment_vm.qemu-vm["semaphore-ui"].ipv4_addresses[1][0]
+    vm_id    = proxmox_virtual_environment_vm.qemu-vm["semaphore-ui"].vm_id
+  }, {})
+  description = "Semaphore UI VM details formatted for Ansible inventory"
+}
+
+# ==============================================================================
+# GitLab VM Outputs
+# ==============================================================================
+
+output "ansible_inventory_gitlab" {
+  value = try({
+    hostname = proxmox_virtual_environment_vm.qemu-vm["gitlab"].name
+    ip       = proxmox_virtual_environment_vm.qemu-vm["gitlab"].ipv4_addresses[1][0]
+    vm_id    = proxmox_virtual_environment_vm.qemu-vm["gitlab"].vm_id
+  }, {})
+  description = "GitLab VM details formatted for Ansible inventory"
+}
+
+# ==============================================================================
 # PostgreSQL LXC Container Outputs
 # ==============================================================================
 # Single PostgreSQL instance outputs
@@ -31,11 +57,11 @@ output "postgresql_container_ipv4" {
 output "ansible_inventory_postgresql" {
   value = {
     hostname  = proxmox_virtual_environment_container.postgresql.initialization[0].hostname
-    ip        = try(proxmox_virtual_environment_container.postgresql.initialization[0].ip_config[0].ipv4[0].address, "IP not available")
+    ip        = proxmox_virtual_environment_container.postgresql.initialization[0].hostname  # Use hostname for DNS resolution
     vm_id     = proxmox_virtual_environment_container.postgresql.vm_id
     databases = var.postgresql_databases
   }
-  description = "PostgreSQL container details formatted for Ansible inventory (includes database list)"
+  description = "PostgreSQL container details formatted for Ansible inventory (uses hostname for DNS resolution)"
 }
 
 # ==============================================================================
@@ -59,6 +85,11 @@ output "onepassword_wazuh_db_id" {
   description = "1Password item ID for Wazuh database user credentials"
 }
 
+output "onepassword_gitlab_db_id" {
+  value       = onepassword_item.gitlab_db_user.id
+  description = "1Password item ID for GitLab database user credentials"
+}
+
 # Summary output
 output "postgresql_deployment_summary" {
   value = {
@@ -75,6 +106,7 @@ output "postgresql_deployment_summary" {
       admin_password_1password_id     = onepassword_item.postgresql_admin.id
       semaphore_password_1password_id = onepassword_item.semaphore_db_user.id
       wazuh_password_1password_id     = onepassword_item.wazuh_db_user.id
+      gitlab_password_1password_id    = onepassword_item.gitlab_db_user.id
     }
   }
   description = "Complete PostgreSQL deployment summary"

@@ -1,0 +1,57 @@
+---
+# ==============================================================================
+# GitLab Role - Default Variables
+# ==============================================================================
+# Default configuration for GitLab Omnibus installation
+# Can be overridden in playbooks or host_vars
+# ==============================================================================
+
+# GitLab Edition (ce = Community Edition, ee = Enterprise Edition)
+gitlab_edition: "ee"
+
+# GitLab version (leave empty for latest)
+gitlab_version: ""
+
+# GitLab hostname/domain name
+gitlab_hostname: "gitlab.fusioncloudx.home"
+
+# GitLab external URL
+gitlab_external_url: "http://{{ gitlab_hostname }}"
+
+# ==============================================================================
+# PostgreSQL Configuration (External Database)
+# ==============================================================================
+
+gitlab_postgresql_host: "postgresql"
+gitlab_postgresql_port: 5432
+gitlab_postgresql_database: "gitlabhq_production"
+gitlab_postgresql_username: "gitlab"
+gitlab_postgresql_password: "{{ lookup('onepassword.connect.generic_item', 'PostgreSQL - GitLab Database User', field='password', vault='FusionCloudX Infrastructure') }}"
+
+# ==============================================================================
+# GitLab Runner Configuration
+# ==============================================================================
+
+gitlab_runner_enabled: true
+gitlab_runner_concurrent: 2
+gitlab_runner_check_interval: 0
+
+# ==============================================================================
+# GitLab Container Registry (Optional)
+# ==============================================================================
+
+gitlab_registry_enabled: false
+gitlab_registry_external_url: "registry.{{ gitlab_hostname }}"
+
+# ==============================================================================
+# GitLab Pages (Optional)
+# ==============================================================================
+
+gitlab_pages_enabled: false
+
+# ==============================================================================
+# QEMU Guest Agent
+# ==============================================================================
+
+qemu_guest_agent_enabled: true
+qemu_guest_agent_package: "qemu-guest-agent"
