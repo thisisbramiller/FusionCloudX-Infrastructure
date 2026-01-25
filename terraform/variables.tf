@@ -24,6 +24,14 @@ variable "vm_configs" {
       started    = true
       full_clone = true
     }
+    "gitlab" = {
+      vm_id      = 1103
+      name       = "gitlab"
+      memory_mb  = 8192  # 8GB for installation (can reduce to 4GB after installation if needed)
+      cpu_cores  = 4     # 4 cores for faster installation
+      started    = true
+      full_clone = true
+    }
   }
 }
 
