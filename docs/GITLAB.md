@@ -327,20 +327,6 @@ When moving to production:
 7. **Monitoring**: Enable Prometheus/Grafana
 8. **Security updates**: Enable automatic security patches
 
-## Known Issues
-
-### Ansible Roles Path
-
-**Issue**: Ansible playbooks require `ANSIBLE_ROLES_PATH=./roles` when run from ansible directory.
-
-**Workaround**: 
-```bash
-cd ansible
-ANSIBLE_ROLES_PATH=./roles ansible-playbook playbooks/gitlab.yml
-```
-
-**Fix**: To be addressed in future commit - update ansible.cfg roles_path resolution.
-
 ## References
 
 - **GitLab Docs**: https://docs.gitlab.com/
