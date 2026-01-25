@@ -79,7 +79,9 @@ Configuration files in `terraform/`:
 - Service account token passed via `OP_SERVICE_ACCOUNT_TOKEN` environment variable
 
 **Current Infrastructure** (from `variables.tf`):
-- **VMs**: `semaphore-ui` (ID 1102, 8GB/8 cores) - control plane
+- **VMs**:
+  - `semaphore-ui` (ID 1102, 8GB/8 cores) - control plane
+  - `gitlab` (ID 1103, 8GB/4 cores) - Git hosting + CI/CD
 - **LXC**: `postgresql` (ID 2001, 4GB/2 cores) - database server
 - **Databases**: semaphore, wazuh (defined in `postgresql_databases` variable)
 
@@ -300,8 +302,41 @@ op vault list  # Should succeed if token is valid
 **Cloud-Init Behavior**:
 - **Standard VMs**: Basic vendor_data (qemu-guest-agent, python3, pip)
 - **semaphore-ui**: Enhanced vendor_data (ansible, terraform, git, build-essential)
+- **gitlab**: Enhanced vendor_data (curl, postfix, ufw, python3 for Ansible)
 - User: `ansible` with NOPASSWD sudo, SSH keys from GitHub (`thisisbramiller`)
-- Marker files: `/var/lib/cloud-init.provision.ready` (all VMs), `/var/lib/cloud-init.semaphore.ready` (control plane)
+- Marker files: `/var/lib/cloud-init.provision.ready` (all VMs), `/var/lib/cloud-init.semaphore.ready` (control plane), `/var/lib/cloud-init.gitlab.ready` (GitLab)
+
+**GitLab Configuration**:
+- **VM**: gitlab (ID 1103, 8GB RAM, 4 CPU cores, 50GB disk)
+- **Installation**: GitLab CE Omnibus (latest stable)
+- **Database**: Embedded PostgreSQL (managed by Omnibus)
+- **Configuration**: Memory-constrained (`/etc/gitlab/gitlab.rb`)
+- **Access**: http://gitlab.fusioncloudx.home
+- **Credentials**: 1Password (GitLab Root User)
+
+**Memory-Constrained Settings**:
+- Puma workers: 0 (single process mode)
+- Sidekiq concurrency: 10
+- Prometheus: disabled
+- Supports: 1-10 users with 8GB RAM
+
+**Common GitLab Commands**:
+```bash
+# Reconfigure after editing gitlab.rb
+sudo gitlab-ctl reconfigure
+
+# Check service status
+sudo gitlab-ctl status
+
+# View logs
+sudo gitlab-ctl tail
+
+# Create backup
+sudo gitlab-backup create
+
+# Restart all services
+sudo gitlab-ctl restart
+```
 
 ### State Management
 - Terraform state: Local backend (`terraform.tfstate` at project root)
