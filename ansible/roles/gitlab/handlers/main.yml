@@ -1,0 +1,12 @@
+---
+# ==============================================================================
+# GitLab Role - Handlers
+# ==============================================================================
+
+- name: reconfigure gitlab
+  command: gitlab-ctl reconfigure
+  become: yes
+
+- name: restart gitlab
+  command: gitlab-ctl restart
+  become: yes

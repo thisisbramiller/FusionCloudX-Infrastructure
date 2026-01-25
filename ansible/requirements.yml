@@ -10,4 +10,7 @@ collections:
   # Docs: https://developer.1password.com/docs/connect/ansible-collection
   # GitHub: https://github.com/1Password/ansible-onepasswordconnect-collection
   - name: onepassword.connect
-    version: ">=2.3.1"
+    version: ">=2.3.0"
+
+  # Community General collection (for ufw module and other utilities)
+  - name: community.general
