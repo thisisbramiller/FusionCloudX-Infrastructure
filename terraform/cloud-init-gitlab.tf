@@ -37,12 +37,6 @@ resource "proxmox_virtual_environment_file" "gitlab_vendor_data_cloud_config" {
           postfix postfix/main_mailer_type select 'Internet Site'
           postfix postfix/mailname string gitlab.fusioncloudx.home
 
-        write_files:
-          # Marker file for cloud-init completion
-          - path: /var/lib/cloud-init.gitlab.ready
-            content: "GitLab VM cloud-init completed\n"
-            permissions: '0644'
-
         runcmd:
           - systemctl enable qemu-guest-agent
           - systemctl start qemu-guest-agent
@@ -63,6 +57,8 @@ resource "proxmox_virtual_environment_file" "gitlab_vendor_data_cloud_config" {
             echo "" >> /var/log/cloud-init-verify.log
             echo "=== Verification Complete ===" >> /var/log/cloud-init-verify.log
           - echo "done" > /tmp/cloud-config.done
+          # Create marker file for GitLab cloud-init completion
+          - echo "GitLab VM cloud-init completed" > /var/lib/cloud-init.gitlab.ready
         EOF
 
     file_name = "vendor-data-cloud-config-gitlab.yaml"
