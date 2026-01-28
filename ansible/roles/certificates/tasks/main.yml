@@ -1,0 +1,52 @@
+---
+# Main task orchestration for certificates role
+
+- name: Display certificate deployment information
+  debug:
+    msg:
+      - "FusionCloudX Certificate Deployment"
+      - "=================================="
+      - "Install CA: {{ certificates_install_ca }}"
+      - "Deploy Server Cert: {{ certificates_deploy_server }}"
+      - "Configure Nginx: {{ certificates_configure_nginx }}"
+      - "Target Host: {{ inventory_hostname }}"
+
+# Include CA installation tasks
+- name: Include CA certificate installation tasks
+  include_tasks: install-ca.yml
+  when: certificates_install_ca | bool
+  tags:
+    - certificates
+    - ca
+
+# Include server certificate deployment tasks
+- name: Include server certificate deployment tasks
+  include_tasks: deploy-cert.yml
+  when: certificates_deploy_server | bool
+  tags:
+    - certificates
+    - server-cert
+
+# Include nginx configuration tasks
+- name: Include nginx SSL configuration tasks
+  include_tasks: nginx.yml
+  when:
+    - certificates_configure_nginx | bool
+    - certificates_deploy_server | bool
+  tags:
+    - certificates
+    - nginx
+
+- name: Display certificate deployment summary
+  debug:
+    msg:
+      - "Certificate Deployment Complete"
+      - "==============================="
+      - "CA Installed: {{ certificates_install_ca }}"
+      - "Server Certificate Deployed: {{ certificates_deploy_server }}"
+      - "Nginx Configured: {{ certificates_configure_nginx }}"
+      - ""
+      - "Certificate Locations:"
+      - "  CA Certificates: {{ certificates_ca_path }}"
+      - "  Server Certificate: {{ certificates_cert_path }}/{{ certificates_server_cert_filename }}"
+      - "  Server Key: {{ certificates_key_path }}/{{ certificates_server_key_filename }}"

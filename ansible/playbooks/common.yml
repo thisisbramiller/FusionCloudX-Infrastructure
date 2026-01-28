@@ -1,0 +1,63 @@
+---
+# ==============================================================================
+# Common Infrastructure Playbook
+# ==============================================================================
+# Runs first to establish baseline configuration across all hosts
+# Includes: Certificate deployment, common packages, system configuration
+# ==============================================================================
+
+- name: Common Infrastructure Configuration
+  hosts: all
+  become: yes
+  gather_facts: yes
+
+  pre_tasks:
+    - name: Display common infrastructure configuration
+      debug:
+        msg:
+          - "========================================"
+          - "Common Infrastructure Configuration"
+          - "========================================"
+          - "Target: {{ inventory_hostname }} ({{ ansible_host }})"
+          - "Deploying certificates and common configuration"
+          - "========================================"
+      tags: ['always']
+
+    - name: Verify 1Password authentication
+      debug:
+        msg: "{{ 'Using 1Password Service Account' if lookup('env', 'OP_SERVICE_ACCOUNT_TOKEN') else 'WARNING: No 1Password authentication - certificate deployment will fail' }}"
+      tags: ['always']
+
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600
+      tags: ['always']
+
+  roles:
+    - role: certificates
+      tags: ['certificates']
+      vars:
+        certificates_root_ca: "{{ lookup('file', '/tmp/root-ca.pem') | default('') }}"
+        certificates_intermediate_ca: "{{ lookup('file', '/tmp/intermediate-ca.pem') | default('') }}"
+        certificates_server_cert: "{{ lookup('file', '/tmp/server-cert.pem') | default('') }}"
+        certificates_server_key: "{{ lookup('file', '/tmp/server-key.pem') | default('') }}"
+
+  post_tasks:
+    - name: Verify certificate deployment
+      stat:
+        path: /usr/local/share/ca-certificates/fusioncloudx-root-ca.crt
+      register: ca_cert_stat
+      tags: ['verify']
+
+    - name: Display common infrastructure summary
+      debug:
+        msg:
+          - "========================================"
+          - "Common Infrastructure Complete"
+          - "========================================"
+          - "Host: {{ inventory_hostname }}"
+          - "CA Certificates Installed: {{ ca_cert_stat.stat.exists }}"
+          - "Server Certificate Deployed: {{ certificates_deploy_server }}"
+          - "========================================"
+      tags: ['always']

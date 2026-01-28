@@ -1,0 +1,108 @@
+---
+# ==============================================================================
+# Optional Device Certificate Deployment Playbook
+# ==============================================================================
+# Deploys certificates to network devices (printers, appliances)
+# These are OPTIONAL and NOT part of core infrastructure
+# ==============================================================================
+
+- name: Optional Device Certificate Deployment
+  hosts: localhost
+  gather_facts: no
+  vars:
+    devices_config: "{{ playbook_dir }}/../../inventory/devices.yaml"
+    vault_name: "FusionCloudX"
+
+  pre_tasks:
+    - name: Display optional device deployment information
+      debug:
+        msg:
+          - "========================================"
+          - "Optional Device Certificate Deployment"
+          - "========================================"
+          - "This playbook provides manual deployment instructions"
+          - "Devices are NOT managed by Ansible (manual deployment)"
+          - "========================================"
+      tags: ['always']
+
+    - name: Load device configuration
+      include_vars:
+        file: "{{ devices_config }}"
+        name: devices
+      tags: ['always']
+
+    - name: Display device count
+      debug:
+        msg: "Found {{ devices.network_devices | length }} network device(s) configured"
+      tags: ['always']
+
+  tasks:
+    - name: Display deployment instructions for each device
+      debug:
+        msg:
+          - "========================================"
+          - "Device: {{ item.name }}"
+          - "========================================"
+          - "Hostname: {{ item.hostname }}"
+          - "IP Address: {{ item.ip }}"
+          - "Type: {{ item.type }}"
+          - "Certificate Format: {{ item.cert_format }}"
+          - "Deployment Method: {{ item.deployment_method }}"
+          - ""
+          - "1Password Item: {{ item.onepassword_item }}"
+          - "1Password Vault: {{ vault_name }}"
+          - ""
+          - "Deployment Steps:"
+          - "{{ item.notes | regex_replace('\\n', '\\n          ') }}"
+          - ""
+          - "========================================"
+      loop: "{{ devices.network_devices }}"
+      tags: ['instructions']
+
+    - name: Check if 1Password CLI is available
+      command: op --version
+      register: op_version
+      changed_when: false
+      failed_when: false
+      tags: ['1password']
+
+    - name: Display 1Password CLI status
+      debug:
+        msg: "{{ '1Password CLI available: ' + op_version.stdout if op_version.rc == 0 else 'WARNING: 1Password CLI not found - install with: brew install 1password-cli' }}"
+      tags: ['1password']
+
+    - name: Provide 1Password retrieval commands
+      debug:
+        msg:
+          - "========================================"
+          - "1Password Certificate Retrieval"
+          - "========================================"
+          - ""
+          - "To download certificates from 1Password:"
+          - ""
+          - "{% for item in devices.network_devices %}"
+          - "# {{ item.name }}"
+          - "op document get '{{ item.onepassword_item }}' --vault '{{ vault_name }}' --output ~/Downloads/{{ item.hostname }}.{{ item.cert_format }}"
+          - ""
+          - "{% endfor %}"
+          - "========================================"
+      tags: ['1password']
+
+  post_tasks:
+    - name: Display deployment summary
+      debug:
+        msg:
+          - "========================================"
+          - "Optional Device Certificate Deployment Summary"
+          - "========================================"
+          - "Total Devices: {{ devices.network_devices | length }}"
+          - ""
+          - "Next Steps:"
+          - "  1. Review deployment instructions above"
+          - "  2. Download certificates from 1Password"
+          - "  3. Manually import to each device"
+          - "  4. Verify HTTPS access shows secure padlock"
+          - ""
+          - "Note: These devices are OPTIONAL and not required for infrastructure operations"
+          - "========================================"
+      tags: ['always']

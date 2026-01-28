@@ -1,0 +1,55 @@
+# Optional Device Certificate Deployment
+# These devices are NOT part of core infrastructure
+# Deploy certificates manually or via optional playbook
+
+network_devices:
+  - name: "HP OfficeJet Pro 9015e"
+    hostname: "printer"
+    ip: "192.168.40.226"
+    type: "network-printer"
+    cert_format: "pfx"
+    deployment_method: "manual"  # Web UI import
+    notes: |
+      Manual import via EWS:
+      1. Navigate to https://192.168.40.226
+      2. EWS → Network → Security → Certificates
+      3. Import Certificate and Private Key (PFX format)
+      4. Blank password
+    onepassword_item: "HP OfficeJet Pro 9015e Certificate"
+
+  - name: "UniFi Dream Machine Pro"
+    hostname: "udm-pro"
+    ip: "192.168.10.1"
+    type: "network-appliance"
+    cert_format: "pem"
+    deployment_method: "manual"  # UniFi Controller UI
+    notes: |
+      Manual import via UniFi Controller:
+      1. Navigate to https://192.168.10.1
+      2. Settings → System → Advanced → SSL Certificate
+      3. Upload Certificate (PEM) and Private Key
+      4. Restart controller
+    onepassword_item: "UDM Pro Certificate"
+
+  - name: "UNAS Pro"
+    hostname: "nas01"
+    ip: "192.168.40.50"
+    type: "storage-appliance"
+    cert_format: "pem"
+    deployment_method: "manual"  # Web UI import
+    notes: |
+      Manual import via UNAS UI:
+      1. Navigate to https://192.168.40.50
+      2. Settings → Security → Certificates
+      3. Import Server Certificate and Key
+      4. Apply configuration
+    onepassword_item: "UNAS Pro Certificate"
+
+# Raspberry Pi (optional, if needed)
+# - name: "Raspberry Pi 4"
+#   hostname: "rpi01"
+#   ip: "192.168.40.100"
+#   type: "raspberry-pi"
+#   cert_format: "pem"
+#   deployment_method: "ansible"  # Could be automated
+#   notes: "Could use ansible/roles/certificates for automated deployment"
