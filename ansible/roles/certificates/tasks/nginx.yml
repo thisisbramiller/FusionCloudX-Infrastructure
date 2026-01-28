@@ -1,0 +1,44 @@
+---
+# Configure nginx to use deployed certificates
+
+- name: Check if nginx is installed
+  stat:
+    path: /etc/nginx/nginx.conf
+  register: nginx_installed
+  when: certificates_configure_nginx | bool
+
+- name: Create nginx SSL configuration directory
+  file:
+    path: /etc/nginx/conf.d
+    state: directory
+    mode: '0755'
+  when:
+    - certificates_configure_nginx | bool
+    - nginx_installed.stat.exists
+
+- name: Deploy nginx SSL configuration snippet
+  template:
+    src: nginx-ssl.conf.j2
+    dest: /etc/nginx/conf.d/ssl-fusioncloudx.conf
+    mode: '0644'
+  when:
+    - certificates_configure_nginx | bool
+    - nginx_installed.stat.exists
+  notify: Restart nginx
+
+- name: Verify nginx configuration
+  command: nginx -t
+  register: nginx_test
+  changed_when: false
+  failed_when: nginx_test.rc != 0
+  when:
+    - certificates_configure_nginx | bool
+    - nginx_installed.stat.exists
+
+- name: Display nginx configuration status
+  debug:
+    msg: "Nginx SSL configuration deployed and validated"
+  when:
+    - certificates_configure_nginx | bool
+    - nginx_installed.stat.exists
+    - nginx_test.rc == 0

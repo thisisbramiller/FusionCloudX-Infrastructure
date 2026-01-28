@@ -1,0 +1,60 @@
+---
+# Deploy server certificate and private key
+
+- name: Create certificate directory
+  file:
+    path: "{{ certificates_cert_path }}"
+    state: directory
+    mode: '0755'
+  when: certificates_deploy_server | bool
+
+- name: Create private key directory
+  file:
+    path: "{{ certificates_key_path }}"
+    state: directory
+    mode: '0700'
+  when: certificates_deploy_server | bool
+
+- name: Deploy server certificate
+  copy:
+    content: "{{ certificates_server_cert }}"
+    dest: "{{ certificates_cert_path }}/{{ certificates_server_cert_filename }}"
+    mode: '0644'
+  when: certificates_deploy_server | bool
+  notify: Restart nginx
+
+- name: Deploy server private key
+  copy:
+    content: "{{ certificates_server_key }}"
+    dest: "{{ certificates_key_path }}/{{ certificates_server_key_filename }}"
+    mode: '0600'
+    owner: root
+    group: root
+  when: certificates_deploy_server | bool
+  notify: Restart nginx
+
+- name: Verify server certificate deployed
+  stat:
+    path: "{{ certificates_cert_path }}/{{ certificates_server_cert_filename }}"
+  register: server_cert_stat
+  when: certificates_deploy_server | bool
+
+- name: Verify server private key deployed
+  stat:
+    path: "{{ certificates_key_path }}/{{ certificates_server_key_filename }}"
+  register: server_key_stat
+  when: certificates_deploy_server | bool
+
+- name: Display server certificate deployment status
+  debug:
+    msg: "Server certificate deployed: {{ certificates_cert_path }}/{{ certificates_server_cert_filename }}"
+  when:
+    - certificates_deploy_server | bool
+    - server_cert_stat.stat.exists
+
+- name: Display server key deployment status
+  debug:
+    msg: "Server key deployed: {{ certificates_key_path }}/{{ certificates_server_key_filename }}"
+  when:
+    - certificates_deploy_server | bool
+    - server_key_stat.stat.exists
