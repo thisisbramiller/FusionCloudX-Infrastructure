@@ -1,0 +1,21 @@
+---
+# Default variables for certificates role
+
+# Enable/disable features
+certificates_install_ca: true
+certificates_deploy_server: true
+certificates_configure_nginx: false
+
+# Certificate paths
+certificates_ca_path: "/usr/local/share/ca-certificates"
+certificates_cert_path: "/etc/ssl/certs"
+certificates_key_path: "/etc/ssl/private"
+
+# Certificate filenames
+certificates_root_ca_filename: "fusioncloudx-root-ca.crt"
+certificates_intermediate_ca_filename: "fusioncloudx-intermediate-ca.crt"
+certificates_server_cert_filename: "server.crt"
+certificates_server_key_filename: "server.key"
+
+# 1Password vault name
+certificates_vault_name: "FusionCloudX"

@@ -1,0 +1,39 @@
+---
+# Handlers for certificates role
+
+- name: Update CA certificates
+  command: update-ca-certificates
+  become: yes
+  listen: Update CA certificates
+
+- name: Restart nginx
+  service:
+    name: nginx
+    state: restarted
+  become: yes
+  when: ansible_facts.services['nginx.service'] is defined
+  listen: Restart nginx
+
+- name: Reload nginx
+  service:
+    name: nginx
+    state: reloaded
+  become: yes
+  when: ansible_facts.services['nginx.service'] is defined
+  listen: Reload nginx
+
+- name: Restart apache2
+  service:
+    name: apache2
+    state: restarted
+  become: yes
+  when: ansible_facts.services['apache2.service'] is defined
+  listen: Restart apache2
+
+- name: Reload apache2
+  service:
+    name: apache2
+    state: reloaded
+  become: yes
+  when: ansible_facts.services['apache2.service'] is defined
+  listen: Reload apache2
