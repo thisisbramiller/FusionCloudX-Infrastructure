@@ -35,7 +35,15 @@
       "mcp__clickup__clickup_update_task",
       "Bash(cd:*)",
       "Bash(ls:*)",
-      "Bash(git log:*)"
+      "Bash(git log:*)",
+      "WebFetch(domain:docs.gitlab.com)",
+      "WebFetch(domain:about.gitlab.com)",
+      "WebFetch(domain:gitlab.com)",
+      "WebSearch",
+      "Bash(echo:*)",
+      "Bash(terraform plan:*)",
+      "Bash(ansible-doc:*)",
+      "Bash(ansible-config dump:*)"
     ],
     "deny": [],
     "ask": []

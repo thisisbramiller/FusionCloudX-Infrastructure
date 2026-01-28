@@ -134,7 +134,9 @@ ansible-playbook \
   -i 'SEMAPHORE_IP,' \
   -u ansible \
   ansible/playbooks/bootstrap-semaphore.yml \
-  -e "onepassword_service_account_token=YOUR_TOKEN"
+  -e "onepassword_service_account_token=$OP_SERVICE_ACCOUNT_TOKEN"
+
+# Note: OP_SERVICE_ACCOUNT_TOKEN loaded from ~/.zprofile (macOS Keychain)
 ```
 
 This configures:

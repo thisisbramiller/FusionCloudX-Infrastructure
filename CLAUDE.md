@@ -146,7 +146,9 @@ ansible-playbook \
   -i 'SEMAPHORE_IP,' \
   -u ansible \
   playbooks/bootstrap-semaphore.yml \
-  -e "onepassword_service_account_token=YOUR_TOKEN"
+  -e "onepassword_service_account_token=$OP_SERVICE_ACCOUNT_TOKEN"
+
+# Note: OP_SERVICE_ACCOUNT_TOKEN loaded from ~/.zprofile (macOS Keychain)
 
 # After bootstrap, configure GitHub deploy key
 ssh ansible@SEMAPHORE_IP 'cat ~/.ssh/github_deploy_key.pub'
@@ -269,11 +271,26 @@ op vault list  # Should succeed if token is valid
 - Most resources use API; SSH only for operations requiring direct file access
 
 ### 1Password Integration
-- **Terraform**: Uses 1Password provider to create credential items (e.g., database passwords)
-- **Ansible**: Uses `onepassword.connect` collection to retrieve secrets
-- Service account token required: Set `OP_SERVICE_ACCOUNT_TOKEN` environment variable
-- Vault ID required: Set `TF_VAR_onepassword_vault_id` for Terraform
-- Ansible Vault is fallback for secrets when 1Password unavailable
+
+**Dual Authentication Setup**:
+- **1Password Service Account Token** (`OP_SERVICE_ACCOUNT_TOKEN`): Used by bootstrap playbook for initial semaphore-ui setup
+- **1Password Connect** (`OP_CONNECT_TOKEN` + `OP_CONNECT_HOST`): Used by Ansible collections for ongoing secret retrieval
+- Connect Server: http://192.168.40.44:8080 (self-hosted 1Password Connect)
+
+**Usage by Tool**:
+- **Terraform**: Uses 1Password provider to create credential items (database passwords, GitLab root password)
+- **Ansible Bootstrap**: Uses service account token (`OP_SERVICE_ACCOUNT_TOKEN`) passed as extra var
+- **Ansible Operations**: Uses `onepassword.connect` collection with Connect server credentials
+- **Vault ID**: Set `TF_VAR_onepassword_vault_id` for Terraform (required)
+
+**Environment Variables** (loaded from ~/.zprofile via macOS Keychain):
+- `OP_SERVICE_ACCOUNT_TOKEN` - Service account token (for bootstrap)
+- `OP_CONNECT_TOKEN` - JWT token for 1Password Connect server
+- `OP_CONNECT_HOST` - 1Password Connect server URL
+- `TF_VAR_onepassword_vault_id` - Vault UUID
+- `PROXMOX_VE_API_TOKEN` - Proxmox API authentication
+
+**Fallback**: Ansible Vault (`inventory/group_vars/vault.yml`) for secrets when 1Password unavailable
 
 ### Resource Dependencies
 - VMs depend on template (ID 1000) via `depends_on` in `qemu-vm.tf`
