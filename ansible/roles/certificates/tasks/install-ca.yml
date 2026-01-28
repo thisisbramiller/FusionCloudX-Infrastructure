@@ -1,0 +1,38 @@
+---
+# Install Root CA and Intermediate CA to system trust store
+
+- name: Create CA certificates directory
+  file:
+    path: "{{ certificates_ca_path }}"
+    state: directory
+    mode: '0755'
+  when: certificates_install_ca | bool
+
+- name: Install Root CA certificate
+  copy:
+    content: "{{ certificates_root_ca }}"
+    dest: "{{ certificates_ca_path }}/fusioncloudx-root-ca.crt"
+    mode: '0644'
+  when: certificates_install_ca | bool
+  notify: Update CA certificates
+
+- name: Install Intermediate CA certificate
+  copy:
+    content: "{{ certificates_intermediate_ca }}"
+    dest: "{{ certificates_ca_path }}/fusioncloudx-intermediate-ca.crt"
+    mode: '0644'
+  when: certificates_install_ca | bool
+  notify: Update CA certificates
+
+- name: Verify CA certificates installed
+  stat:
+    path: "{{ certificates_ca_path }}/fusioncloudx-root-ca.crt"
+  register: root_ca_stat
+  when: certificates_install_ca | bool
+
+- name: Display CA installation status
+  debug:
+    msg: "FusionCloudX CA certificates installed to {{ certificates_ca_path }}"
+  when:
+    - certificates_install_ca | bool
+    - root_ca_stat.stat.exists
