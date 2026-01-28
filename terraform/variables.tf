@@ -19,8 +19,16 @@ variable "vm_configs" {
     "semaphore-ui" = {
       vm_id      = 1102
       name       = "semaphore-ui"
-      memory_mb  = 8192
-      cpu_cores  = 8
+      memory_mb  = 4096
+      cpu_cores  = 4
+      started    = true
+      full_clone = true
+    }
+    "gitlab" = {
+      vm_id      = 1103
+      name       = "gitlab"
+      memory_mb  = 16384  # 16GB for installation (can reduce to 4GB after installation if needed)
+      cpu_cores  = 8     # 8 cores for faster installation (can reduce to 4 cores after installation if needed)
       started    = true
       full_clone = true
     }

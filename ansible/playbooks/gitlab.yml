@@ -1,0 +1,45 @@
+---
+# ==============================================================================
+# GitLab Deployment Playbook
+# ==============================================================================
+# Deploys GitLab CE on the gitlab VM with memory-constrained configuration
+# ==============================================================================
+
+- name: Deploy GitLab
+  hosts: gitlab
+  become: yes
+  gather_facts: yes
+
+  pre_tasks:
+    - name: Ensure 1Password Connect credentials are set
+      fail:
+        msg: "OP_CONNECT_HOST and OP_CONNECT_TOKEN environment variables must be set"
+      when: >
+        lookup('env', 'OP_CONNECT_HOST') == '' or
+        lookup('env', 'OP_CONNECT_TOKEN') == ''
+
+    - name: Display 1Password Connect status
+      debug:
+        msg: "Using 1Password Connect Server at {{ lookup('env', 'OP_CONNECT_HOST') }}"
+
+  roles:
+    - gitlab
+
+  post_tasks:
+    - name: Display GitLab access information
+      debug:
+        msg:
+          - "========================================"
+          - "GitLab installation complete!"
+          - "========================================"
+          - "Access GitLab at: {{ gitlab_external_url }}"
+          - "Username: root"
+          - "Password: Retrieved from 1Password (GitLab Root User)"
+          - ""
+          - "First login steps:"
+          - "1. Access {{ gitlab_external_url }} in your browser"
+          - "2. Login with username 'root' and password from 1Password"
+          - "3. Change root password immediately"
+          - "4. Create admin user account"
+          - "5. Configure SSH keys for Git operations"
+          - "========================================"

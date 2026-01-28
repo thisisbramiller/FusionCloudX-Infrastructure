@@ -1,0 +1,46 @@
+---
+# ==============================================================================
+# GitLab Role - Default Variables
+# ==============================================================================
+
+# GitLab Edition
+gitlab_edition: "gitlab-ce"  # Community Edition
+
+# GitLab Version (empty = latest)
+gitlab_version: ""
+
+# Domain configuration
+gitlab_domain: "fusioncloudx.home"
+gitlab_hostname: "gitlab"
+gitlab_external_url: "http://{{ gitlab_hostname }}.{{ gitlab_domain }}"
+
+# Memory-constrained configuration
+gitlab_memory_constrained: true
+gitlab_puma_workers: 0  # Disabled for memory constraints (single process)
+gitlab_sidekiq_concurrency: 10
+gitlab_prometheus_enabled: false
+
+# Email configuration
+gitlab_email_enabled: true
+gitlab_email_from: "gitlab@{{ gitlab_domain }}"
+gitlab_email_display_name: "GitLab"
+
+# Backup configuration
+gitlab_backup_enabled: true
+gitlab_backup_path: "/var/opt/gitlab/backups"
+gitlab_backup_keep_time: 604800  # 7 days in seconds
+
+# Firewall rules
+gitlab_firewall_rules:
+  - rule: allow
+    port: '80'
+    proto: tcp
+    comment: "GitLab HTTP"
+  - rule: allow
+    port: '443'
+    proto: tcp
+    comment: "GitLab HTTPS"
+  - rule: allow
+    port: '22'
+    proto: tcp
+    comment: "GitLab SSH"

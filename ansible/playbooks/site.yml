@@ -32,12 +32,12 @@
   tags: ['postgresql', 'databases']
 
 # ==============================================================================
-# Application Servers (future)
+# Application Servers
 # ==============================================================================
 
-# - name: Deploy Application Servers
-#   import_playbook: applications.yml
-#   tags: ['applications']
+- name: Deploy GitLab
+  import_playbook: gitlab.yml
+  tags: ['gitlab', 'applications']
 
 # ==============================================================================
 # Monitoring (future)

@@ -24,3 +24,10 @@ __pycache__/
 # OS
 Thumbs.db
 .DS_Store
+
+# IDE directories
+.vscode/
+.idea/
+
+# macOS files
+.DS_Store

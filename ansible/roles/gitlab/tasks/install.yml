@@ -1,0 +1,57 @@
+---
+# ==============================================================================
+# GitLab Role - Installation Tasks
+# ==============================================================================
+
+- name: Install GitLab prerequisites
+  apt:
+    name:
+      - curl
+      - ca-certificates
+      - perl
+      - openssh-server
+      - postfix
+      - tzdata
+    state: present
+    update_cache: yes
+
+- name: Add GitLab GPG key
+  apt_key:
+    url: https://packages.gitlab.com/gitlab/gitlab-ce/gpgkey
+    state: present
+
+- name: Add GitLab repository
+  apt_repository:
+    repo: "deb https://packages.gitlab.com/gitlab/gitlab-ce/ubuntu/ {{ ansible_distribution_release }} main"
+    state: present
+    filename: gitlab-ce
+
+- name: Install GitLab package
+  apt:
+    name: "{{ gitlab_edition }}{{ '=' + gitlab_version if gitlab_version else '' }}"
+    state: present
+  environment:
+    EXTERNAL_URL: "{{ gitlab_external_url }}"
+  notify: reconfigure gitlab
+
+- name: Retrieve GitLab root password from 1Password
+  onepassword.connect.field_info:
+    item: "GitLab Root User"
+    field: "password"
+    vault: "{{ lookup('env', 'TF_VAR_onepassword_vault_id') }}"
+    hostname: "{{ lookup('env', 'OP_CONNECT_HOST') }}"
+    token: "{{ lookup('env', 'OP_CONNECT_TOKEN') }}"
+  register: gitlab_password_result
+  no_log: true
+  tags: ['secrets']
+
+- name: Set GitLab initial root password
+  copy:
+    content: "{{ gitlab_password_result.field.value }}"
+    dest: /etc/gitlab/initial_root_password
+    owner: root
+    group: root
+    mode: '0600'
+  when: gitlab_password_result.field.value is defined
+  no_log: true
+  notify: reconfigure gitlab

@@ -6,6 +6,15 @@ output "vm_ipv4_addresses" {
   description = "VM IPv4 addresses from QEMU guest agent (map of VM name to IP)"
 }
 
+# GitLab-specific output for easy reference
+output "gitlab_ipv4_address" {
+  description = "IPv4 address of GitLab VM"
+  value = try(
+    proxmox_virtual_environment_vm.qemu-vm["gitlab"].ipv4_addresses[1][0],
+    "DHCP address not yet assigned"
+  )
+}
+
 # ==============================================================================
 # PostgreSQL LXC Container Outputs
 # ==============================================================================

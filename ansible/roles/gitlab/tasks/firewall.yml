@@ -1,0 +1,21 @@
+---
+# ==============================================================================
+# GitLab Role - Firewall Configuration Tasks
+# ==============================================================================
+
+- name: Install UFW firewall
+  apt:
+    name: ufw
+    state: present
+
+- name: Configure GitLab firewall rules
+  community.general.ufw:
+    rule: "{{ item.rule }}"
+    port: "{{ item.port }}"
+    proto: "{{ item.proto }}"
+    comment: "{{ item.comment | default(omit) }}"
+  loop: "{{ gitlab_firewall_rules }}"
+
+- name: Enable UFW firewall
+  community.general.ufw:
+    state: enabled
