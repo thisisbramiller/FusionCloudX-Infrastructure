@@ -11,6 +11,13 @@
       - "Configure Nginx: {{ certificates_configure_nginx }}"
       - "Target Host: {{ inventory_hostname }}"
 
+# Retrieve certificates from 1Password Connect
+- name: Include certificate retrieval tasks
+  include_tasks: retrieve-certs.yml
+  tags:
+    - certificates
+    - retrieve
+
 # Include CA installation tasks
 - name: Include CA certificate installation tasks
   include_tasks: install-ca.yml
