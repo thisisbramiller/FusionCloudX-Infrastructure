@@ -12,6 +12,7 @@
   no_log: true
   register: root_ca_item
   delegate_to: localhost
+  become: no
 
 - name: Get Intermediate CA Bundle item from 1Password
   onepassword.connect.item_info:
@@ -23,6 +24,7 @@
   no_log: true
   register: intermediate_ca_item
   delegate_to: localhost
+  become: no
 
 - name: Extract file information from items
   set_fact:
@@ -40,6 +42,7 @@
   no_log: true
   register: root_ca_file
   delegate_to: localhost
+  become: no
   when: item.name == "root-ca.pem"
   loop: "{{ root_ca_files }}"
 
@@ -53,6 +56,7 @@
   no_log: true
   register: intermediate_ca_file
   delegate_to: localhost
+  become: no
   when: item.name == "intermediate-ca.pem"
   loop: "{{ intermediate_ca_files }}"
 
@@ -66,6 +70,7 @@
   no_log: true
   register: server_cert_file
   delegate_to: localhost
+  become: no
   when: item.name == "server-cert.pem"
   loop: "{{ intermediate_ca_files }}"
 
@@ -79,6 +84,7 @@
   no_log: true
   register: server_key_file
   delegate_to: localhost
+  become: no
   when: item.name == "server-key.pem"
   loop: "{{ intermediate_ca_files }}"
 
