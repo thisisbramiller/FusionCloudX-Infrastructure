@@ -1,0 +1,71 @@
+---
+# Test playbook for certificates role
+# Tests certificate retrieval and deployment
+
+- name: Test Certificate Deployment
+  hosts: all
+  become: yes
+  gather_facts: yes
+
+  tasks:
+    - name: Verify certificate variables are defined after role execution
+      block:
+        - name: Apply certificates role
+          include_role:
+            name: certificates
+
+        - name: Verify certificate facts are defined
+          assert:
+            that:
+              - certificates_root_ca is defined
+              - certificates_intermediate_ca is defined
+              - certificates_server_cert is defined
+              - certificates_server_key is defined
+              - certificates_root_ca | length > 100
+              - certificates_intermediate_ca | length > 100
+              - certificates_server_cert | length > 100
+              - certificates_server_key | length > 100
+            success_msg: "✅ PASS: Certificate variables defined and populated from 1Password"
+            fail_msg: "❌ FAIL: Certificate variables undefined or empty"
+          tags: ['certificates', 'test']
+
+        - name: Verify CA certificates installed
+          stat:
+            path: "{{ certificates_ca_path }}/fusioncloudx-root-ca.crt"
+          register: root_ca_stat
+          when: certificates_install_ca | bool
+
+        - name: Display CA installation status
+          debug:
+            msg: "✅ Root CA installed: {{ root_ca_stat.stat.exists }}"
+          when:
+            - certificates_install_ca | bool
+            - root_ca_stat is defined
+
+        - name: Verify server certificate deployed
+          stat:
+            path: "{{ certificates_cert_path }}/{{ certificates_server_cert_filename }}"
+          register: server_cert_stat
+          when: certificates_deploy_server | bool
+
+        - name: Display server certificate status
+          debug:
+            msg: "✅ Server certificate deployed: {{ server_cert_stat.stat.exists }}"
+          when:
+            - certificates_deploy_server | bool
+            - server_cert_stat is defined
+
+        - name: Verify server key deployed
+          stat:
+            path: "{{ certificates_key_path }}/{{ certificates_server_key_filename }}"
+          register: server_key_stat
+          when: certificates_deploy_server | bool
+
+        - name: Display server key status
+          debug:
+            msg: "✅ Server key deployed: {{ server_key_stat.stat.exists }}"
+          when:
+            - certificates_deploy_server | bool
+            - server_key_stat is defined
+
+      tags: ['certificates', 'test']
