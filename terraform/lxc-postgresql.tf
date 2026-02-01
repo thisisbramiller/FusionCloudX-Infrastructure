@@ -134,25 +134,6 @@ resource "onepassword_item" "postgresql_admin" {
   }
 }
 
-# Semaphore database user password item in 1Password
-resource "onepassword_item" "semaphore_db_user" {
-  vault    = var.onepassword_vault_id
-  category = "database"
-  title    = "PostgreSQL - Semaphore Database User"
-  tags     = ["terraform", "postgresql", "semaphore", "homelab"]
-
-  type     = "postgresql"
-  hostname = "${var.postgresql_lxc_config.hostname}.fusioncloudx.home"
-  port     = "5432"
-  database = "semaphore"
-  username = "semaphore"
-
-  password_recipe {
-    length  = 32
-    symbols = true
-  }
-}
-
 # Wazuh database user password item in 1Password
 resource "onepassword_item" "wazuh_db_user" {
   vault    = var.onepassword_vault_id

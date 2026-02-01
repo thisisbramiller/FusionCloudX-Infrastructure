@@ -16,14 +16,6 @@ variable "vm_configs" {
   }))
 
   default = {
-    "semaphore-ui" = {
-      vm_id      = 1102
-      name       = "semaphore-ui"
-      memory_mb  = 4096
-      cpu_cores  = 4
-      started    = true
-      full_clone = true
-    }
     "gitlab" = {
       vm_id      = 1103
       name       = "gitlab"
@@ -86,11 +78,6 @@ variable "postgresql_databases" {
   description = "List of databases to create on the PostgreSQL instance"
 
   default = [
-    {
-      name        = "semaphore"
-      description = "Database for Semaphore (Ansible UI)"
-      owner       = "semaphore"
-    },
     {
       name        = "wazuh"
       description = "Database for Wazuh (SIEM)"

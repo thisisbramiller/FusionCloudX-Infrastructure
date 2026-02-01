@@ -58,11 +58,6 @@ output "onepassword_postgresql_admin_id" {
   description = "1Password item ID for PostgreSQL admin (postgres) credentials"
 }
 
-output "onepassword_semaphore_db_id" {
-  value       = onepassword_item.semaphore_db_user.id
-  description = "1Password item ID for Semaphore database user credentials"
-}
-
 output "onepassword_wazuh_db_id" {
   value       = onepassword_item.wazuh_db_user.id
   description = "1Password item ID for Wazuh database user credentials"
@@ -81,9 +76,8 @@ output "postgresql_deployment_summary" {
     }
     databases = var.postgresql_databases
     secrets = {
-      admin_password_1password_id     = onepassword_item.postgresql_admin.id
-      semaphore_password_1password_id = onepassword_item.semaphore_db_user.id
-      wazuh_password_1password_id     = onepassword_item.wazuh_db_user.id
+      admin_password_1password_id = onepassword_item.postgresql_admin.id
+      wazuh_password_1password_id = onepassword_item.wazuh_db_user.id
     }
   }
   description = "Complete PostgreSQL deployment summary"
