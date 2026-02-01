@@ -14,11 +14,11 @@
 
 {% for entry in postgresql_hba_entries %}
 {% if entry.type == 'local' %}
-{{ entry.type | ljust(8) }}{{ entry.database | ljust(16) }}{{ entry.user | ljust(16) }}{{ entry.method }}
+{{ "{:<8}{:<16}{:<16}{}".format(entry.type, entry.database, entry.user, entry.method) }}
 {% elif entry.address is defined %}
-{{ entry.type | ljust(8) }}{{ entry.database | ljust(16) }}{{ entry.user | ljust(16) }}{{ entry.address | ljust(24) }}{{ entry.method }}
+{{ "{:<8}{:<16}{:<16}{:<24}{}".format(entry.type, entry.database, entry.user, entry.address, entry.method) }}
 {% else %}
-{{ entry.type | ljust(8) }}{{ entry.database | ljust(16) }}{{ entry.user | ljust(16) }}{{ entry.method }}
+{{ "{:<8}{:<16}{:<16}{}".format(entry.type, entry.database, entry.user, entry.method) }}
 {% endif %}
 {% endfor %}
 

@@ -6,6 +6,13 @@
 # ==============================================================================
 
 #------------------------------------------------------------------------------
+# FILE LOCATIONS
+#------------------------------------------------------------------------------
+
+# Data Directory
+data_directory = '{{ postgresql_data_directory }}'
+
+#------------------------------------------------------------------------------
 # CONNECTIONS AND AUTHENTICATION
 #------------------------------------------------------------------------------
 
@@ -81,10 +88,10 @@ datestyle = {{ config.datestyle | default("'iso, mdy'") }}
 timezone = {{ config.timezone | default("'UTC'") }}
 
 # These settings are initialized by initdb, but they can be changed.
-lc_messages = {{ config.lc_messages | default("'en_US.UTF-8'") }}
-lc_monetary = {{ config.lc_monetary | default("'en_US.UTF-8'") }}
-lc_numeric = {{ config.lc_numeric | default("'en_US.UTF-8'") }}
-lc_time = {{ config.lc_time | default("'en_US.UTF-8'") }}
+lc_messages = {{ config.lc_messages | default("'C.UTF-8'") }}
+lc_monetary = {{ config.lc_monetary | default("'C.UTF-8'") }}
+lc_numeric = {{ config.lc_numeric | default("'C.UTF-8'") }}
+lc_time = {{ config.lc_time | default("'C.UTF-8'") }}
 
 # default configuration for text search
 default_text_search_config = {{ config.default_text_search_config | default("'pg_catalog.english'") }}
@@ -100,7 +107,8 @@ track_io_timing = off
 track_functions = none
 
 # Statistics Monitoring
-stats_temp_directory = '/var/run/postgresql/{{ postgresql_version }}-main.pg_stat_tmp'
+# Note: stats_temp_directory was removed in PostgreSQL 15
+# Statistics are now stored in shared memory
 
 #------------------------------------------------------------------------------
 # AUTOVACUUM
