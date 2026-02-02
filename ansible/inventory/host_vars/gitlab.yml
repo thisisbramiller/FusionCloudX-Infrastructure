@@ -9,7 +9,8 @@
 # GitLab Configuration
 gitlab_domain: "fusioncloudx.home"
 gitlab_hostname: "gitlab"
-gitlab_external_url: "http://gitlab.fusioncloudx.home"
+gitlab_enable_https: true  # Enable HTTPS with FusionCloudX certificates
+gitlab_external_url: "https://gitlab.fusioncloudx.home"
 
 # Memory-constrained for homelab (can handle 1-10 users with 8GB RAM)
 gitlab_memory_constrained: true

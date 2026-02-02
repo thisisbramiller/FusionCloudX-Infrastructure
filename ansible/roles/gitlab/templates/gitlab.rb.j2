@@ -7,6 +7,31 @@
 # External URL
 external_url '{{ gitlab_external_url }}'
 
+{% if gitlab_enable_https %}
+# ==============================================================================
+# HTTPS/SSL Configuration
+# ==============================================================================
+# Configures nginx (built into GitLab Omnibus) to use FusionCloudX certificates
+# Certificates deployed by certificates role to standard system paths
+# ==============================================================================
+
+# SSL Certificate paths
+nginx['ssl_certificate'] = "{{ gitlab_ssl_certificate }}"
+nginx['ssl_certificate_key'] = "{{ gitlab_ssl_certificate_key }}"
+
+# SSL/TLS protocols and ciphers (modern, secure configuration)
+nginx['ssl_protocols'] = "{{ gitlab_ssl_protocols }}"
+nginx['ssl_ciphers'] = "{{ gitlab_ssl_ciphers }}"
+nginx['ssl_prefer_server_ciphers'] = "{{ gitlab_ssl_prefer_server_ciphers }}"
+
+# Redirect HTTP to HTTPS
+nginx['redirect_http_to_https'] = true
+
+# Enable HSTS (HTTP Strict Transport Security)
+nginx['hsts_max_age'] = 31536000
+nginx['hsts_include_subdomains'] = false
+{% endif %}
+
 {% if gitlab_memory_constrained %}
 # ==============================================================================
 # Memory-Constrained Configuration
