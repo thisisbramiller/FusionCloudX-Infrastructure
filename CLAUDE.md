@@ -423,3 +423,100 @@ Main branch for PRs: `main`
 **Homelab/Development Infrastructure**: This repository manages Proxmox-based homelab infrastructure for testing and development. Services deployed: Semaphore (automation), PostgreSQL (databases), planned services (Teleport, Wazuh, Immich). Production workloads will use separate AWS infrastructure.
 
 **Security Posture**: Appropriate for homelab (NOPASSWD sudo, self-signed certs, `insecure = true`). Review security settings before adapting for production use.
+
+## Certificate Management
+
+### Overview
+
+Certificate deployment integrates with the `fusioncloudx-bootstrap` repository:
+- **Bootstrap Repository:** Generates PKI (Phase 04), deploys to bare metal (Phase 13)
+- **Infrastructure Repository:** Deploys certificates to VMs via Ansible
+
+### Architecture
+
+**Certificate Flow:**
+1. **Bootstrap Phase 04:** Generate Root CA, Intermediate CA, Server Certificate → Store in 1Password
+2. **Bootstrap Phase 13:** Deploy CA to Mac Mini, deploy server certs to Proxmox hosts
+3. **Infrastructure Ansible:** Retrieve from 1Password → Deploy to VMs via `certificates` role
+
+**Separation of Concerns:**
+- **Bootstrap:** Bare metal only (Mac Mini workstation + Proxmox echo/zero)
+- **Infrastructure:** VMs and services (semaphore-ui, gitlab, postgresql)
+
+### Ansible Role: certificates
+
+**Location:** `ansible/roles/certificates/`
+
+**Features:**
+- Installs Root CA + Intermediate CA to system trust store
+- Deploys server certificate and private key to `/etc/ssl/`
+- Configures nginx for HTTPS (optional)
+- Handles service restarts automatically
+
+**Usage:**
+```bash
+# Deploy to all hosts
+ansible-playbook ansible/playbooks/site.yml --tags certificates
+
+# Test on single host
+ansible-playbook ansible/playbooks/test-certificates.yml --limit semaphore-ui
+
+# Deploy to specific host
+ansible-playbook ansible/playbooks/common.yml --limit gitlab
+```
+
+**Variables:**
+```yaml
+certificates_install_ca: true           # Install CA to trust store
+certificates_deploy_server: true        # Deploy server cert/key
+certificates_configure_nginx: false     # Configure nginx SSL
+```
+
+### Optional Network Devices
+
+**Location:** `ansible/inventory/devices.yaml`, `ansible/playbooks/optional/deploy-device-certificates.yml`
+
+**Included Devices:**
+- HP OfficeJet Pro 9015e (network printer)
+- UniFi Dream Machine Pro (network appliance)
+- UNAS Pro (storage appliance)
+
+**Deployment:** Manual import via device web interfaces (instructions provided by playbook)
+
+**Usage:**
+```bash
+ansible-playbook ansible/playbooks/optional/deploy-device-certificates.yml
+```
+
+### Integration Points
+
+**1Password:**
+- Certificates stored in FusionCloudX vault
+- Retrieved via 1Password CLI during Ansible runs
+- Requires `OP_SERVICE_ACCOUNT_TOKEN` environment variable
+
+**Bootstrap Repository:**
+- Phase 04 generates all certificates
+- Phase 13 deploys to bare metal (workstation + Proxmox)
+- Source of truth for PKI infrastructure
+
+**Verification:**
+```bash
+# Check CA installation
+ls /usr/local/share/ca-certificates/fusioncloudx-*.crt
+
+# Check server certificate
+ls /etc/ssl/certs/server.crt
+ls /etc/ssl/private/server.key
+
+# Verify trust store
+grep -r "FusionCloudX" /etc/ssl/certs/ca-certificates.crt
+```
+
+### Decision Tree: Certificate Deployment
+
+**Is it bare metal?** → Bootstrap repository (Phase 13)
+**Is it a VM?** → Infrastructure repository (certificates role)
+**Is it optional (printer, appliance)?** → Infrastructure repository (optional playbook, manual)
+
+See `ansible/roles/certificates/README.md` and `docs/DEVICE-CERTIFICATE-DEPLOYMENT.md` for detailed documentation.
