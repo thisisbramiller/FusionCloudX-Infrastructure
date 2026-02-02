@@ -25,7 +25,8 @@ provider "proxmox" {
   ssh {
     agent    = true
     username = "terraform"
-    agent_socket = "/Users/fcx/Library/Group Containers/2BUA8C4S2C.com.1password/t/agent.sock"
+    # SSH agent socket automatically uses SSH_AUTH_SOCK environment variable
+    # Works across macOS, Linux, and Windows without hardcoding OS-specific paths
   }
 }
 
