@@ -2,34 +2,29 @@
 # PostgreSQL LXC Container Infrastructure
 # ==============================================================================
 # This file defines a SINGLE LXC container for PostgreSQL database server
-# This container will host MULTIPLE databases (semaphore, wazuh, etc.)
+# This container will host MULTIPLE databases (wazuh, etc.)
 # Configuration and PostgreSQL installation is handled by Ansible
+#
+# PREREQUISITE - One-Time Setup:
+# Create custom LXC template with Ansible prerequisites pre-installed:
+#   cat scripts/create-ansible-ready-lxc-template.sh | ssh root@192.168.40.206 'bash -s'
+#
+# This is a ONE-TIME operation. Once template exists, all future deployments are automated.
+# Template includes: sudo, python3, python3-pip, ssh-import-id
+#
+# Why custom template?
+# - LXC containers don't support cloud-init
+# - Hook scripts require root@pam (not API tokens)
+# - Provisioners require interactive SSH approval
+# - Custom template = clean, repeatable, zero runtime provisioning
 # ==============================================================================
-
-# Download Debian 12 LXC template
-resource "proxmox_virtual_environment_download_file" "debian12_lxc_template" {
-  content_type = "vztmpl"
-  datastore_id = "nas-infrastructure"
-  node_name    = "pve"
-
-  # Debian 12 Standard template from official Proxmox repository
-  # You can find available templates at: http://download.proxmox.com/images/system/
-  # url = "http://download.proxmox.com/images/system/debian-12-standard_12.7-1_amd64.tar.zst"
-  url = "http://download.proxmox.com/images/system/debian-12-standard_12.12-1_amd64.tar.zst"
-
-  # Alternative: Download from your Proxmox web UI (recommended)
-  # Navigate to: Datacenter > pve > nas-infrastructure > CT Templates > Download
-  # Select: debian-12-standard (latest version)
-
-  # Only download once - don't re-download on subsequent runs
-  lifecycle {
-    ignore_changes = [url]
-  }
-}
 
 # Create single PostgreSQL LXC container
 # This container will host multiple databases for different services
 resource "proxmox_virtual_environment_container" "postgresql" {
+  # Ensure Ansible-ready template exists before creating container
+  depends_on = [null_resource.ansible_ready_lxc_template]
+
   node_name = "pve"
   vm_id     = var.postgresql_lxc_config.vm_id
 
@@ -39,9 +34,10 @@ resource "proxmox_virtual_environment_container" "postgresql" {
   start_on_boot = var.postgresql_lxc_config.on_boot
   unprivileged  = true # Security best practice - always use unprivileged containers
 
-  # Operating System
+  # Operating System - custom Ansible-ready template
+  # Template must be created first (one-time): scripts/create-ansible-ready-lxc-template.sh
   operating_system {
-    template_file_id = proxmox_virtual_environment_download_file.debian12_lxc_template.id
+    template_file_id = "nas-infrastructure:vztmpl/debian-12-ansible-ready.tar.zst"
     type             = "debian"
   }
 
@@ -76,7 +72,7 @@ resource "proxmox_virtual_environment_container" "postgresql" {
     tty_count = 2
   }
 
-  # Initialization - SSH keys for root access
+  # Initialization - SSH keys from GitHub (hardcoded for initial access)
   initialization {
     hostname = var.postgresql_lxc_config.hostname
 
@@ -86,12 +82,14 @@ resource "proxmox_virtual_environment_container" "postgresql" {
       }
     }
 
-    # user_account {
-    #   keys = [
-    #     # SSH public key for ansible/terraform user - replace with your key
-    #     trimspace(file("~/.ssh/id_rsa.pub"))
-    #   ]
-    # }
+    user_account {
+      keys = [
+        # SSH keys from GitHub - thisisbramiller
+        # These match what ssh-import-id would fetch
+        "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJfloPNsap5v++MwS6YA9eqiRr9IiyxhBpMVVRT26x4c",
+        "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIK2KVCN+voRL8xt7MQzVayUzNq5ETiS7uNHdHo1iHERE"
+      ]
+    }
   }
 
   # Features
@@ -101,11 +99,6 @@ resource "proxmox_virtual_environment_container" "postgresql" {
 
   # Tags for organization
   tags = var.postgresql_lxc_config.tags
-
-  # Depends on template being downloaded
-  depends_on = [
-    proxmox_virtual_environment_download_file.debian12_lxc_template
-  ]
 }
 
 # ==============================================================================

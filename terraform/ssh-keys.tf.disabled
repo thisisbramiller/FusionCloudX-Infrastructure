@@ -1,0 +1,43 @@
+# ==============================================================================
+# SSH Key Management - 1Password Connect Infrastructure Keys
+# ==============================================================================
+# This file references SSH keys stored in 1Password for infrastructure access
+#
+# SETUP:
+# Run the setup script to create the SSH key in 1Password:
+#   ./scripts/setup-infrastructure-ssh-key.sh
+#
+# ARCHITECTURE:
+# - SSH key created in 1Password via CLI (op item create --ssh-generate-key)
+# - Terraform references the existing key via data source
+# - Public key used for VM/LXC provisioning
+# - Private key accessible via 1Password SSH agent
+# - Private keys never stored in Terraform state
+#
+# REQUIREMENTS:
+# - 1Password Connect Server: http://192.168.40.44:8080
+# - SSH key item titled "Infrastructure SSH Key (Terraform)" must exist
+# ==============================================================================
+
+# Retrieve SSH public key from 1Password for use in Terraform
+# This assumes the SSH key already exists in 1Password
+data "onepassword_item" "infrastructure_ssh_key" {
+  vault = var.onepassword_vault_id
+  title = "Infrastructure SSH Key (Terraform)"
+}
+
+# Output the public key for reference and use in other resources
+output "infrastructure_ssh_public_key" {
+  description = "Public SSH key for infrastructure access (from 1Password)"
+  value       = data.onepassword_item.infrastructure_ssh_key.public_key
+}
+
+output "infrastructure_ssh_fingerprint" {
+  description = "SSH key fingerprint (from 1Password)"
+  value       = data.onepassword_item.infrastructure_ssh_key.fingerprint
+}
+
+output "infrastructure_ssh_1password_id" {
+  description = "1Password item ID for infrastructure SSH key"
+  value       = data.onepassword_item.infrastructure_ssh_key.id
+}

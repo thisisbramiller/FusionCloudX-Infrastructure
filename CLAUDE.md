@@ -66,6 +66,7 @@ Configuration files in `terraform/`:
 - `cloud-init.tf` - Split cloud-init: per-VM user_data + shared vendor_data. **Special**: `gitlab_vendor_data_cloud_config` has enhanced packages for GitLab
 - `qemu-vm.tf` - Creates VMs using `for_each`. GitLab gets special vendor_data. Uses 10 retries for clone operations
 - `lxc-postgresql.tf` - Single Debian 12 LXC for PostgreSQL + 1Password items for database credentials
+- `lxc-template-automation.tf` - Automated custom LXC template creation (sudo, python3, ssh-import-id pre-installed)
 - `outputs.tf` - VM IPv4 addresses map from QEMU guest agent
 
 ### Key Terraform Patterns
@@ -76,11 +77,14 @@ Configuration files in `terraform/`:
 3. Clone template with full clone, apply cloud-init
 4. QEMU guest agent reports IP address to outputs
 
-**LXC Container Pattern**:
+**LXC Container Pattern** (Fully Automated):
 - Single PostgreSQL LXC hosts multiple databases (not one LXC per database)
+- **Custom template**: Terraform automatically creates Ansible-ready template with sudo, python3, ssh-import-id pre-installed
+- **Automation**: null_resource copies and runs template creation script on Proxmox via SSH (no manual steps)
 - Unprivileged container for security
 - Ansible handles PostgreSQL installation and database creation
 - 1Password items created via Terraform for each database user
+- See `docs/LXC-TEMPLATE-SETUP.md` for details
 
 **1Password Integration**:
 - Terraform creates 1Password items for database passwords
@@ -313,7 +317,8 @@ op vault list  # Should succeed if token is valid
 
 ### Resource Dependencies
 - VMs depend on template (ID 1000) via `depends_on` in `qemu-vm.tf`
-- LXC depends on Debian 12 template download
+- **PostgreSQL LXC depends on custom template** via `depends_on` in `lxc-postgresql.tf` (automated by null_resource)
+- Custom LXC template creation runs before PostgreSQL container (fully automated)
 - Cloud-init files must exist before VM initialization
 - PostgreSQL LXC must be provisioned before running `postgresql.yml` playbook
 - GitLab VM must be configured before using CI/CD pipelines

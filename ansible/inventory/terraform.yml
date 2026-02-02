@@ -1,0 +1,20 @@
+# ==============================================================================
+# Terraform State Dynamic Inventory Configuration
+# ==============================================================================
+# This inventory plugin reads Terraform state directly using bpg/proxmox provider
+# Works with your existing Terraform infrastructure - no API tokens needed
+# ==============================================================================
+
+plugin: cloud.terraform.terraform_provider
+
+# Path to Terraform project directory
+project_path: ../terraform
+
+# Optional: Specify state file explicitly (if not using default location)
+# state_file: ../../terraform/terraform.tfstate
+
+# Optional: Custom terraform binary path
+# binary_path: /usr/local/bin/terraform
+
+# Include resources from child modules (if any)
+search_child_modules: false

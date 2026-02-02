@@ -14,7 +14,7 @@ resource "proxmox_virtual_environment_file" "user_data_cloud_config" {
             shell: /bin/bash
             groups: [sudo, users]
             sudo: "ALL=(ALL) NOPASSWD:ALL"
-            ssh_import_id: 
+            ssh_import_id:
               - gh:thisisbramiller
             lock_passwd: true
         ssh_pwauth: false
