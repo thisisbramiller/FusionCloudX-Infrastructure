@@ -26,44 +26,29 @@ postgresql_databases:
   - name: "semaphore"
     owner: "semaphore"
     encoding: "UTF-8"
-    lc_collate: "en_US.UTF-8"
-    lc_ctype: "en_US.UTF-8"
+    lc_collate: "C.UTF-8"
+    lc_ctype: "C.UTF-8"
     template: "template0"
     description: "Database for Semaphore (Ansible UI)"
 
   - name: "wazuh"
     owner: "wazuh"
     encoding: "UTF-8"
-    lc_collate: "en_US.UTF-8"
-    lc_ctype: "en_US.UTF-8"
+    lc_collate: "C.UTF-8"
+    lc_ctype: "C.UTF-8"
     template: "template0"
     description: "Database for Wazuh (SIEM)"
 
 # ==============================================================================
 # Database Users (with 1Password Integration)
 # ==============================================================================
-# Credentials are stored in 1Password vault "FusionCloudX Infrastructure"
+# Credentials are retrieved from 1Password vault "FusionCloudX Infrastructure"
+# Passwords are fetched dynamically in the postgresql role (tasks/fetch-secrets.yml)
 # ==============================================================================
 
-# PostgreSQL admin (postgres) user password
-# Retrieved from 1Password item: "PostgreSQL Admin (postgres)"
-postgresql_admin_password: "{{ lookup('onepassword.connect.generic_item', 'PostgreSQL Admin (postgres)', field='password', vault='FusionCloudX Infrastructure') }}"
-
-# Database user configurations
-postgresql_users:
-  - name: "semaphore"
-    password: "{{ lookup('onepassword.connect.generic_item', 'PostgreSQL - Semaphore DB User', field='password', vault='FusionCloudX Infrastructure') }}"
-    database: "semaphore"
-    priv: "ALL"
-    role_attr_flags: "CREATEDB,NOSUPERUSER,NOCREATEROLE"
-    description: "Semaphore database user"
-
-  - name: "wazuh"
-    password: "{{ lookup('onepassword.connect.generic_item', 'PostgreSQL - Wazuh DB User', field='password', vault='FusionCloudX Infrastructure') }}"
-    database: "wazuh"
-    priv: "ALL"
-    role_attr_flags: "CREATEDB,NOSUPERUSER,NOCREATEROLE"
-    description: "Wazuh database user"
+# Note: postgresql_admin_password and postgresql_users are now populated
+# dynamically by the postgresql role using onepassword.connect.field_info module
+# See: ansible/roles/postgresql/tasks/fetch-secrets.yml
 
 # ==============================================================================
 # Firewall Rules
@@ -72,6 +57,11 @@ postgresql_users:
 # ==============================================================================
 
 postgresql_firewall_rules:
+  # CRITICAL: SSH must be allowed BEFORE enabling firewall to prevent lockout
+  - rule: "allow"
+    port: "22"
+    proto: "tcp"
+    comment: "SSH access (prevent firewall lockout)"
   - rule: "allow"
     port: "5432"
     proto: "tcp"
