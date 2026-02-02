@@ -72,4 +72,6 @@
   when:
     - gitlab_enable_https
     - https_check is defined
+    - https_check is not skipped
+    - https_check.status is defined
   tags: ['gitlab', 'configure', 'verify']
