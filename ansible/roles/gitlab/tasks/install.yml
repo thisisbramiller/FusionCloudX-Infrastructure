@@ -32,7 +32,16 @@
     state: present
   environment:
     EXTERNAL_URL: "{{ gitlab_external_url }}"
+    DEBIAN_FRONTEND: noninteractive
+  register: gitlab_install_result
+  async: 3600
+  poll: 5
   notify: reconfigure gitlab
+
+- name: Display GitLab installation progress
+  debug:
+    msg: "GitLab installation in progress... This can take 5-10 minutes for initial setup."
+  when: gitlab_install_result.changed
 
 - name: Retrieve GitLab root password from 1Password
   onepassword.connect.field_info:
