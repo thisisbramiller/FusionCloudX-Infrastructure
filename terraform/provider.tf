@@ -14,6 +14,10 @@ terraform {
       source  = "ansible/ansible"
       version = "~> 1.3.0"
     }
+    tls = {
+      source  = "hashicorp/tls"
+      version = "~> 4.0"
+    }
   }
 }
 
@@ -23,10 +27,9 @@ provider "proxmox" {
   insecure = false
 
   ssh {
-    agent    = true
-    username = "terraform"
-    # SSH agent socket automatically uses SSH_AUTH_SOCK environment variable
-    # Works across macOS, Linux, and Windows without hardcoding OS-specific paths
+    agent        = true
+    agent_socket = "/Users/fcx/Library/Group Containers/2BUA8C4S2C.com.1password/t/agent.sock"
+    username     = "terraform"
   }
 }
 
@@ -52,3 +55,4 @@ provider "onepassword" {
   #   export OP_CONNECT_HOST="http://localhost:8080"
   #   export OP_CONNECT_TOKEN="your-connect-token"
 }
+

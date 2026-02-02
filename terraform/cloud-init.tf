@@ -14,8 +14,8 @@ resource "proxmox_virtual_environment_file" "user_data_cloud_config" {
             shell: /bin/bash
             groups: [sudo, users]
             sudo: "ALL=(ALL) NOPASSWD:ALL"
-            ssh_import_id:
-              - gh:thisisbramiller
+            ssh_authorized_keys:
+              - ${trimspace(tls_private_key.ansible.public_key_openssh)}
             lock_passwd: true
         ssh_pwauth: false
         disable_root: true

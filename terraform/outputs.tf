@@ -83,5 +83,22 @@ output "onepassword_items" {
       admin_password = onepassword_item.postgresql_admin.id
       wazuh_password = onepassword_item.wazuh_db_user.id
     }
+    ssh = {
+      ansible_key = onepassword_item.ansible_ssh_key.id
+    }
   }
+}
+
+# ------------------------------------------------------------------------------
+# SSH Key Information
+# ------------------------------------------------------------------------------
+
+output "ansible_ssh_public_key" {
+  description = "Public SSH key for Ansible access (for reference/debugging)"
+  value       = trimspace(tls_private_key.ansible.public_key_openssh)
+}
+
+output "ansible_ssh_key_fingerprint" {
+  description = "SHA256 fingerprint of the Ansible SSH key"
+  value       = tls_private_key.ansible.public_key_fingerprint_sha256
 }
