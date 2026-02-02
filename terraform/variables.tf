@@ -30,15 +30,6 @@ variable "vm_configs" {
       started    = true
       full_clone = true
     }
-    "packer-builder" = {
-      vm_id      = 1100
-      name       = "packer-builder"
-      memory_mb  = 4096   # 4GB for Packer builds
-      cpu_cores  = 2
-      started    = false  # Start manually when building templates
-      on_boot    = false  # Don't auto-start
-      full_clone = true
-    }
   }
 }
 
