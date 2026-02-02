@@ -2,7 +2,7 @@
 # ==============================================================================
 # Certificate Deployment Test Playbook
 # ==============================================================================
-# Tests certificate deployment to a single host or subset of hosts
+# Tests certificate retrieval from 1Password and deployment to hosts
 # Useful for verifying certificates role before full deployment
 # ==============================================================================
 
@@ -19,7 +19,7 @@
           - "Certificate Deployment Test"
           - "========================================"
           - "Target: {{ inventory_hostname }} ({{ ansible_host }})"
-          - "This is a TEST run with verbose output"
+          - "Testing 1Password integration and deployment"
           - "========================================"
       tags: ['always']
 
@@ -35,17 +35,29 @@
         msg: "Found {{ existing_ca_certs.matched }} existing FusionCloudX CA certificates"
       tags: ['pre-check']
 
-  roles:
-    - role: certificates
+  tasks:
+    - name: Apply certificates role
+      include_role:
+        name: certificates
       tags: ['certificates']
-      vars:
-        certificates_root_ca: "{{ lookup('file', '/tmp/root-ca.pem') | default('') }}"
-        certificates_intermediate_ca: "{{ lookup('file', '/tmp/intermediate-ca.pem') | default('') }}"
-        certificates_server_cert: "{{ lookup('file', '/tmp/server-cert.pem') | default('') }}"
-        certificates_server_key: "{{ lookup('file', '/tmp/server-key.pem') | default('') }}"
+
+    - name: Verify certificate facts are defined after role execution
+      assert:
+        that:
+          - certificates_root_ca is defined
+          - certificates_intermediate_ca is defined
+          - certificates_server_cert is defined
+          - certificates_server_key is defined
+          - certificates_root_ca | length > 100
+          - certificates_intermediate_ca | length > 100
+          - certificates_server_cert | length > 100
+          - certificates_server_key | length > 100
+        success_msg: "✅ PASS: Certificate variables retrieved from 1Password"
+        fail_msg: "❌ FAIL: Certificate variables undefined or empty"
+      tags: ['verify']
 
   post_tasks:
-    - name: Verify CA certificate installation
+    - name: Verify root CA installation
       stat:
         path: /usr/local/share/ca-certificates/fusioncloudx-root-ca.crt
       register: root_ca_check
@@ -84,6 +96,9 @@
           - "========================================"
           - "Host: {{ inventory_hostname }}"
           - ""
+          - "1Password Integration:"
+          - "  Certificate retrieval: {{ 'PASS' if (certificates_root_ca is defined and certificates_root_ca | length > 100) else 'FAIL' }}"
+          - ""
           - "CA Certificates:"
           - "  Root CA: {{ 'PASS' if root_ca_check.stat.exists else 'FAIL' }}"
           - "  Intermediate CA: {{ 'PASS' if int_ca_check.stat.exists else 'FAIL' }}"
@@ -96,12 +111,12 @@
           - "  CA in trust store: {{ 'PASS' if ca_trust_check.rc == 0 else 'FAIL' }}"
           - ""
           - "========================================"
-          - "Overall: {{ 'SUCCESS' if (root_ca_check.stat.exists and int_ca_check.stat.exists and server_cert_check.stat.exists and server_key_check.stat.exists) else 'FAILED' }}"
+          - "Overall: {{ 'SUCCESS' if (root_ca_check.stat.exists and int_ca_check.stat.exists and server_cert_check.stat.exists and server_key_check.stat.exists and certificates_root_ca is defined) else 'FAILED' }}"
           - "========================================"
       tags: ['always']
 
     - name: Fail if any certificate missing
       fail:
         msg: "Certificate deployment failed - see test results above"
-      when: not (root_ca_check.stat.exists and int_ca_check.stat.exists and server_cert_check.stat.exists and server_key_check.stat.exists)
+      when: not (root_ca_check.stat.exists and int_ca_check.stat.exists and server_cert_check.stat.exists and server_key_check.stat.exists and certificates_root_ca is defined)
       tags: ['verify']

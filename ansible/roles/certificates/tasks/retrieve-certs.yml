@@ -1,0 +1,106 @@
+---
+# Retrieve certificates from 1Password Connect using official modules
+# Files are retrieved via the Connect API using the uri module
+
+- name: Get Root CA Bundle item from 1Password
+  onepassword.connect.item_info:
+    hostname: "{{ lookup('env', 'OP_CONNECT_HOST') }}"
+    token: "{{ lookup('env', 'OP_CONNECT_TOKEN') }}"
+    item: "FusionCloudX Root CA Bundle"
+    vault: "FusionCloudX"
+    flatten_fields_by_label: false
+  no_log: true
+  register: root_ca_item
+  delegate_to: localhost
+  become: no
+
+- name: Get Intermediate CA Bundle item from 1Password
+  onepassword.connect.item_info:
+    hostname: "{{ lookup('env', 'OP_CONNECT_HOST') }}"
+    token: "{{ lookup('env', 'OP_CONNECT_TOKEN') }}"
+    item: "FusionCloudX Intermediate CA Bundle"
+    vault: "FusionCloudX"
+    flatten_fields_by_label: false
+  no_log: true
+  register: intermediate_ca_item
+  delegate_to: localhost
+  become: no
+
+- name: Extract file information from items
+  set_fact:
+    root_ca_files: "{{ root_ca_item.op_item.files }}"
+    intermediate_ca_files: "{{ intermediate_ca_item.op_item.files }}"
+  no_log: true
+
+- name: Download Root CA certificate from 1Password Connect
+  uri:
+    url: "{{ lookup('env', 'OP_CONNECT_HOST') }}{{ item.content_path }}"
+    method: GET
+    headers:
+      Authorization: "Bearer {{ lookup('env', 'OP_CONNECT_TOKEN') }}"
+    return_content: yes
+  no_log: true
+  register: root_ca_file
+  delegate_to: localhost
+  become: no
+  when: item.name == "root-ca.pem"
+  loop: "{{ root_ca_files }}"
+
+- name: Download Intermediate CA certificate from 1Password Connect
+  uri:
+    url: "{{ lookup('env', 'OP_CONNECT_HOST') }}{{ item.content_path }}"
+    method: GET
+    headers:
+      Authorization: "Bearer {{ lookup('env', 'OP_CONNECT_TOKEN') }}"
+    return_content: yes
+  no_log: true
+  register: intermediate_ca_file
+  delegate_to: localhost
+  become: no
+  when: item.name == "intermediate-ca.pem"
+  loop: "{{ intermediate_ca_files }}"
+
+- name: Download server certificate from 1Password Connect
+  uri:
+    url: "{{ lookup('env', 'OP_CONNECT_HOST') }}{{ item.content_path }}"
+    method: GET
+    headers:
+      Authorization: "Bearer {{ lookup('env', 'OP_CONNECT_TOKEN') }}"
+    return_content: yes
+  no_log: true
+  register: server_cert_file
+  delegate_to: localhost
+  become: no
+  when: item.name == "server-cert.pem"
+  loop: "{{ intermediate_ca_files }}"
+
+- name: Download server key from 1Password Connect
+  uri:
+    url: "{{ lookup('env', 'OP_CONNECT_HOST') }}{{ item.content_path }}"
+    method: GET
+    headers:
+      Authorization: "Bearer {{ lookup('env', 'OP_CONNECT_TOKEN') }}"
+    return_content: yes
+  no_log: true
+  register: server_key_file
+  delegate_to: localhost
+  become: no
+  when: item.name == "server-key.pem"
+  loop: "{{ intermediate_ca_files }}"
+
+- name: Set certificate facts from downloaded files
+  set_fact:
+    certificates_root_ca: "{{ root_ca_file.results | selectattr('content', 'defined') | map(attribute='content') | first }}"
+    certificates_intermediate_ca: "{{ intermediate_ca_file.results | selectattr('content', 'defined') | map(attribute='content') | first }}"
+    certificates_server_cert: "{{ server_cert_file.results | selectattr('content', 'defined') | map(attribute='content') | first }}"
+    certificates_server_key: "{{ server_key_file.results | selectattr('content', 'defined') | map(attribute='content') | first }}"
+  no_log: true
+
+- name: Display certificate retrieval status
+  debug:
+    msg:
+      - "Certificates retrieved from 1Password Connect"
+      - "Root CA: {{ (certificates_root_ca | length > 0) | ternary('✓', '✗') }}"
+      - "Intermediate CA: {{ (certificates_intermediate_ca | length > 0) | ternary('✓', '✗') }}"
+      - "Server Certificate: {{ (certificates_server_cert | length > 0) | ternary('✓', '✗') }}"
+      - "Server Key: {{ (certificates_server_key | length > 0) | ternary('✓', '✗') }}"
