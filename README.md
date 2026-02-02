@@ -240,3 +240,59 @@ If Terraform cannot connect to Proxmox:
 ## Support
 
 For issues or questions, please open an issue in this repository.
+
+## Certificate Management
+
+### Overview
+
+FusionCloudX Infrastructure integrates with the bootstrap repository for certificate deployment. Certificates are generated during disaster recovery (bootstrap Phase 04) and deployed to VMs during infrastructure provisioning.
+
+### Certificate Flow
+
+```
+┌─────────────────────────────────────────┐
+│   Bootstrap Repository (Phase 04)       │
+│   - Generate Root CA                    │
+│   - Generate Intermediate CA            │
+│   - Generate Server Certificate         │
+│   - Store in 1Password                  │
+└─────────────────────────────────────────┘
+                    │
+                    ↓ (1Password)
+┌─────────────────────────────────────────┐
+│   Infrastructure Repository (Ansible)   │
+│   - Retrieve certificates from 1Pass    │
+│   - Deploy to VMs (certificates role)   │
+│   - Configure services (nginx, etc.)    │
+└─────────────────────────────────────────┘
+```
+
+### Usage
+
+**Test Certificate Deployment:**
+```bash
+ansible-playbook ansible/playbooks/test-certificates.yml --limit semaphore-ui
+```
+
+**Deploy Certificates to All Hosts:**
+```bash
+ansible-playbook ansible/playbooks/site.yml --tags certificates
+```
+
+**Deploy Certificates to Specific Host:**
+```bash
+ansible-playbook ansible/playbooks/common.yml --limit gitlab
+```
+
+### Troubleshooting
+
+**Issue: "Certificate deployment failed"**
+- Verify 1Password CLI authentication: `op vault list`
+- Check bootstrap repository Phase 04 completed successfully
+- Verify certificates exist in 1Password vault "FusionCloudX"
+
+**Issue: "CA not in trust store"**
+- Run: `sudo update-ca-certificates`
+- Verify CA file exists: `ls /usr/local/share/ca-certificates/fusioncloudx-*.crt`
+
+See `ansible/roles/certificates/README.md` for detailed configuration options.

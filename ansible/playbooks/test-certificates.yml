@@ -1,0 +1,107 @@
+---
+# ==============================================================================
+# Certificate Deployment Test Playbook
+# ==============================================================================
+# Tests certificate deployment to a single host or subset of hosts
+# Useful for verifying certificates role before full deployment
+# ==============================================================================
+
+- name: Test Certificate Deployment
+  hosts: all
+  become: yes
+  gather_facts: yes
+
+  pre_tasks:
+    - name: Display test information
+      debug:
+        msg:
+          - "========================================"
+          - "Certificate Deployment Test"
+          - "========================================"
+          - "Target: {{ inventory_hostname }} ({{ ansible_host }})"
+          - "This is a TEST run with verbose output"
+          - "========================================"
+      tags: ['always']
+
+    - name: Check existing CA certificates
+      find:
+        paths: /usr/local/share/ca-certificates
+        patterns: 'fusioncloudx-*.crt'
+      register: existing_ca_certs
+      tags: ['pre-check']
+
+    - name: Display existing certificates
+      debug:
+        msg: "Found {{ existing_ca_certs.matched }} existing FusionCloudX CA certificates"
+      tags: ['pre-check']
+
+  roles:
+    - role: certificates
+      tags: ['certificates']
+      vars:
+        certificates_root_ca: "{{ lookup('file', '/tmp/root-ca.pem') | default('') }}"
+        certificates_intermediate_ca: "{{ lookup('file', '/tmp/intermediate-ca.pem') | default('') }}"
+        certificates_server_cert: "{{ lookup('file', '/tmp/server-cert.pem') | default('') }}"
+        certificates_server_key: "{{ lookup('file', '/tmp/server-key.pem') | default('') }}"
+
+  post_tasks:
+    - name: Verify CA certificate installation
+      stat:
+        path: /usr/local/share/ca-certificates/fusioncloudx-root-ca.crt
+      register: root_ca_check
+      tags: ['verify']
+
+    - name: Verify intermediate CA installation
+      stat:
+        path: /usr/local/share/ca-certificates/fusioncloudx-intermediate-ca.crt
+      register: int_ca_check
+      tags: ['verify']
+
+    - name: Verify server certificate deployment
+      stat:
+        path: /etc/ssl/certs/server.crt
+      register: server_cert_check
+      tags: ['verify']
+
+    - name: Verify server key deployment
+      stat:
+        path: /etc/ssl/private/server.key
+      register: server_key_check
+      tags: ['verify']
+
+    - name: Check CA trust store
+      command: grep -r "FusionCloudX" /etc/ssl/certs/ca-certificates.crt
+      register: ca_trust_check
+      changed_when: false
+      failed_when: false
+      tags: ['verify']
+
+    - name: Display test results
+      debug:
+        msg:
+          - "========================================"
+          - "Certificate Deployment Test Results"
+          - "========================================"
+          - "Host: {{ inventory_hostname }}"
+          - ""
+          - "CA Certificates:"
+          - "  Root CA: {{ 'PASS' if root_ca_check.stat.exists else 'FAIL' }}"
+          - "  Intermediate CA: {{ 'PASS' if int_ca_check.stat.exists else 'FAIL' }}"
+          - ""
+          - "Server Certificates:"
+          - "  Certificate: {{ 'PASS' if server_cert_check.stat.exists else 'FAIL' }}"
+          - "  Private Key: {{ 'PASS' if server_key_check.stat.exists else 'FAIL' }}"
+          - ""
+          - "Trust Store:"
+          - "  CA in trust store: {{ 'PASS' if ca_trust_check.rc == 0 else 'FAIL' }}"
+          - ""
+          - "========================================"
+          - "Overall: {{ 'SUCCESS' if (root_ca_check.stat.exists and int_ca_check.stat.exists and server_cert_check.stat.exists and server_key_check.stat.exists) else 'FAILED' }}"
+          - "========================================"
+      tags: ['always']
+
+    - name: Fail if any certificate missing
+      fail:
+        msg: "Certificate deployment failed - see test results above"
+      when: not (root_ca_check.stat.exists and int_ca_check.stat.exists and server_cert_check.stat.exists and server_key_check.stat.exists)
+      tags: ['verify']
