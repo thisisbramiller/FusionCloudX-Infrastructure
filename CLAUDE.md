@@ -53,7 +53,7 @@ The infrastructure uses GitLab CI/CD as the central platform for both version co
 - `ansible:gitlab` - Configure GitLab instance
 - `ansible:site` - Run all Ansible playbooks
 
-See `docs/GITLAB-CICD-SETUP.md` for detailed setup and usage instructions.
+**Note**: The `.gitlab-ci.yml` pipeline configuration file needs to be created to enable GitLab CI/CD functionality. See `docs/GITLAB-CICD-SETUP.md` for detailed setup and usage instructions.
 
 ## Terraform Structure
 
@@ -452,9 +452,8 @@ sudo gitlab-ctl restart
 4. Add manual job to `.gitlab-ci.yml` for the new playbook
 5. Run playbook via GitLab CI/CD or command line
 
-## Current Branch
+## Git Workflow
 
-Current branch: `feat/remove-semaphore-use-gitlab-cicd` (replacing Semaphore UI with GitLab CI/CD)
 Main branch for PRs: `main`
 
 ## Environment Context
@@ -480,7 +479,7 @@ Certificate deployment integrates with the `fusioncloudx-bootstrap` repository:
 
 **Separation of Concerns:**
 - **Bootstrap:** Bare metal only (Mac Mini workstation + Proxmox echo/zero)
-- **Infrastructure:** VMs and services (semaphore-ui, gitlab, postgresql)
+- **Infrastructure:** VMs and services (gitlab, postgresql)
 
 ### Ansible Role: certificates
 
@@ -498,7 +497,7 @@ Certificate deployment integrates with the `fusioncloudx-bootstrap` repository:
 ansible-playbook ansible/playbooks/site.yml --tags certificates
 
 # Test on single host
-ansible-playbook ansible/playbooks/test-certificates.yml --limit semaphore-ui
+ansible-playbook ansible/playbooks/test-certificates.yml --limit gitlab
 
 # Deploy to specific host
 ansible-playbook ansible/playbooks/common.yml --limit gitlab
