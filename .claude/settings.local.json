@@ -43,7 +43,8 @@
       "Bash(echo:*)",
       "Bash(terraform plan:*)",
       "Bash(ansible-doc:*)",
-      "Bash(ansible-config dump:*)"
+      "Bash(ansible-config dump:*)",
+      "WebFetch(domain:github.com)"
     ],
     "deny": [],
     "ask": []

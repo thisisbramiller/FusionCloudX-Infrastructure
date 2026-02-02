@@ -4,6 +4,12 @@ variable "proxmox_api_url" {
   description = "Proxmox VE API URL"
 }
 
+variable "proxmox_ssh_host" {
+  type        = string
+  default     = "192.168.40.206"
+  description = "Proxmox VE SSH host for template management and remote operations"
+}
+
 variable "vm_configs" {
   type = map(object({
     vm_id      = number
@@ -16,14 +22,6 @@ variable "vm_configs" {
   }))
 
   default = {
-    "semaphore-ui" = {
-      vm_id      = 1102
-      name       = "semaphore-ui"
-      memory_mb  = 4096
-      cpu_cores  = 4
-      started    = true
-      full_clone = true
-    }
     "gitlab" = {
       vm_id      = 1103
       name       = "gitlab"
@@ -86,11 +84,6 @@ variable "postgresql_databases" {
   description = "List of databases to create on the PostgreSQL instance"
 
   default = [
-    {
-      name        = "semaphore"
-      description = "Database for Semaphore (Ansible UI)"
-      owner       = "semaphore"
-    },
     {
       name        = "wazuh"
       description = "Database for Wazuh (SIEM)"

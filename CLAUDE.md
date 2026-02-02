@@ -4,47 +4,56 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-FusionCloudX Infrastructure is an Infrastructure-as-Code repository for managing **homelab/development** infrastructure on Proxmox Virtual Environment (PVE) using Terraform and Ansible. The repository follows a **Control Plane architecture** where the `semaphore-ui` VM serves as a centralized automation hub running Terraform and Ansible through a web interface.
+FusionCloudX Infrastructure is an Infrastructure-as-Code repository for managing **homelab/development** infrastructure on Proxmox Virtual Environment (PVE) using Terraform and Ansible. The repository uses **GitLab CI/CD** for both version control and automated/manual job execution, eliminating the need for separate automation tooling.
 
-## Control Plane Architecture
+## GitLab CI/CD Architecture
 
 ### Overview
 
-The infrastructure uses Semaphore UI (running on `semaphore-ui` VM) as the control plane:
-- All Terraform/Ansible operations run through Semaphore web UI
-- Infrastructure repository cloned to `/opt/infrastructure` on semaphore-ui
-- 1Password CLI integration for secrets management
-- Three SSH keys for different purposes (management, GitHub, Proxmox)
-- PostgreSQL LXC container hosts databases (semaphore, wazuh, etc.)
+The infrastructure uses GitLab CI/CD as the central platform for both version control and execution:
+- **Version Control**: Git repository hosted in GitLab
+- **CI/CD**: Automated validation + manual job execution via GitLab pipelines
+- **Manual Triggers**: Click-to-run jobs using `when: manual` (similar to Rundeck)
+- **No Separate Control Plane**: GitLab provides both code hosting and execution platform
+- PostgreSQL LXC container hosts databases (wazuh, etc.)
 
 ### Key Components
 
-**Control Plane VM (semaphore-ui)**:
-- VM ID 1102, 8GB RAM, 8 CPU cores
-- Runs Semaphore UI on port 3000
-- Hosts: Terraform 1.10+, Ansible 2.18+, 1Password CLI
-- Repository path: `/opt/infrastructure`
-- User: `ansible` (NOPASSWD sudo)
+**GitLab VM**:
+- VM ID 1103, 8GB RAM, 4 CPU cores
+- Runs GitLab CE Omnibus on port 80/443
+- Hosts infrastructure repository
+- Provides CI/CD web UI for manual job execution
+- Access: http://gitlab.fusioncloudx.home
+
+**GitLab Runner**:
+- Executes CI/CD jobs (Docker or Shell executor)
+- Installed on GitLab VM or separate host
+- Has access to Terraform, Ansible, and managed infrastructure
+- Configured with secrets via GitLab CI/CD variables
 
 **Database Server (postgresql)**:
 - LXC container ID 2001, 4GB RAM, 2 CPU cores
 - Debian 12 unprivileged container
-- Hosts multiple databases: semaphore, wazuh
+- Hosts multiple databases: wazuh, future applications
 - Managed by Ansible role `postgresql`
 
-**SSH Key Strategy**:
-1. `~/.ssh/id_ed25519` - Management key for all managed hosts
-2. `~/.ssh/github_deploy_key` - GitHub repository access
-3. `~/.ssh/proxmox_terraform_key` - Terraform authentication to Proxmox
+### Execution Model
 
-### Bootstrap Process
+**Automated Jobs** (run on git push):
+- `terraform:init` - Initialize Terraform providers
+- `terraform:validate` - Validate Terraform syntax and formatting
 
-**Three-phase bootstrap**:
-1. **Cloud-init** (automatic): Installs base packages via enhanced vendor_data for semaphore-ui
-2. **Workstation bootstrap** (one-time): Run `./scripts/bootstrap-control-plane.sh` or manually execute `ansible/playbooks/bootstrap-semaphore.yml`
-3. **Self-management** (ongoing): All operations run through Semaphore UI
+**Manual Jobs** (click-to-run in GitLab UI):
+- `terraform:plan` - Preview infrastructure changes
+- `terraform:apply` - Provision infrastructure
+- `terraform:destroy` - Destroy all infrastructure (destructive)
+- `ansible:ping` - Test connectivity to managed hosts
+- `ansible:postgresql` - Configure PostgreSQL server
+- `ansible:gitlab` - Configure GitLab instance
+- `ansible:site` - Run all Ansible playbooks
 
-After bootstrap, update Semaphore UI with repository, create task templates, and manage infrastructure through the web interface. See `docs/CONTROL-PLANE.md` for detailed architecture documentation.
+See `docs/GITLAB-CICD-SETUP.md` for detailed setup and usage instructions.
 
 ## Terraform Structure
 
@@ -54,24 +63,28 @@ Configuration files in `terraform/`:
 - `backend.tf` - Local state backend (`terraform.tfstate` at project root)
 - `variables.tf` - Defines `vm_configs` (QEMU VMs), `postgresql_lxc_config` (single LXC), `postgresql_databases` (database list), and `onepassword_vault_id`
 - `ubuntu-template.tf` - Creates VM template (ID 1000) from Ubuntu Noble cloud image
-- `cloud-init.tf` - Split cloud-init: per-VM user_data + shared vendor_data. **Special**: `semaphore_vendor_data_cloud_config` has enhanced packages for control plane
-- `qemu-vm.tf` - Creates VMs using `for_each`. Semaphore-ui gets special vendor_data. Uses 10 retries for clone operations
+- `cloud-init.tf` - Split cloud-init: per-VM user_data + shared vendor_data. **Special**: `gitlab_vendor_data_cloud_config` has enhanced packages for GitLab
+- `qemu-vm.tf` - Creates VMs using `for_each`. GitLab gets special vendor_data. Uses 10 retries for clone operations
 - `lxc-postgresql.tf` - Single Debian 12 LXC for PostgreSQL + 1Password items for database credentials
+- `lxc-template-automation.tf` - Automated custom LXC template creation (sudo, python3, ssh-import-id pre-installed)
 - `outputs.tf` - VM IPv4 addresses map from QEMU guest agent
 
 ### Key Terraform Patterns
 
 **VM Provisioning Flow**:
 1. Download Ubuntu Noble cloud image → create template (ID 1000)
-2. For each VM in `vm_configs`: create user_data, reference vendor_data (standard or semaphore-specific)
+2. For each VM in `vm_configs`: create user_data, reference vendor_data (standard or gitlab-specific)
 3. Clone template with full clone, apply cloud-init
 4. QEMU guest agent reports IP address to outputs
 
-**LXC Container Pattern**:
+**LXC Container Pattern** (Fully Automated):
 - Single PostgreSQL LXC hosts multiple databases (not one LXC per database)
+- **Custom template**: Terraform automatically creates Ansible-ready template with sudo, python3, ssh-import-id pre-installed
+- **Automation**: null_resource copies and runs template creation script on Proxmox via SSH (no manual steps)
 - Unprivileged container for security
 - Ansible handles PostgreSQL installation and database creation
 - 1Password items created via Terraform for each database user
+- See `docs/LXC-TEMPLATE-SETUP.md` for details
 
 **1Password Integration**:
 - Terraform creates 1Password items for database passwords
@@ -80,10 +93,9 @@ Configuration files in `terraform/`:
 
 **Current Infrastructure** (from `variables.tf`):
 - **VMs**:
-  - `semaphore-ui` (ID 1102, 8GB/8 cores) - control plane
-  - `gitlab` (ID 1103, 8GB/4 cores) - Git hosting + CI/CD
+  - `gitlab` (ID 1103, 8GB/4 cores) - Git hosting + CI/CD + manual job execution
 - **LXC**: `postgresql` (ID 2001, 4GB/2 cores) - database server
-- **Databases**: semaphore, wazuh (defined in `postgresql_databases` variable)
+- **Databases**: wazuh (defined in `postgresql_databases` variable)
 
 ## Ansible Structure
 
@@ -95,11 +107,11 @@ Configuration in `ansible/`:
 - `inventory/group_vars/vault.yml` - Ansible Vault encrypted secrets (fallback for 1Password)
 - `inventory/group_vars/postgresql.yml` - PostgreSQL-specific variables
 - `inventory/host_vars/postgresql.yml` - Database definitions and user configuration
-- `playbooks/bootstrap-semaphore.yml` - **One-time** control plane bootstrap playbook
 - `playbooks/postgresql.yml` - PostgreSQL installation and database setup
+- `playbooks/gitlab.yml` - GitLab installation and configuration
 - `playbooks/site.yml` - Main playbook (orchestrates all roles)
-- `roles/semaphore-controller/` - Installs Terraform, 1Password CLI, Semaphore UI, SSH keys, clones repo
 - `roles/postgresql/` - Installs PostgreSQL, creates databases/users, configures remote access
+- `roles/gitlab/` - Installs GitLab CE Omnibus, configures memory-constrained settings
 
 ### Ansible Vault vs 1Password
 
@@ -117,49 +129,54 @@ Configuration in `ansible/`:
 
 ### Key Ansible Roles
 
-**semaphore-controller** (bootstrap only):
-- Tasks: install-terraform, install-onepassword, install-semaphore, install-ansible-collections, ssh-keys, clone-repo, configure-environment, verify-installation
-- Generates 3 SSH keys, installs Terraform 1.10.3, 1Password CLI 2.30.3, Semaphore UI
-- Clones repo to `/opt/infrastructure`, configures systemd service
-- Run once from workstation to bootstrap control plane
-
 **postgresql**:
 - Installs PostgreSQL 15+ on Debian 12 LXC
 - Creates databases and users from `postgresql_databases` variable
 - Configures `pg_hba.conf` for remote access (homelab network)
 - Templates: `postgresql.conf.j2`, `pg_hba.conf.j2`
 - Handlers: restart PostgreSQL on config changes
+- Secrets: Retrieves database passwords from 1Password Connect via `onepassword.connect.field_info`
+
+**gitlab**:
+- Installs GitLab CE Omnibus package
+- Configures memory-constrained settings for 8GB RAM (Puma workers: 0, Sidekiq: 10)
+- Sets up external URL and initial root password from 1Password
+- Templates: `gitlab.rb.j2`
+- Handlers: gitlab-ctl reconfigure on config changes
 
 ## Common Commands
 
-### Initial Setup (One-Time Bootstrap)
+### Initial Setup (GitLab CI/CD)
 
-Bootstrap the control plane from your workstation:
+Setup GitLab CI/CD for infrastructure automation:
 
 ```bash
-# Guided bootstrap script (recommended)
-./scripts/bootstrap-control-plane.sh
+# 1. Provision GitLab VM with Terraform
+cd terraform/
+terraform init
+terraform plan
+terraform apply
 
-# Manual bootstrap (if script fails)
-cd ansible/
-ansible-playbook \
-  -i 'SEMAPHORE_IP,' \
-  -u ansible \
-  playbooks/bootstrap-semaphore.yml \
-  -e "onepassword_service_account_token=$OP_SERVICE_ACCOUNT_TOKEN"
+# 2. Configure GitLab with Ansible
+cd ../ansible/
+ansible-playbook playbooks/gitlab.yml
 
-# Note: OP_SERVICE_ACCOUNT_TOKEN loaded from ~/.zprofile (macOS Keychain)
+# 3. Setup GitLab Runner (on GitLab VM or separate host)
+# See docs/GITLAB-CICD-SETUP.md for detailed instructions
 
-# After bootstrap, configure GitHub deploy key
-ssh ansible@SEMAPHORE_IP 'cat ~/.ssh/github_deploy_key.pub'
-# Add to GitHub: Repository → Settings → Deploy keys
+# 4. Push repository to GitLab
+git remote add gitlab http://gitlab.fusioncloudx.home/homelab/infrastructure.git
+git push gitlab main
 
-# Configure Proxmox SSH access
-ssh ansible@SEMAPHORE_IP 'cat ~/.ssh/proxmox_terraform_key.pub'
-# Add to Proxmox terraform user's authorized_keys
+# 5. Configure CI/CD variables in GitLab UI
+# Settings → CI/CD → Variables
+# Required: PROXMOX_VE_*, OP_SERVICE_ACCOUNT_TOKEN, TF_VAR_onepassword_vault_id
+
+# 6. Test manual jobs in GitLab UI
+# CI/CD → Pipelines → Click pipeline → Click ▶ on terraform:plan
 ```
 
-### Terraform (from Control Plane or Workstation)
+### Terraform (from Workstation or GitLab CI/CD)
 
 Work from `terraform/` directory:
 
@@ -180,7 +197,7 @@ terraform output vm_ipv4_addresses
 terraform output postgresql_lxc_ipv4_address
 
 # Destroy specific resource
-terraform destroy -target=proxmox_virtual_environment_vm.qemu-vm[\"semaphore-ui\"]
+terraform destroy -target=proxmox_virtual_environment_vm.qemu-vm[\"gitlab\"]
 
 # Destroy all infrastructure (use with caution)
 terraform destroy
@@ -236,16 +253,18 @@ terraform output -json > /tmp/tf-outputs.json
 # Parse JSON and update ansible/inventory/hosts.ini
 ```
 
-### Control Plane Operations (via Semaphore UI)
+### GitLab CI/CD Operations
 
-After bootstrap, use Semaphore UI at `http://semaphore-ui:3000`:
+Use GitLab UI at `http://gitlab.fusioncloudx.home`:
 
-1. **Update repository**: Task template or manual `git pull` in `/opt/infrastructure`
-2. **Deploy infrastructure**: Run Terraform task template (plan/apply)
-3. **Configure hosts**: Run Ansible playbook task template
-4. **Scheduled tasks**: Configure cron-like schedules in Semaphore
+1. **Update repository**: Commit and push changes to GitLab
+2. **Preview infrastructure**: Navigate to CI/CD → Pipelines → Click ▶ on `terraform:plan`
+3. **Deploy infrastructure**: Click ▶ on `terraform:apply` (after reviewing plan)
+4. **Configure hosts**: Click ▶ on `ansible:postgresql` or `ansible:site`
+5. **View logs**: Real-time output in GitLab job logs
+6. **Scheduled pipelines**: Configure in CI/CD → Schedules (for backups, health checks)
 
-### 1Password CLI (on Control Plane)
+### 1Password CLI (for local development)
 
 ```bash
 # List vaults
@@ -265,39 +284,45 @@ op vault list  # Should succeed if token is valid
 - **Primary**: Proxmox API via HTTPS endpoint (`192.168.40.206:8006`)
 - **Secondary**: SSH agent authentication for specific operations (file uploads, etc.)
   - User: `terraform` on Proxmox host
-  - On control plane: Uses dedicated SSH key at `~/.ssh/proxmox_terraform_key`
   - SSH agent must have key loaded (or 1Password SSH agent integration)
 - Provider configuration: `insecure = false` for SSL verification (update if using self-signed certs)
 - Most resources use API; SSH only for operations requiring direct file access
+- GitLab CI/CD: Authenticate via `PROXMOX_VE_*` environment variables (configured in GitLab settings)
 
 ### 1Password Integration
 
-**Dual Authentication Setup**:
-- **1Password Service Account Token** (`OP_SERVICE_ACCOUNT_TOKEN`): Used by bootstrap playbook for initial semaphore-ui setup
-- **1Password Connect** (`OP_CONNECT_TOKEN` + `OP_CONNECT_HOST`): Used by Ansible collections for ongoing secret retrieval
+**Service Account Token**:
+- **1Password Service Account Token** (`OP_SERVICE_ACCOUNT_TOKEN`): Used by Terraform and Ansible
 - Connect Server: http://192.168.40.44:8080 (self-hosted 1Password Connect)
 
 **Usage by Tool**:
 - **Terraform**: Uses 1Password provider to create credential items (database passwords, GitLab root password)
-- **Ansible Bootstrap**: Uses service account token (`OP_SERVICE_ACCOUNT_TOKEN`) passed as extra var
-- **Ansible Operations**: Uses `onepassword.connect` collection with Connect server credentials
+- **Ansible**: Uses `onepassword.connect` collection to retrieve secrets at runtime
+- **GitLab CI/CD**: Service account token configured as masked CI/CD variable
 - **Vault ID**: Set `TF_VAR_onepassword_vault_id` for Terraform (required)
 
-**Environment Variables** (loaded from ~/.zprofile via macOS Keychain):
-- `OP_SERVICE_ACCOUNT_TOKEN` - Service account token (for bootstrap)
+**Environment Variables** (for local development):
+- `OP_SERVICE_ACCOUNT_TOKEN` - Service account token
 - `OP_CONNECT_TOKEN` - JWT token for 1Password Connect server
 - `OP_CONNECT_HOST` - 1Password Connect server URL
 - `TF_VAR_onepassword_vault_id` - Vault UUID
 - `PROXMOX_VE_API_TOKEN` - Proxmox API authentication
 
+**GitLab CI/CD Variables** (configured in GitLab UI):
+- `OP_SERVICE_ACCOUNT_TOKEN` - Masked variable for 1Password access
+- `PROXMOX_VE_ENDPOINT`, `PROXMOX_VE_USERNAME`, `PROXMOX_VE_PASSWORD` - Proxmox authentication
+- `TF_VAR_onepassword_vault_id` - Vault UUID
+
 **Fallback**: Ansible Vault (`inventory/group_vars/vault.yml`) for secrets when 1Password unavailable
 
 ### Resource Dependencies
 - VMs depend on template (ID 1000) via `depends_on` in `qemu-vm.tf`
-- LXC depends on Debian 12 template download
+- **PostgreSQL LXC depends on custom template** via `depends_on` in `lxc-postgresql.tf` (automated by null_resource)
+- Custom LXC template creation runs before PostgreSQL container (fully automated)
 - Cloud-init files must exist before VM initialization
 - PostgreSQL LXC must be provisioned before running `postgresql.yml` playbook
-- Semaphore-ui must be bootstrapped before managing infrastructure through UI
+- GitLab VM must be configured before using CI/CD pipelines
+- GitLab Runner must be registered before running CI/CD jobs
 
 ### Infrastructure Specifics
 
@@ -318,10 +343,9 @@ op vault list  # Should succeed if token is valid
 
 **Cloud-Init Behavior**:
 - **Standard VMs**: Basic vendor_data (qemu-guest-agent, python3, pip)
-- **semaphore-ui**: Enhanced vendor_data (ansible, terraform, git, build-essential)
 - **gitlab**: Enhanced vendor_data (curl, postfix, ufw, python3 for Ansible)
 - User: `ansible` with NOPASSWD sudo, SSH keys from GitHub (`thisisbramiller`)
-- Marker files: `/var/lib/cloud-init.provision.ready` (all VMs), `/var/lib/cloud-init.semaphore.ready` (control plane), `/var/lib/cloud-init.gitlab.ready` (GitLab)
+- Marker files: `/var/lib/cloud-init.provision.ready` (all VMs), `/var/lib/cloud-init.gitlab.ready` (GitLab)
 
 **GitLab Configuration**:
 - **VM**: gitlab (ID 1103, 8GB RAM, 4 CPU cores, 50GB disk)
@@ -359,7 +383,8 @@ sudo gitlab-ctl restart
 - Terraform state: Local backend (`terraform.tfstate` at project root)
 - State file is gitignored
 - No locking or collaboration support (use remote backend for teams)
-- Control plane approach: Run Terraform from semaphore-ui to centralize state
+- GitLab CI/CD approach: Runner maintains state, accessible as pipeline artifact
+- Consider migrating to remote backend (S3, GitLab Managed Terraform State) for collaboration
 
 ### Secrets Management Strategy
 
@@ -372,19 +397,32 @@ sudo gitlab-ctl restart
 **DON'T**:
 - Commit secrets to git (use `.gitignore` for sensitive files)
 - Share service account tokens between environments
-- Log secrets in Semaphore/Ansible output
+- Log secrets in GitLab CI/CD job output (use `no_log: true` in Ansible, masked variables in GitLab)
 - Use Ansible Vault as primary secrets store (1Password preferred)
 
 ## Development Workflow
 
-### Day-to-Day (Control Plane Approach)
+### GitLab CI/CD Workflow (Recommended)
 
-1. **Make changes on workstation**: Edit Terraform/Ansible files, commit to git
-2. **Update control plane**: SSH to semaphore-ui, `git pull` in `/opt/infrastructure`, or use Semaphore task
-3. **Execute via Semaphore UI**: Run Terraform plan/apply or Ansible playbook through web interface
-4. **Monitor and verify**: View logs in Semaphore, check infrastructure state
+1. **Make changes on workstation**: Edit Terraform/Ansible files
+2. **Commit and push to GitLab**:
+   ```bash
+   git add terraform/variables.tf
+   git commit -m "feat: add monitoring VM"
+   git push gitlab main
+   ```
+3. **GitLab auto-validates**: `terraform:init` and `terraform:validate` run automatically
+4. **Execute manual jobs in GitLab UI**:
+   - Navigate to CI/CD → Pipelines → Click latest pipeline
+   - Click ▶ on `terraform:plan` to preview changes
+   - Review plan output in job logs
+   - Click ▶ on `terraform:apply` to provision infrastructure
+   - Click ▶ on `update:inventory` to export IPs
+   - Update `ansible/inventory/hosts.ini` with IPs, commit and push
+   - Click ▶ on `ansible:postgresql` or `ansible:site` to configure hosts
+5. **Monitor and verify**: Real-time logs in GitLab job output, green checkmarks indicate success
 
-### Traditional Workflow (Without Control Plane)
+### Local Development Workflow (Without GitLab CI/CD)
 
 1. Modify Terraform configurations in `terraform/` directory
 2. Run `terraform plan` to preview changes
@@ -411,16 +449,17 @@ sudo gitlab-ctl restart
 1. Create role in `ansible/roles/role-name/`
 2. Define tasks, handlers, defaults, templates
 3. Include role in `playbooks/site.yml` or dedicated playbook
-4. Run playbook via Semaphore or command line
+4. Add manual job to `.gitlab-ci.yml` for the new playbook
+5. Run playbook via GitLab CI/CD or command line
 
 ## Current Branch
 
-Current branch: `semaphore-ui` (active development of control plane)
+Current branch: `feat/remove-semaphore-use-gitlab-cicd` (replacing Semaphore UI with GitLab CI/CD)
 Main branch for PRs: `main`
 
 ## Environment Context
 
-**Homelab/Development Infrastructure**: This repository manages Proxmox-based homelab infrastructure for testing and development. Services deployed: Semaphore (automation), PostgreSQL (databases), planned services (Teleport, Wazuh, Immich). Production workloads will use separate AWS infrastructure.
+**Homelab/Development Infrastructure**: This repository manages Proxmox-based homelab infrastructure for testing and development. Services deployed: GitLab (version control + CI/CD), PostgreSQL (databases), planned services (Teleport, Wazuh, Immich). Production workloads will use separate AWS infrastructure.
 
 **Security Posture**: Appropriate for homelab (NOPASSWD sudo, self-signed certs, `insecure = true`). Review security settings before adapting for production use.
 
