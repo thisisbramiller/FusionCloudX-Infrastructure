@@ -17,23 +17,28 @@ FusionCloudX Infrastructure is an Infrastructure-as-Code repository for managing
 **PostgreSQL LXC** (ID 2001):
 - Debian 12 unprivileged container, 4GB RAM, 2 CPU cores, 64GB disk
 - Hosts multiple databases (currently: wazuh)
-- Custom Ansible-ready template with sudo, python3, ssh-import-id pre-installed
+- Packer-built Ansible-ready template with sudo, python3, ssh-import-id pre-installed
+
+**Packer Builder VM** (ID 1100):
+- 4GB RAM, 2 CPU cores
+- Builds LXC templates using Packer
+- Starts manually when building templates (not auto-started)
 
 ## Architecture
 
 ```
-Terraform (Provisioning)           Ansible (Configuration)
-├── Create VM template (ID 1000)   ├── certificates role (CA + server certs)
-├── Clone VMs from template        ├── postgresql role (install, configure)
-├── Create custom LXC template     ├── gitlab role (install, configure)
-├── Create LXC containers          └── Dynamic inventory via Terraform state
-├── Create 1Password items
-└── Generate Ansible inventory
+Packer (Template Building)         Terraform (Provisioning)           Ansible (Configuration)
+└── Build LXC templates            ├── Create VM template (ID 1000)   ├── certificates role (CA + server certs)
+    on packer-builder VM           ├── Clone VMs from template        ├── postgresql role (install, configure)
+                                   ├── Create LXC containers          ├── gitlab role (install, configure)
+                                   ├── Create 1Password items         └── Dynamic inventory via Terraform state
+                                   └── Generate Ansible inventory
 ```
 
 **Key Design Decisions**:
 - Single PostgreSQL instance hosts all databases (not one container per database)
-- Custom LXC template solves cloud-init unavailability for containers
+- Packer-built LXC templates solve cloud-init unavailability for containers
+- Dedicated packer-builder VM for template creation (scales to future templates)
 - 1Password is primary secrets store; Ansible Vault is fallback
 - Dynamic inventory reads directly from Terraform state
 
@@ -51,8 +56,8 @@ Files in `terraform/`:
 | `cloud-init-gitlab.tf` | Enhanced cloud-init for GitLab (postfix, ufw, etc.) |
 | `qemu-vm.tf` | VMs via `for_each` from `vm_configs`; 10 clone retries |
 | `lxc-debian-template.tf` | Downloads Debian 12 LXC template |
-| `lxc-template.tf` | Creates Ansible-ready custom template via null_resource |
 | `lxc-postgresql.tf` | PostgreSQL container + 1Password items for credentials |
+| `ssh-keys.tf` | Ansible SSH key generation + 1Password storage |
 | `onepassword-gitlab.tf` | GitLab root password + runner token in 1Password |
 | `ansible-inventory.tf` | Dynamic inventory via Terraform Ansible provider |
 | `outputs.tf` | Infrastructure summary, URLs, 1Password item IDs |
@@ -157,15 +162,14 @@ op item get "GitLab Root User" --vault homelab --fields password  # Get password
 ## Resource Dependencies
 
 ```
-Ubuntu Template (ID 1000)
-    ↓
-GitLab VM (ID 1103) ──────────────┐
-                                   ↓
-Debian 12 Template                Ansible playbooks
-    ↓                             (after VMs/containers
-Custom Ansible-Ready Template      have IP addresses)
-    ↓
-PostgreSQL LXC (ID 2001) ─────────┘
+Ubuntu Template (ID 1000)              Packer-built Template
+    ↓                                  (debian-12-ansible-ready.tar.gz)
+GitLab VM (ID 1103) ──────────────┐         ↓
+Packer Builder VM (ID 1100)       │    PostgreSQL LXC (ID 2001)
+                                  ↓         │
+                            Ansible playbooks
+                            (after VMs/containers
+                             have IP addresses)
 ```
 
 ## Adding New Infrastructure
@@ -184,6 +188,7 @@ PostgreSQL LXC (ID 2001) ─────────┘
 | GitLab Runner Registration Token | Password | 32-char alphanumeric token |
 | PostgreSQL Admin (postgres) | Database | postgres user credentials |
 | PostgreSQL - Wazuh Database User | Database | wazuh user credentials |
+| Infrastructure Ansible SSH Key | Secure Note | ED25519 private/public key pair |
 
 ## Certificate Management
 
@@ -197,13 +202,43 @@ Certificates integrate with the `fusioncloudx-bootstrap` repository:
 - VMs/containers → Infrastructure repository (certificates role)
 - Network devices (printer, appliance) → Infrastructure optional playbook (manual import)
 
+## Packer Templates
+
+LXC templates are built using Packer on the `packer-builder` VM. This approach provides versioned, reproducible templates with Ansible prerequisites pre-installed.
+
+**Files in `packer/`**:
+
+| File | Purpose |
+|------|---------|
+| `debian-12-ansible-ready.pkr.hcl` | Main Packer template for Debian 12 LXC |
+| `scripts/provision-ansible-ready.sh` | Provisioning script (installs sudo, python3, etc.) |
+| `.gitignore` | Excludes build artifacts and secrets |
+
+**Build Commands** (on packer-builder VM):
+
+```bash
+cd /opt/packer
+packer init debian-12-ansible-ready.pkr.hcl     # Download plugins
+packer validate debian-12-ansible-ready.pkr.hcl # Validate config
+packer build debian-12-ansible-ready.pkr.hcl    # Build template
+```
+
+**Template Location**: `nas-infrastructure:vztmpl/debian-12-ansible-ready.tar.gz`
+
+**Pre-installed Packages**: sudo, python3, python3-pip, ssh-import-id, curl, wget, ca-certificates, gnupg
+
+**Verify Template**:
+```bash
+ssh root@<container-ip> 'cat /etc/ansible-ready'
+```
+
 ## Cloud-Init Configuration
 
 **Standard VMs**: User `ansible` with NOPASSWD sudo, SSH keys from GitHub (`thisisbramiller`), qemu-guest-agent, python3
 
 **GitLab VM**: Enhanced packages (curl, postfix, ufw, openssh-server), preconfigured hostname, UFW rules, marker files for readiness detection
 
-**LXC Containers**: No cloud-init (uses custom template with Ansible prerequisites instead)
+**LXC Containers**: No cloud-init (uses Packer-built template with Ansible prerequisites instead)
 
 ## Git Workflow
 
