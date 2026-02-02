@@ -5,13 +5,8 @@
 # This container will host MULTIPLE databases (wazuh, etc.)
 # Configuration and PostgreSQL installation is handled by Ansible
 #
-# PREREQUISITE:
-# The Ansible-ready LXC template must exist before running terraform apply.
-# Build it using Packer on the packer-builder VM:
-#   ssh packer-builder 'cd /opt/packer && packer build debian-12-ansible-ready.pkr.hcl'
-#
-# Template includes: sudo, python3, python3-pip, ssh-import-id
-# Template location: nas-infrastructure:vztmpl/debian-12-ansible-ready.tar.zst
+# Uses standard Debian 12 LXC template from Proxmox. Ansible prerequisites
+# (python3, sudo) are installed via bootstrap playbook using raw module.
 # ==============================================================================
 
 # Create single PostgreSQL LXC container
@@ -26,10 +21,10 @@ resource "proxmox_virtual_environment_container" "postgresql" {
   start_on_boot = var.postgresql_lxc_config.on_boot
   unprivileged  = true # Security best practice - always use unprivileged containers
 
-  # Operating System - Packer-built Ansible-ready template
-  # Template built by: packer build debian-12-ansible-ready.pkr.hcl
+  # Operating System - Standard Debian 12 template from Proxmox
+  # Ansible prerequisites installed via bootstrap playbook
   operating_system {
-    template_file_id = "nas-infrastructure:vztmpl/debian-12-ansible-ready.tar.gz"
+    template_file_id = proxmox_virtual_environment_download_file.debian12_lxc_template.id
     type             = "debian"
   }
 
