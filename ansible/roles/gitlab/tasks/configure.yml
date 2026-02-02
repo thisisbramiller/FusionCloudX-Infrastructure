@@ -3,6 +3,17 @@
 # GitLab Role - Configuration Tasks
 # ==============================================================================
 
+- name: Verify SSL certificates exist when HTTPS is enabled
+  stat:
+    path: "{{ item }}"
+  register: ssl_cert_check
+  failed_when: not ssl_cert_check.stat.exists
+  when: gitlab_enable_https
+  loop:
+    - "{{ gitlab_ssl_certificate }}"
+    - "{{ gitlab_ssl_certificate_key }}"
+  tags: ['gitlab', 'configure', 'https']
+
 - name: Configure GitLab via gitlab.rb
   template:
     src: gitlab.rb.j2
@@ -21,6 +32,6 @@
 
 - name: Wait for GitLab to be fully initialized
   wait_for:
-    port: 80
+    port: "{{ 443 if gitlab_enable_https else 80 }}"
     host: localhost
     timeout: 300
