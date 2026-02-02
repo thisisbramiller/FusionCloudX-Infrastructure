@@ -4,56 +4,21 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-FusionCloudX Infrastructure is an Infrastructure-as-Code repository for managing **homelab/development** infrastructure on Proxmox Virtual Environment (PVE) using Terraform and Ansible. The repository uses **GitLab CI/CD** for both version control and automated/manual job execution, eliminating the need for separate automation tooling.
+FusionCloudX Infrastructure is an Infrastructure-as-Code repository for managing **homelab/development** infrastructure on Proxmox Virtual Environment (PVE) using Terraform and Ansible.
 
-## GitLab CI/CD Architecture
-
-### Overview
-
-The infrastructure uses GitLab CI/CD as the central platform for both version control and execution:
-- **Version Control**: Git repository hosted in GitLab
-- **CI/CD**: Automated validation + manual job execution via GitLab pipelines
-- **Manual Triggers**: Click-to-run jobs using `when: manual` (similar to Rundeck)
-- **No Separate Control Plane**: GitLab provides both code hosting and execution platform
-- PostgreSQL LXC container hosts databases (wazuh, etc.)
-
-### Key Components
+## Infrastructure Components
 
 **GitLab VM**:
 - VM ID 1103, 8GB RAM, 4 CPU cores
 - Runs GitLab CE Omnibus on port 80/443
 - Hosts infrastructure repository
-- Provides CI/CD web UI for manual job execution
 - Access: http://gitlab.fusioncloudx.home
-
-**GitLab Runner**:
-- Executes CI/CD jobs (Docker or Shell executor)
-- Installed on GitLab VM or separate host
-- Has access to Terraform, Ansible, and managed infrastructure
-- Configured with secrets via GitLab CI/CD variables
 
 **Database Server (postgresql)**:
 - LXC container ID 2001, 4GB RAM, 2 CPU cores
 - Debian 12 unprivileged container
 - Hosts multiple databases: wazuh, future applications
 - Managed by Ansible role `postgresql`
-
-### Execution Model
-
-**Automated Jobs** (run on git push):
-- `terraform:init` - Initialize Terraform providers
-- `terraform:validate` - Validate Terraform syntax and formatting
-
-**Manual Jobs** (click-to-run in GitLab UI):
-- `terraform:plan` - Preview infrastructure changes
-- `terraform:apply` - Provision infrastructure
-- `terraform:destroy` - Destroy all infrastructure (destructive)
-- `ansible:ping` - Test connectivity to managed hosts
-- `ansible:postgresql` - Configure PostgreSQL server
-- `ansible:gitlab` - Configure GitLab instance
-- `ansible:site` - Run all Ansible playbooks
-
-**Note**: The `.gitlab-ci.yml` pipeline configuration file needs to be created to enable GitLab CI/CD functionality. See `docs/GITLAB-CICD-SETUP.md` for detailed setup and usage instructions.
 
 ## Terraform Structure
 
@@ -93,7 +58,7 @@ Configuration files in `terraform/`:
 
 **Current Infrastructure** (from `variables.tf`):
 - **VMs**:
-  - `gitlab` (ID 1103, 8GB/4 cores) - Git hosting + CI/CD + manual job execution
+  - `gitlab` (ID 1103, 8GB/4 cores) - Git hosting and version control
 - **LXC**: `postgresql` (ID 2001, 4GB/2 cores) - database server
 - **Databases**: wazuh (defined in `postgresql_databases` variable)
 
@@ -146,37 +111,29 @@ Configuration in `ansible/`:
 
 ## Common Commands
 
-### Initial Setup (GitLab CI/CD)
+### Initial Setup
 
-Setup GitLab CI/CD for infrastructure automation:
+Provision infrastructure with Terraform and configure with Ansible:
 
 ```bash
-# 1. Provision GitLab VM with Terraform
+# 1. Provision infrastructure with Terraform
 cd terraform/
 terraform init
 terraform plan
 terraform apply
 
-# 2. Configure GitLab with Ansible
+# 2. Get VM IP addresses
+terraform output vm_ipv4_addresses
+
+# 3. Update Ansible inventory with IPs
 cd ../ansible/
-ansible-playbook playbooks/gitlab.yml
+# Edit inventory/hosts.ini with the IP addresses from Terraform output
 
-# 3. Setup GitLab Runner (on GitLab VM or separate host)
-# See docs/GITLAB-CICD-SETUP.md for detailed instructions
-
-# 4. Push repository to GitLab
-git remote add gitlab http://gitlab.fusioncloudx.home/homelab/infrastructure.git
-git push gitlab main
-
-# 5. Configure CI/CD variables in GitLab UI
-# Settings → CI/CD → Variables
-# Required: PROXMOX_VE_*, OP_SERVICE_ACCOUNT_TOKEN, TF_VAR_onepassword_vault_id
-
-# 6. Test manual jobs in GitLab UI
-# CI/CD → Pipelines → Click pipeline → Click ▶ on terraform:plan
+# 4. Configure hosts with Ansible
+ansible-playbook playbooks/site.yml
 ```
 
-### Terraform (from Workstation or GitLab CI/CD)
+### Terraform
 
 Work from `terraform/` directory:
 
@@ -203,7 +160,7 @@ terraform destroy -target=proxmox_virtual_environment_vm.qemu-vm[\"gitlab\"]
 terraform destroy
 ```
 
-### Ansible (from Control Plane or Workstation)
+### Ansible
 
 Work from `ansible/` directory:
 
@@ -253,18 +210,7 @@ terraform output -json > /tmp/tf-outputs.json
 # Parse JSON and update ansible/inventory/hosts.ini
 ```
 
-### GitLab CI/CD Operations
-
-Use GitLab UI at `http://gitlab.fusioncloudx.home`:
-
-1. **Update repository**: Commit and push changes to GitLab
-2. **Preview infrastructure**: Navigate to CI/CD → Pipelines → Click ▶ on `terraform:plan`
-3. **Deploy infrastructure**: Click ▶ on `terraform:apply` (after reviewing plan)
-4. **Configure hosts**: Click ▶ on `ansible:postgresql` or `ansible:site`
-5. **View logs**: Real-time output in GitLab job logs
-6. **Scheduled pipelines**: Configure in CI/CD → Schedules (for backups, health checks)
-
-### 1Password CLI (for local development)
+### 1Password CLI
 
 ```bash
 # List vaults
@@ -287,7 +233,6 @@ op vault list  # Should succeed if token is valid
   - SSH agent must have key loaded (or 1Password SSH agent integration)
 - Provider configuration: `insecure = false` for SSL verification (update if using self-signed certs)
 - Most resources use API; SSH only for operations requiring direct file access
-- GitLab CI/CD: Authenticate via `PROXMOX_VE_*` environment variables (configured in GitLab settings)
 
 ### 1Password Integration
 
@@ -298,20 +243,14 @@ op vault list  # Should succeed if token is valid
 **Usage by Tool**:
 - **Terraform**: Uses 1Password provider to create credential items (database passwords, GitLab root password)
 - **Ansible**: Uses `onepassword.connect` collection to retrieve secrets at runtime
-- **GitLab CI/CD**: Service account token configured as masked CI/CD variable
 - **Vault ID**: Set `TF_VAR_onepassword_vault_id` for Terraform (required)
 
-**Environment Variables** (for local development):
+**Environment Variables**:
 - `OP_SERVICE_ACCOUNT_TOKEN` - Service account token
 - `OP_CONNECT_TOKEN` - JWT token for 1Password Connect server
 - `OP_CONNECT_HOST` - 1Password Connect server URL
 - `TF_VAR_onepassword_vault_id` - Vault UUID
 - `PROXMOX_VE_API_TOKEN` - Proxmox API authentication
-
-**GitLab CI/CD Variables** (configured in GitLab UI):
-- `OP_SERVICE_ACCOUNT_TOKEN` - Masked variable for 1Password access
-- `PROXMOX_VE_ENDPOINT`, `PROXMOX_VE_USERNAME`, `PROXMOX_VE_PASSWORD` - Proxmox authentication
-- `TF_VAR_onepassword_vault_id` - Vault UUID
 
 **Fallback**: Ansible Vault (`inventory/group_vars/vault.yml`) for secrets when 1Password unavailable
 
@@ -321,8 +260,6 @@ op vault list  # Should succeed if token is valid
 - Custom LXC template creation runs before PostgreSQL container (fully automated)
 - Cloud-init files must exist before VM initialization
 - PostgreSQL LXC must be provisioned before running `postgresql.yml` playbook
-- GitLab VM must be configured before using CI/CD pipelines
-- GitLab Runner must be registered before running CI/CD jobs
 
 ### Infrastructure Specifics
 
@@ -383,8 +320,7 @@ sudo gitlab-ctl restart
 - Terraform state: Local backend (`terraform.tfstate` at project root)
 - State file is gitignored
 - No locking or collaboration support (use remote backend for teams)
-- GitLab CI/CD approach: Runner maintains state, accessible as pipeline artifact
-- Consider migrating to remote backend (S3, GitLab Managed Terraform State) for collaboration
+- Consider migrating to remote backend (S3, Terraform Cloud) for collaboration
 
 ### Secrets Management Strategy
 
@@ -397,32 +333,10 @@ sudo gitlab-ctl restart
 **DON'T**:
 - Commit secrets to git (use `.gitignore` for sensitive files)
 - Share service account tokens between environments
-- Log secrets in GitLab CI/CD job output (use `no_log: true` in Ansible, masked variables in GitLab)
+- Log secrets in playbook output (use `no_log: true` in Ansible)
 - Use Ansible Vault as primary secrets store (1Password preferred)
 
 ## Development Workflow
-
-### GitLab CI/CD Workflow (Recommended)
-
-1. **Make changes on workstation**: Edit Terraform/Ansible files
-2. **Commit and push to GitLab**:
-   ```bash
-   git add terraform/variables.tf
-   git commit -m "feat: add monitoring VM"
-   git push gitlab main
-   ```
-3. **GitLab auto-validates**: `terraform:init` and `terraform:validate` run automatically
-4. **Execute manual jobs in GitLab UI**:
-   - Navigate to CI/CD → Pipelines → Click latest pipeline
-   - Click ▶ on `terraform:plan` to preview changes
-   - Review plan output in job logs
-   - Click ▶ on `terraform:apply` to provision infrastructure
-   - Click ▶ on `update:inventory` to export IPs
-   - Update `ansible/inventory/hosts.ini` with IPs, commit and push
-   - Click ▶ on `ansible:postgresql` or `ansible:site` to configure hosts
-5. **Monitor and verify**: Real-time logs in GitLab job output, green checkmarks indicate success
-
-### Local Development Workflow (Without GitLab CI/CD)
 
 1. Modify Terraform configurations in `terraform/` directory
 2. Run `terraform plan` to preview changes
@@ -449,8 +363,7 @@ sudo gitlab-ctl restart
 1. Create role in `ansible/roles/role-name/`
 2. Define tasks, handlers, defaults, templates
 3. Include role in `playbooks/site.yml` or dedicated playbook
-4. Add manual job to `.gitlab-ci.yml` for the new playbook
-5. Run playbook via GitLab CI/CD or command line
+4. Run playbook: `ansible-playbook playbooks/site.yml`
 
 ## Git Workflow
 
@@ -458,7 +371,7 @@ Main branch for PRs: `main`
 
 ## Environment Context
 
-**Homelab/Development Infrastructure**: This repository manages Proxmox-based homelab infrastructure for testing and development. Services deployed: GitLab (version control + CI/CD), PostgreSQL (databases), planned services (Teleport, Wazuh, Immich). Production workloads will use separate AWS infrastructure.
+**Homelab/Development Infrastructure**: This repository manages Proxmox-based homelab infrastructure for testing and development. Services deployed: GitLab (version control), PostgreSQL (databases), planned services (Teleport, Wazuh, Immich). Production workloads will use separate AWS infrastructure.
 
 **Security Posture**: Appropriate for homelab (NOPASSWD sudo, self-signed certs, `insecure = true`). Review security settings before adapting for production use.
 
