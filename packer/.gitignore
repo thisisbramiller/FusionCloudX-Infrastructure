@@ -1,0 +1,9 @@
+# Packer cache and output
+.packer_plugins/
+packer_cache/
+*.tar.gz
+*.tar.zst
+
+# Variables files that may contain secrets
+*.auto.pkrvars.hcl
+variables.pkrvars.hcl
