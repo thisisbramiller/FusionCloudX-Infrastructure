@@ -43,10 +43,10 @@ postgresql_global_config:
   # Locale
   datestyle: "'iso, mdy'"
   timezone: "'America/Chicago'"
-  lc_messages: "'en_US.UTF-8'"
-  lc_monetary: "'en_US.UTF-8'"
-  lc_numeric: "'en_US.UTF-8'"
-  lc_time: "'en_US.UTF-8'"
+  lc_messages: "'C.UTF-8'"
+  lc_monetary: "'C.UTF-8'"
+  lc_numeric: "'C.UTF-8'"
+  lc_time: "'C.UTF-8'"
   default_text_search_config: "'pg_catalog.english'"
 
 # PostgreSQL Authentication (pg_hba.conf)
