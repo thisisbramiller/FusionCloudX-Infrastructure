@@ -7,11 +7,29 @@
   stat:
     path: "{{ item }}"
   register: ssl_cert_check
-  failed_when: not ssl_cert_check.stat.exists
+  failed_when: false
   when: gitlab_enable_https
   loop:
     - "{{ gitlab_ssl_certificate }}"
     - "{{ gitlab_ssl_certificate_key }}"
+  tags: ['gitlab', 'configure', 'https']
+
+- name: Display helpful error if certificates are missing
+  fail:
+    msg: |
+      SSL certificate not found: {{ item.item }}
+
+      Please ensure the certificates role has been run first:
+      ansible-playbook ansible/playbooks/common.yml --limit gitlab
+
+      Or run the full site playbook:
+      ansible-playbook ansible/playbooks/site.yml --limit gitlab
+  when:
+    - gitlab_enable_https
+    - not item.stat.exists
+  loop: "{{ ssl_cert_check.results }}"
+  loop_control:
+    label: "{{ item.item }}"
   tags: ['gitlab', 'configure', 'https']
 
 - name: Configure GitLab via gitlab.rb
@@ -35,3 +53,25 @@
     port: "{{ 443 if gitlab_enable_https else 80 }}"
     host: localhost
     timeout: 300
+
+- name: Verify HTTPS endpoint responding
+  uri:
+    url: "https://{{ gitlab_hostname }}.{{ gitlab_domain }}"
+    validate_certs: no
+    method: GET
+    status_code: [200, 302]
+  register: https_check
+  retries: 3
+  delay: 10
+  when: gitlab_enable_https
+  tags: ['gitlab', 'configure', 'verify']
+
+- name: Display HTTPS verification result
+  debug:
+    msg: "✅ GitLab HTTPS endpoint verified: {{ https_check.status }}"
+  when:
+    - gitlab_enable_https
+    - https_check is defined
+    - https_check is not skipped
+    - https_check.status is defined
+  tags: ['gitlab', 'configure', 'verify']

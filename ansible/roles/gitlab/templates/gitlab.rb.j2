@@ -28,8 +28,8 @@ nginx['ssl_prefer_server_ciphers'] = "{{ gitlab_ssl_prefer_server_ciphers }}"
 nginx['redirect_http_to_https'] = true
 
 # Enable HSTS (HTTP Strict Transport Security)
-nginx['hsts_max_age'] = 31536000
-nginx['hsts_include_subdomains'] = false
+nginx['hsts_max_age'] = {{ gitlab_hsts_max_age }}
+nginx['hsts_include_subdomains'] = {{ gitlab_hsts_include_subdomains | lower }}
 {% endif %}
 
 {% if gitlab_memory_constrained %}
