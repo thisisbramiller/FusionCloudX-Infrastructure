@@ -17,28 +17,22 @@ FusionCloudX Infrastructure is an Infrastructure-as-Code repository for managing
 **PostgreSQL LXC** (ID 2001):
 - Debian 12 unprivileged container, 4GB RAM, 2 CPU cores, 64GB disk
 - Hosts multiple databases (currently: wazuh)
-- Packer-built Ansible-ready template with sudo, python3, ssh-import-id pre-installed
-
-**Packer Builder VM** (ID 1100):
-- 4GB RAM, 2 CPU cores
-- Builds LXC templates using Packer
-- Starts manually when building templates (not auto-started)
+- Standard Proxmox Debian 12 template with Ansible bootstrap
 
 ## Architecture
 
 ```
-Packer (Template Building)         Terraform (Provisioning)           Ansible (Configuration)
-└── Build LXC templates            ├── Create VM template (ID 1000)   ├── certificates role (CA + server certs)
-    on packer-builder VM           ├── Clone VMs from template        ├── postgresql role (install, configure)
-                                   ├── Create LXC containers          ├── gitlab role (install, configure)
-                                   ├── Create 1Password items         └── Dynamic inventory via Terraform state
-                                   └── Generate Ansible inventory
+Terraform (Provisioning)                    Ansible (Configuration)
+├── Create VM template (ID 1000)            ├── bootstrap playbook (raw: python3, sudo)
+├── Clone VMs from template                 ├── certificates role (CA + server certs)
+├── Create LXC from standard template       ├── postgresql role (install, configure)
+├── Create 1Password items                  ├── gitlab role (install, configure)
+└── Generate Ansible inventory              └── Dynamic inventory via Terraform state
 ```
 
 **Key Design Decisions**:
 - Single PostgreSQL instance hosts all databases (not one container per database)
-- Packer-built LXC templates solve cloud-init unavailability for containers
-- Dedicated packer-builder VM for template creation (scales to future templates)
+- Standard Proxmox templates with Ansible `raw` module bootstrap (no custom template building needed)
 - 1Password is primary secrets store; Ansible Vault is fallback
 - Dynamic inventory reads directly from Terraform state
 
@@ -91,7 +85,8 @@ Files in `ansible/`:
 - `gitlab/`: Installs GitLab CE Omnibus, configures gitlab.rb with memory-constrained settings
 
 **Playbooks**:
-- `site.yml`: Main orchestration (imports common, postgresql, gitlab)
+- `site.yml`: Main orchestration (imports bootstrap, common, postgresql, gitlab)
+- `bootstrap.yml`: LXC container prerequisite installation (python3, sudo via raw module)
 - `common.yml`: Certificate deployment
 - `postgresql.yml`: Database server configuration
 - `gitlab.yml`: GitLab installation and configuration
@@ -162,14 +157,13 @@ op item get "GitLab Root User" --vault homelab --fields password  # Get password
 ## Resource Dependencies
 
 ```
-Ubuntu Template (ID 1000)              Packer-built Template
-    ↓                                  (debian-12-ansible-ready.tar.gz)
+Ubuntu Template (ID 1000)              Standard Debian 12 Template
+    ↓                                  (downloaded from Proxmox)
 GitLab VM (ID 1103) ──────────────┐         ↓
-Packer Builder VM (ID 1100)       │    PostgreSQL LXC (ID 2001)
+                                  │    PostgreSQL LXC (ID 2001)
                                   ↓         │
                             Ansible playbooks
-                            (after VMs/containers
-                             have IP addresses)
+                            (bootstrap → common → apps)
 ```
 
 ## Adding New Infrastructure
@@ -202,34 +196,20 @@ Certificates integrate with the `fusioncloudx-bootstrap` repository:
 - VMs/containers → Infrastructure repository (certificates role)
 - Network devices (printer, appliance) → Infrastructure optional playbook (manual import)
 
-## Packer Templates
+## LXC Container Bootstrap
 
-LXC templates are built using Packer on the `packer-builder` VM. This approach provides versioned, reproducible templates with Ansible prerequisites pre-installed.
+LXC containers use standard Proxmox Debian 12 templates. Since these templates don't include Python, the Ansible `bootstrap.yml` playbook uses the `raw` module to install prerequisites before other playbooks run.
 
-**Files in `packer/`**:
+**Bootstrap Process**:
+1. Terraform creates LXC from standard Debian 12 template
+2. Bootstrap playbook runs `raw` module (works without Python)
+3. Installs `python3` and `sudo` via apt
+4. Subsequent playbooks can use standard Ansible modules
 
-| File | Purpose |
-|------|---------|
-| `debian-12-ansible-ready.pkr.hcl` | Main Packer template for Debian 12 LXC |
-| `scripts/provision-ansible-ready.sh` | Provisioning script (installs sudo, python3, etc.) |
-| `.gitignore` | Excludes build artifacts and secrets |
-
-**Build Commands** (on packer-builder VM):
-
+**Run Bootstrap**:
 ```bash
-cd /opt/packer
-packer init debian-12-ansible-ready.pkr.hcl     # Download plugins
-packer validate debian-12-ansible-ready.pkr.hcl # Validate config
-packer build debian-12-ansible-ready.pkr.hcl    # Build template
-```
-
-**Template Location**: `nas-infrastructure:vztmpl/debian-12-ansible-ready.tar.gz`
-
-**Pre-installed Packages**: sudo, python3, python3-pip, ssh-import-id, curl, wget, ca-certificates, gnupg
-
-**Verify Template**:
-```bash
-ssh root@<container-ip> 'cat /etc/ansible-ready'
+ansible-playbook playbooks/bootstrap.yml        # Bootstrap LXC containers
+ansible-playbook playbooks/site.yml             # Full deployment (includes bootstrap)
 ```
 
 ## Cloud-Init Configuration
@@ -238,7 +218,7 @@ ssh root@<container-ip> 'cat /etc/ansible-ready'
 
 **GitLab VM**: Enhanced packages (curl, postfix, ufw, openssh-server), preconfigured hostname, UFW rules, marker files for readiness detection
 
-**LXC Containers**: No cloud-init (uses Packer-built template with Ansible prerequisites instead)
+**LXC Containers**: No cloud-init (uses standard template with Ansible raw module bootstrap)
 
 ## Git Workflow
 
