@@ -116,7 +116,7 @@ terraform:destroy:
 # Ansible Ping (manual trigger - connectivity test)
 ansible:ping:
   stage: configure
-  image: cytopia/ansible:latest-tools
+  image: cytopia/ansible:2.17-tools
   before_script:
     - cd ansible/
     - ansible-galaxy collection install -r requirements.yml
@@ -128,7 +128,7 @@ ansible:ping:
 # Ansible PostgreSQL Playbook (manual trigger)
 ansible:postgresql:
   stage: configure
-  image: cytopia/ansible:latest-tools
+  image: cytopia/ansible:2.17-tools
   dependencies:
     - terraform:apply
   before_script:
@@ -144,7 +144,7 @@ ansible:postgresql:
 # Ansible GitLab Playbook (manual trigger)
 ansible:gitlab:
   stage: configure
-  image: cytopia/ansible:latest-tools
+  image: cytopia/ansible:2.17-tools
   dependencies:
     - terraform:apply
   before_script:
@@ -160,7 +160,7 @@ ansible:gitlab:
 # Ansible Site Playbook (manual trigger - runs ALL roles)
 ansible:site:
   stage: configure
-  image: cytopia/ansible:latest-tools
+  image: cytopia/ansible:2.17-tools
   dependencies:
     - terraform:apply
   before_script:

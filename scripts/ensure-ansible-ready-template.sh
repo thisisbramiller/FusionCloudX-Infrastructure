@@ -74,6 +74,8 @@ echo -e "${BLUE}Step 3: Installing required packages...${NC}"
 
 # Install packages
 pct exec $TEMPLATE_ID -- bash -c '
+    set -euo pipefail
+
     # Update package cache
     apt-get update
 

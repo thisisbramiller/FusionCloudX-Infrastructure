@@ -4,6 +4,12 @@ variable "proxmox_api_url" {
   description = "Proxmox VE API URL"
 }
 
+variable "proxmox_ssh_host" {
+  type        = string
+  default     = "192.168.40.206"
+  description = "Proxmox VE SSH host for template management and remote operations"
+}
+
 variable "vm_configs" {
   type = map(object({
     vm_id      = number

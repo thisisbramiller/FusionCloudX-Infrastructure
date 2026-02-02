@@ -21,7 +21,7 @@ resource "null_resource" "ansible_ready_lxc_template" {
       # Upload and execute the wrapper script on Proxmox host
       cat "${path.module}/../scripts/ensure-ansible-ready-template.sh" | \
         ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
-        terraform@192.168.40.206 'bash -s'
+        terraform@${var.proxmox_ssh_host} 'bash -s'
     EOT
 
     interpreter = ["bash", "-c"]
