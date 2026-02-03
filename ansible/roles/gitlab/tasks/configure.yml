@@ -42,6 +42,12 @@
     backup: yes
   notify: reconfigure gitlab
 
+# Flush handlers to run reconfigure immediately after template changes
+# Required because we need nginx to be running with the new config
+# before we can verify the HTTPS endpoint
+- name: Apply gitlab.rb changes immediately
+  meta: flush_handlers
+
 - name: Ensure GitLab is started and enabled
   systemd:
     name: gitlab-runsvdir
