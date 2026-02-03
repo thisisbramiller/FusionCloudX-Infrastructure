@@ -27,9 +27,9 @@ provider "proxmox" {
   insecure = false
 
   ssh {
-    agent        = true
-    agent_socket = "/Users/fcx/Library/Group Containers/2BUA8C4S2C.com.1password/t/agent.sock"
-    username     = "terraform"
+    agent    = true
+    username = "terraform"
+    # SSH_AUTH_SOCK environment variable is used automatically
   }
 }
 

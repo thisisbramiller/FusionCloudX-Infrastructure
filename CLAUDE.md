@@ -86,7 +86,7 @@ Files in `ansible/`:
 - `gitlab/`: Installs GitLab CE Omnibus, configures gitlab.rb with memory-constrained settings
 
 **Playbooks**:
-- `site.yml`: Main orchestration (imports bootstrap, common, postgresql, gitlab)
+- `site.yml`: Main orchestration (contains inlined plays for bootstrap, common, postgresql, gitlab)
 - `bootstrap.yml`: LXC container prerequisite installation (python3, sudo via raw module)
 - `common.yml`: Certificate deployment
 - `postgresql.yml`: Database server configuration
