@@ -15,6 +15,9 @@ external_url '{{ gitlab_external_url }}'
 # Certificates deployed by certificates role to standard system paths
 # ==============================================================================
 
+# Disable Let's Encrypt (using internal FusionCloudX CA certificates)
+letsencrypt['enable'] = false
+
 # SSL Certificate paths
 nginx['ssl_certificate'] = "{{ gitlab_ssl_certificate }}"
 nginx['ssl_certificate_key'] = "{{ gitlab_ssl_certificate_key }}"

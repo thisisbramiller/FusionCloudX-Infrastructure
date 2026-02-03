@@ -26,15 +26,38 @@
     state: present
     filename: gitlab-ce
 
+# Create gitlab.rb BEFORE installing package to disable Let's Encrypt
+# GitLab post-install script reads existing gitlab.rb if present
+- name: Create GitLab configuration directory
+  file:
+    path: /etc/gitlab
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: Create initial gitlab.rb with Let's Encrypt disabled
+  copy:
+    content: |
+      # Initial GitLab configuration - prevents Let's Encrypt during install
+      # Full configuration will be deployed after installation
+      external_url '{{ gitlab_external_url }}'
+      letsencrypt['enable'] = false
+    dest: /etc/gitlab/gitlab.rb
+    owner: root
+    group: root
+    mode: '0600'
+  when: not ansible_check_mode
+
 - name: Install GitLab package
-  shell: |
-    EXTERNAL_URL="{{ gitlab_external_url }}" apt-get install -y {{ gitlab_edition }}{{ '=' + gitlab_version if gitlab_version else '' }}
-  args:
-    creates: /usr/bin/gitlab-ctl
+  apt:
+    name: "{{ gitlab_edition }}{{ '=' + gitlab_version if gitlab_version else '' }}"
+    state: present
+    update_cache: yes
   environment:
     DEBIAN_FRONTEND: noninteractive
+    EXTERNAL_URL: "{{ gitlab_external_url }}"
   register: gitlab_install_result
-  changed_when: "'Setting up gitlab-ce' in gitlab_install_result.stdout"
   notify: reconfigure gitlab
 
 - name: Retrieve GitLab root password from 1Password

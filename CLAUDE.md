@@ -80,6 +80,7 @@ Files in `ansible/`:
 | `inventory/group_vars/vault.yml` | Encrypted fallback secrets (Ansible Vault) |
 
 **Roles**:
+- `ssh-key-loader/`: Retrieves SSH key from 1Password Connect for playbook authentication
 - `certificates/`: Retrieves certs from 1Password, installs CA to trust store, deploys server cert/key
 - `postgresql/`: Installs PostgreSQL 15, creates databases/users, configures pg_hba.conf
 - `gitlab/`: Installs GitLab CE Omnibus, configures gitlab.rb with memory-constrained settings
@@ -149,8 +150,10 @@ op item get "GitLab Root User" --vault homelab --fields password  # Get password
 
 | Variable | Purpose | Required By |
 |----------|---------|-------------|
-| `OP_SERVICE_ACCOUNT_TOKEN` | 1Password authentication | Terraform, Ansible |
-| `TF_VAR_onepassword_vault_id` | 1Password vault UUID | Terraform |
+| `OP_CONNECT_HOST` | 1Password Connect server URL | Ansible (ssh-key-loader, secrets) |
+| `OP_CONNECT_TOKEN` | 1Password Connect authentication | Ansible (ssh-key-loader, secrets) |
+| `OP_SERVICE_ACCOUNT_TOKEN` | 1Password authentication | Terraform |
+| `TF_VAR_onepassword_vault_id` | 1Password vault UUID | Terraform, Ansible |
 | `PROXMOX_VE_API_TOKEN` | Proxmox API authentication | Terraform |
 | `SSH_AUTH_SOCK` | SSH agent socket (auto-set) | Terraform SSH operations |
 
@@ -223,6 +226,35 @@ ansible-playbook playbooks/site.yml             # Full deployment (includes boot
 ## Git Workflow
 
 Main branch: `main`
+
+## SSH Key Management
+
+Ansible SSH keys are managed through 1Password Connect for automated, secure access:
+
+**Architecture**:
+1. **Terraform** generates ED25519 SSH key pair via `tls_private_key`
+2. **Terraform** stores key in 1Password as "Infrastructure Ansible SSH Key" (secure_note)
+3. **Ansible** cleans any leftover temp key from previous runs (clean-before-load)
+4. **Ansible** retrieves fresh key from 1Password Connect via `ssh-key-loader` role
+5. **Ansible** writes key to temp file (`/tmp/.ansible_ssh_key`) with 0600 permissions
+6. **Ansible** cleans up temp file after playbook completion
+
+**Clean-Before-Load Pattern**:
+Similar to Jenkins `deleteDir()` at pipeline start, the `ssh-key-loader` role removes any existing temp key before loading a fresh one. This ensures failed runs don't leave stale keys and the next run always starts with a clean workspace.
+
+**Why 1Password Connect (not SSH agent)**:
+- 1Password Terraform provider only supports `secure_note` category (not `SSH_KEY`)
+- 1Password SSH agent can only serve keys stored as SSH_KEY items
+- Connect API allows retrieval of any field type, enabling full automation
+
+**Security Considerations**:
+| Aspect | Assessment |
+|--------|-----------|
+| Key at rest | Encrypted in 1Password |
+| Key in transit | HTTPS to Connect server |
+| Key in memory | Only during playbook execution |
+| Temp file | Brief disk exposure (0600 perms, deleted after) |
+| Audit trail | 1Password Connect logs all access |
 
 ## Security Notes
 
