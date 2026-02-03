@@ -2,12 +2,36 @@
 # ==============================================================================
 # Site Playbook - FusionCloudX Infrastructure
 # ==============================================================================
-# Main playbook that orchestrates all infrastructure configuration
+# Main playbook that orchestrates all infrastructure configuration.
+# Automatically loads SSH key from 1Password Connect at start and cleans
+# up after completion.
+#
+# Requirements:
+#   - OP_CONNECT_HOST, OP_CONNECT_TOKEN, TF_VAR_onepassword_vault_id env vars
+# ==============================================================================
+
+# ==============================================================================
+# Phase 1: Load SSH Key from 1Password Connect
+# ==============================================================================
+
+- name: Load SSH Key from 1Password Connect
+  hosts: localhost
+  gather_facts: false
+  connection: local
+
+  roles:
+    - role: ssh-key-loader
+      tags: ['ssh-key', 'always']
+
+# ==============================================================================
+# Phase 2: Infrastructure Overview
 # ==============================================================================
 
 - name: FusionCloudX Infrastructure - Complete Deployment
   hosts: all
   gather_facts: yes
+  vars:
+    ansible_ssh_private_key_file: "/tmp/.ansible_ssh_key"
 
   tasks:
     - name: Display infrastructure overview
@@ -24,33 +48,261 @@
       tags: ['always']
 
 # ==============================================================================
-# Common Infrastructure (Certificates, Base Configuration)
+# Phase 3: Bootstrap LXC Containers
+# ==============================================================================
+# Note: Bootstrap tasks are inlined here since import_playbook cannot use vars
+# from a previous play. The standalone bootstrap.yml handles its own SSH key.
 # ==============================================================================
 
-- name: Deploy Common Infrastructure
-  import_playbook: common.yml
+- name: Bootstrap LXC Containers
+  hosts: postgresql
+  gather_facts: false
+  become: true
+  vars:
+    ansible_ssh_private_key_file: "/tmp/.ansible_ssh_key"
+  tags: ['bootstrap', 'lxc']
+
+  tasks:
+    - name: Wait for container to be reachable
+      wait_for_connection:
+        timeout: 120
+
+    - name: Install Ansible prerequisites (raw - no Python needed)
+      raw: |
+        apt-get update
+        apt-get install -y python3 sudo
+      changed_when: true
+
+    - name: Gather facts after bootstrap
+      setup:
+
+    - name: Display bootstrap complete message
+      debug:
+        msg: "Bootstrap complete for {{ inventory_hostname }} - Python {{ ansible_python_version }}"
+
+# ==============================================================================
+# Phase 4: Common Infrastructure (Certificates, Base Configuration)
+# ==============================================================================
+
+- name: Common Infrastructure Configuration
+  hosts: all
+  become: yes
+  gather_facts: yes
+  vars:
+    ansible_ssh_private_key_file: "/tmp/.ansible_ssh_key"
   tags: ['common', 'certificates']
 
+  pre_tasks:
+    - name: Display common infrastructure configuration
+      debug:
+        msg:
+          - "========================================"
+          - "Common Infrastructure Configuration"
+          - "========================================"
+          - "Target: {{ inventory_hostname }} ({{ ansible_host }})"
+          - "Deploying certificates and common configuration"
+          - "========================================"
+      tags: ['always']
+
+    - name: Verify 1Password authentication
+      debug:
+        msg: "{{ 'Using 1Password Service Account' if lookup('env', 'OP_SERVICE_ACCOUNT_TOKEN') else 'WARNING: No 1Password authentication - certificate deployment will fail' }}"
+      tags: ['always']
+
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600
+      tags: ['always']
+
+  roles:
+    - role: certificates
+      tags: ['certificates']
+      vars:
+        certificates_root_ca: "{{ lookup('file', '/tmp/root-ca.pem') | default('') }}"
+        certificates_intermediate_ca: "{{ lookup('file', '/tmp/intermediate-ca.pem') | default('') }}"
+        certificates_server_cert: "{{ lookup('file', '/tmp/server-cert.pem') | default('') }}"
+        certificates_server_key: "{{ lookup('file', '/tmp/server-key.pem') | default('') }}"
+
+  post_tasks:
+    - name: Verify certificate deployment
+      stat:
+        path: /usr/local/share/ca-certificates/fusioncloudx-root-ca.crt
+      register: ca_cert_stat
+      tags: ['verify']
+
+    - name: Display common infrastructure summary
+      debug:
+        msg:
+          - "========================================"
+          - "Common Infrastructure Complete"
+          - "========================================"
+          - "Host: {{ inventory_hostname }}"
+          - "CA Certificates Installed: {{ ca_cert_stat.stat.exists }}"
+          - "Server Certificate Deployed: {{ certificates_deploy_server }}"
+          - "========================================"
+      tags: ['always']
+
 # ==============================================================================
-# Database Server
+# Phase 5: Database Server
 # ==============================================================================
 
 - name: Deploy PostgreSQL Database Server
-  import_playbook: postgresql.yml
+  hosts: postgresql
+  become: yes
+  gather_facts: yes
+  vars:
+    ansible_ssh_private_key_file: "/tmp/.ansible_ssh_key"
   tags: ['postgresql', 'databases']
 
+  pre_tasks:
+    - name: Display target host
+      debug:
+        msg: "Deploying PostgreSQL to {{ inventory_hostname }} ({{ ansible_host }})"
+      tags: ['always']
+
+    - name: Check 1Password environment variables
+      debug:
+        msg: "{{ 'Using 1Password Connect Server' if lookup('env', 'OP_CONNECT_HOST') else ('Using 1Password Service Account' if lookup('env', 'OP_SERVICE_ACCOUNT_TOKEN') else 'WARNING: No 1Password authentication found') }}"
+      tags: ['always']
+
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600
+      tags: ['always']
+
+    - name: Set timezone
+      timezone:
+        name: "{{ timezone | default('America/Chicago') }}"
+      tags: ['always']
+
+  roles:
+    - role: postgresql
+      tags: ['postgresql']
+
+  post_tasks:
+    - name: Verify PostgreSQL is running
+      systemd:
+        name: postgresql
+        state: started
+      register: postgresql_status
+      tags: ['verify']
+
+    - name: Display PostgreSQL version
+      command: psql --version
+      become: yes
+      become_user: postgres
+      register: postgresql_version_output
+      changed_when: false
+      tags: ['verify']
+
+    - name: Show PostgreSQL version
+      debug:
+        msg: "{{ postgresql_version_output.stdout }}"
+      tags: ['verify']
+
+    - name: Test database connectivity
+      postgresql_query:
+        db: postgres
+        login_user: postgres
+        query: "SELECT datname FROM pg_database WHERE datistemplate = false;"
+      become: yes
+      become_user: postgres
+      register: databases_list
+      tags: ['verify']
+
+    - name: Display deployment summary
+      debug:
+        msg:
+          - "========================================"
+          - "PostgreSQL Deployment Complete!"
+          - "========================================"
+          - "Host: {{ inventory_hostname }}"
+          - "IP Address: {{ ansible_host }}"
+          - "PostgreSQL Version: {{ postgresql_version_output.stdout }}"
+          - "Databases Created: {{ postgresql_databases | map(attribute='name') | list | join(', ') | default('None') }}"
+          - "Database Users: {{ postgresql_users | map(attribute='name') | list | join(', ') | default('None') }}"
+          - "Active Databases: {{ databases_list.query_result | map(attribute='datname') | list | join(', ') }}"
+          - "========================================"
+          - "This is a SINGLE instance hosting MULTIPLE databases"
+          - "Credentials managed via 1Password"
+          - "========================================"
+      tags: ['always']
+
 # ==============================================================================
-# Application Servers
+# Phase 6: Application Servers
 # ==============================================================================
 
 - name: Deploy GitLab
-  import_playbook: gitlab.yml
+  hosts: gitlab
+  become: yes
+  gather_facts: yes
+  vars:
+    ansible_ssh_private_key_file: "/tmp/.ansible_ssh_key"
   tags: ['gitlab', 'applications']
 
+  pre_tasks:
+    - name: Ensure 1Password Connect credentials are set
+      fail:
+        msg: "OP_CONNECT_HOST and OP_CONNECT_TOKEN environment variables must be set"
+      when: >
+        lookup('env', 'OP_CONNECT_HOST') == '' or
+        lookup('env', 'OP_CONNECT_TOKEN') == ''
+
+    - name: Display 1Password Connect status
+      debug:
+        msg: "Using 1Password Connect Server at {{ lookup('env', 'OP_CONNECT_HOST') }}"
+
+  roles:
+    - gitlab
+
+  post_tasks:
+    - name: Display GitLab access information
+      debug:
+        msg:
+          - "========================================"
+          - "GitLab installation complete!"
+          - "========================================"
+          - "Access GitLab at: {{ gitlab_external_url }}"
+          - "Username: root"
+          - "Password: Retrieved from 1Password (GitLab Root User)"
+          - ""
+          - "First login steps:"
+          - "1. Access {{ gitlab_external_url }} in your browser"
+          - "2. Login with username 'root' and password from 1Password"
+          - "3. Change root password immediately"
+          - "4. Create admin user account"
+          - "5. Configure SSH keys for Git operations"
+          - "========================================"
+
 # ==============================================================================
-# Monitoring (future)
+# Phase 7: Monitoring (future)
 # ==============================================================================
 
 # - name: Deploy Monitoring Stack
-#   import_playbook: monitoring.yml
+#   hosts: monitoring
+#   become: yes
+#   gather_facts: yes
+#   vars:
+#     ansible_ssh_private_key_file: "/tmp/.ansible_ssh_key"
 #   tags: ['monitoring']
+#
+#   roles:
+#     - monitoring
+
+# ==============================================================================
+# Phase 8: Cleanup SSH Key
+# ==============================================================================
+
+- name: Cleanup SSH Key
+  hosts: localhost
+  gather_facts: false
+  connection: local
+
+  tasks:
+    - name: Include ssh-key-loader cleanup tasks
+      include_role:
+        name: ssh-key-loader
+        tasks_from: cleanup.yml
+      tags: ['ssh-key', 'cleanup', 'always']

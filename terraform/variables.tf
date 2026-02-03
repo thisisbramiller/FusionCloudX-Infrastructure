@@ -104,3 +104,4 @@ variable "onepassword_vault_id" {
   # export TF_VAR_onepassword_vault_id="your-vault-uuid"
   # OR: Create terraform.tfvars with: onepassword_vault_id = "your-vault-uuid"
 }
+

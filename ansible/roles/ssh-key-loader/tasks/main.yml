@@ -1,0 +1,79 @@
+---
+# ==============================================================================
+# SSH Key Loader - Retrieve SSH Key from 1Password Connect
+# ==============================================================================
+# Retrieves the Ansible SSH private key from 1Password Connect and writes
+# it to a temporary file for use with ansible_ssh_private_key_file.
+#
+# This role should be included at the start of playbooks that need SSH access.
+# The cleanup tasks should be included at the end to remove the temp file.
+#
+# Clean-before-load: Any leftover SSH key from a previous failed run is
+# removed before loading a fresh key (similar to 'mvn clean install').
+#
+# Requirements:
+#   - OP_CONNECT_HOST environment variable set
+#   - OP_CONNECT_TOKEN environment variable set
+#   - TF_VAR_onepassword_vault_id environment variable set
+#   - onepassword.connect collection installed
+# ==============================================================================
+
+# --- Clean workspace before loading (removes any leftover from failed runs) ---
+- name: Clean any existing SSH key from previous runs
+  file:
+    path: "{{ ssh_key_loader_temp_path }}"
+    state: absent
+  delegate_to: localhost
+  become: false
+  run_once: true
+  tags: ['ssh-key', 'always']
+
+# --- Load fresh SSH key ---
+- name: Set 1Password Connect token variable
+  set_fact:
+    _op_connect_token: "{{ lookup('env', 'OP_CONNECT_TOKEN') }}"
+  no_log: true
+  run_once: true
+  delegate_to: localhost
+  tags: ['ssh-key', 'always']
+
+- name: Set vault ID variable
+  set_fact:
+    _op_vault_id: "{{ lookup('env', 'TF_VAR_onepassword_vault_id') }}"
+  run_once: true
+  delegate_to: localhost
+  tags: ['ssh-key', 'always']
+
+- name: Retrieve Ansible SSH private key from 1Password Connect
+  onepassword.connect.field_info:
+    token: "{{ _op_connect_token }}"
+    item: "{{ ssh_key_loader_item_name }}"
+    field: "{{ ssh_key_loader_field_name }}"
+    section: "{{ ssh_key_loader_section_name }}"
+    vault: "{{ _op_vault_id }}"
+  environment:
+    OP_CONNECT_HOST: "{{ lookup('env', 'OP_CONNECT_HOST') }}"
+  delegate_to: localhost
+  become: false
+  run_once: true
+  no_log: true
+  register: _ssh_key_result
+  tags: ['ssh-key', 'always']
+
+- name: Write SSH key to secure temp file
+  copy:
+    content: "{{ _ssh_key_result.field.value }}"
+    dest: "{{ ssh_key_loader_temp_path }}"
+    mode: '0600'
+  delegate_to: localhost
+  become: false
+  run_once: true
+  no_log: true
+  tags: ['ssh-key', 'always']
+
+- name: Display SSH key load status
+  debug:
+    msg: "SSH key loaded from 1Password Connect to {{ ssh_key_loader_temp_path }}"
+  run_once: true
+  delegate_to: localhost
+  tags: ['ssh-key', 'always']

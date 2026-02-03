@@ -1,0 +1,76 @@
+---
+# ==============================================================================
+# Bootstrap Playbook - LXC Container Prerequisites
+# ==============================================================================
+# Retrieves SSH key from 1Password Connect, then bootstraps LXC containers
+# with python3 and sudo using raw module (works without Python).
+#
+# Usage:
+#   ansible-playbook playbooks/bootstrap.yml
+#
+# Requirements:
+#   - OP_CONNECT_HOST, OP_CONNECT_TOKEN, TF_VAR_onepassword_vault_id env vars
+#
+# This playbook should run BEFORE any other playbooks targeting LXC containers.
+# Standard Debian LXC templates don't include Python, so we use raw commands.
+#
+# Note: SSH key loader cleans any leftover keys before loading (clean-before-load).
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# Phase 1: Load SSH Key from 1Password Connect
+# ------------------------------------------------------------------------------
+
+- name: Load SSH Key from 1Password Connect
+  hosts: localhost
+  gather_facts: false
+  connection: local
+
+  roles:
+    - role: ssh-key-loader
+      tags: ['ssh-key', 'always']
+
+# ------------------------------------------------------------------------------
+# Phase 2: Bootstrap LXC Containers
+# ------------------------------------------------------------------------------
+
+- name: Bootstrap LXC Containers
+  hosts: postgresql
+  gather_facts: false
+  become: true
+  vars:
+    ansible_ssh_private_key_file: "/tmp/.ansible_ssh_key"
+
+  tasks:
+    - name: Wait for container to be reachable
+      wait_for_connection:
+        timeout: 120
+
+    - name: Install Ansible prerequisites (raw - no Python needed)
+      raw: |
+        apt-get update
+        apt-get install -y python3 sudo
+      changed_when: true
+
+    - name: Gather facts after bootstrap
+      setup:
+
+    - name: Display bootstrap complete message
+      debug:
+        msg: "Bootstrap complete for {{ inventory_hostname }} - Python {{ ansible_python_version }}"
+
+# ------------------------------------------------------------------------------
+# Phase 3: Cleanup SSH Key
+# ------------------------------------------------------------------------------
+
+- name: Cleanup SSH Key
+  hosts: localhost
+  gather_facts: false
+  connection: local
+
+  tasks:
+    - name: Include ssh-key-loader cleanup tasks
+      include_role:
+        name: ssh-key-loader
+        tasks_from: cleanup.yml
+      tags: ['ssh-key', 'cleanup', 'always']

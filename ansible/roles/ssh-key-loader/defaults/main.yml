@@ -1,0 +1,12 @@
+---
+# ==============================================================================
+# SSH Key Loader - Default Variables
+# ==============================================================================
+
+# Path to write the temporary SSH key file
+ssh_key_loader_temp_path: "/tmp/.ansible_ssh_key"
+
+# 1Password item details
+ssh_key_loader_item_name: "Infrastructure Ansible SSH Key"
+ssh_key_loader_section_name: "Private Key"
+ssh_key_loader_field_name: "private_key"

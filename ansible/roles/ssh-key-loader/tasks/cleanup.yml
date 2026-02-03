@@ -1,0 +1,23 @@
+---
+# ==============================================================================
+# SSH Key Loader - Cleanup Tasks
+# ==============================================================================
+# Removes the temporary SSH key file after playbook execution.
+# Include this at the end of playbooks that use the ssh-key-loader role.
+# ==============================================================================
+
+- name: Remove temporary SSH key file
+  file:
+    path: "{{ ssh_key_loader_temp_path }}"
+    state: absent
+  delegate_to: localhost
+  become: false
+  run_once: true
+  tags: ['ssh-key', 'cleanup', 'always']
+
+- name: Display SSH key cleanup status
+  debug:
+    msg: "Temporary SSH key removed from {{ ssh_key_loader_temp_path }}"
+  run_once: true
+  delegate_to: localhost
+  tags: ['ssh-key', 'cleanup', 'always']

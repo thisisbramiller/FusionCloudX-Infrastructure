@@ -1,0 +1,22 @@
+---
+# ==============================================================================
+# SSH Key Loader - Role Metadata
+# ==============================================================================
+
+dependencies: []
+
+galaxy_info:
+  author: FusionCloudX
+  description: Load SSH key from 1Password Connect for Ansible connections
+  license: MIT
+  min_ansible_version: "2.14"
+  platforms:
+    - name: Debian
+      versions:
+        - bullseye
+        - bookworm
+    - name: Ubuntu
+      versions:
+        - focal
+        - jammy
+        - noble
