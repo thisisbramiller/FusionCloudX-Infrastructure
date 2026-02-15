@@ -98,6 +98,16 @@
   notify: restart mealie
   tags: ['mealie', 'deploy']
 
+- name: Template nginx configuration
+  template:
+    src: nginx.conf.j2
+    dest: "{{ mealie_compose_dir }}/nginx.conf"
+    owner: root
+    group: root
+    mode: '0644'
+  notify: restart mealie
+  tags: ['mealie', 'deploy']
+
 - name: Start Mealie containers
   community.docker.docker_compose_v2:
     project_src: "{{ mealie_compose_dir }}"
@@ -107,7 +117,8 @@
 
 - name: Wait for Mealie to be ready
   uri:
-    url: "http://localhost:{{ mealie_host_port }}"
+    url: "https://localhost:{{ mealie_https_port }}"
+    validate_certs: no
     status_code: [200, 302]
   register: mealie_health
   retries: 30
@@ -121,7 +132,7 @@
       - "========================================"
       - "Mealie deployment complete!"
       - "========================================"
-      - "URL: http://{{ ansible_host }}:{{ mealie_host_port }}"
+      - "URL: https://{{ ansible_host }}:{{ mealie_https_port }}"
       - "Database: {{ mealie_db_name }} on {{ mealie_db_host }}"
       - "========================================"
   tags: ['mealie']

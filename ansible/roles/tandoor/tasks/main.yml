@@ -155,7 +155,8 @@
 
 - name: Wait for Tandoor to be ready
   uri:
-    url: "http://localhost:{{ tandoor_host_port }}"
+    url: "https://localhost:{{ tandoor_https_port }}"
+    validate_certs: no
     status_code: [200, 302]
   register: tandoor_health
   retries: 30
@@ -169,7 +170,7 @@
       - "========================================"
       - "Tandoor Recipes deployment complete!"
       - "========================================"
-      - "URL: http://{{ ansible_host }}:{{ tandoor_host_port }}"
+      - "URL: https://{{ ansible_host }}:{{ tandoor_https_port }}"
       - "Database: {{ tandoor_db_name }} on {{ tandoor_db_host }}"
       - "========================================"
   tags: ['tandoor']

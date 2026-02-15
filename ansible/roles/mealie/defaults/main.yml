@@ -6,9 +6,15 @@
 # Mealie container image
 mealie_image: "ghcr.io/mealie-recipes/mealie:latest"
 
-# Port mapping (host:container)
-mealie_host_port: 9925
+# HTTPS port
+mealie_https_port: 9925
+
+# Internal container port (not exposed to host)
 mealie_container_port: 9000
+
+# SSL certificate paths (deployed by certificates role)
+mealie_ssl_cert: "/etc/ssl/certs/server.crt"
+mealie_ssl_key: "/etc/ssl/private/server.key"
 
 # Docker Compose project directory
 mealie_compose_dir: "/opt/mealie"

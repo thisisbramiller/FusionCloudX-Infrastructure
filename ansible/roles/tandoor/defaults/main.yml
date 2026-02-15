@@ -6,9 +6,12 @@
 # Tandoor container image
 tandoor_image: "vabene1111/recipes:latest"
 
-# Port mapping (host:container)
-tandoor_host_port: 8080
-tandoor_container_port: 8080
+# HTTPS port
+tandoor_https_port: 8080
+
+# SSL certificate paths (deployed by certificates role)
+tandoor_ssl_cert: "/etc/ssl/certs/server.crt"
+tandoor_ssl_key: "/etc/ssl/private/server.key"
 
 # Docker Compose project directory
 tandoor_compose_dir: "/opt/tandoor"
