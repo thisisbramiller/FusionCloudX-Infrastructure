@@ -16,8 +16,8 @@ tandoor_compose_dir: "/opt/tandoor"
 # Application settings
 tandoor_timezone: "America/Chicago"
 
-# PostgreSQL connection (shared PostgreSQL LXC)
-tandoor_db_host: "192.168.40.200"
+# PostgreSQL connection (resolved from inventory, override in host_vars if needed)
+tandoor_db_host: "{{ hostvars['postgresql']['ansible_host'] | default('192.168.40.90') }}"
 tandoor_db_port: 5432
 tandoor_db_name: "tandoor"
 

@@ -20,8 +20,8 @@ mealie_timezone: "America/Chicago"
 # Container resource limits
 mealie_memory_limit: "1000M"
 
-# PostgreSQL connection (shared PostgreSQL LXC)
-mealie_db_host: "192.168.40.200"
+# PostgreSQL connection (resolved from inventory, override in host_vars if needed)
+mealie_db_host: "{{ hostvars['postgresql']['ansible_host'] | default('192.168.40.90') }}"
 mealie_db_port: 5432
 mealie_db_name: "mealie"
 
