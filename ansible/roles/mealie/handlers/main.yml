@@ -1,0 +1,10 @@
+---
+# ==============================================================================
+# Mealie Role - Handlers
+# ==============================================================================
+
+- name: restart mealie
+  community.docker.docker_compose_v2:
+    project_src: "{{ mealie_compose_dir }}"
+    state: restarted
+  become: yes

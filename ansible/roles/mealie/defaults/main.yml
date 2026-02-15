@@ -1,0 +1,29 @@
+---
+# ==============================================================================
+# Mealie Role - Default Variables
+# ==============================================================================
+
+# Mealie container image
+mealie_image: "ghcr.io/mealie-recipes/mealie:latest"
+
+# Port mapping (host:container)
+mealie_host_port: 9925
+mealie_container_port: 9000
+
+# Docker Compose project directory
+mealie_compose_dir: "/opt/mealie"
+
+# Application settings
+mealie_allow_signup: true
+mealie_timezone: "America/Chicago"
+
+# Container resource limits
+mealie_memory_limit: "1000M"
+
+# PostgreSQL connection (shared PostgreSQL LXC)
+mealie_db_host: "192.168.40.200"
+mealie_db_port: 5432
+mealie_db_name: "mealie"
+
+# 1Password item for database credentials
+mealie_onepassword_item: "PostgreSQL - Mealie Database User"

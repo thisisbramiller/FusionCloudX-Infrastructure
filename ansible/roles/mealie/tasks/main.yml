@@ -1,0 +1,127 @@
+---
+# ==============================================================================
+# Mealie Role - Main Tasks
+# ==============================================================================
+# Installs Docker and deploys Mealie via Docker Compose
+# ==============================================================================
+
+- name: Install Docker prerequisites
+  apt:
+    name:
+      - ca-certificates
+      - curl
+      - gnupg
+    state: present
+    update_cache: yes
+  tags: ['mealie', 'docker']
+
+- name: Add Docker GPG key
+  ansible.builtin.get_url:
+    url: https://download.docker.com/linux/ubuntu/gpg
+    dest: /etc/apt/keyrings/docker.asc
+    mode: '0644'
+  tags: ['mealie', 'docker']
+
+- name: Add Docker repository
+  ansible.builtin.apt_repository:
+    repo: "deb [arch=amd64 signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable"
+    state: present
+    filename: docker
+  tags: ['mealie', 'docker']
+
+- name: Install Docker CE and Compose plugin
+  apt:
+    name:
+      - docker-ce
+      - docker-ce-cli
+      - containerd.io
+      - docker-compose-plugin
+    state: present
+    update_cache: yes
+  tags: ['mealie', 'docker']
+
+- name: Ensure Docker service is started and enabled
+  systemd:
+    name: docker
+    state: started
+    enabled: yes
+  tags: ['mealie', 'docker']
+
+- name: Fetch Mealie database credentials from 1Password
+  onepassword.connect.field_info:
+    token: "{{ lookup('env', 'OP_CONNECT_TOKEN') }}"
+    item: "{{ mealie_onepassword_item }}"
+    field: "password"
+    vault: "{{ lookup('env', 'TF_VAR_onepassword_vault_id') }}"
+  environment:
+    OP_CONNECT_HOST: "{{ lookup('env', 'OP_CONNECT_HOST') }}"
+  delegate_to: localhost
+  become: no
+  no_log: true
+  register: mealie_db_password_result
+  tags: ['mealie', 'secrets']
+
+- name: Set database credential variables
+  set_fact:
+    mealie_db_user: "mealie"
+    mealie_db_password: "{{ mealie_db_password_result.field.value }}"
+  no_log: true
+  tags: ['mealie', 'secrets']
+
+- name: Create Mealie compose directory
+  file:
+    path: "{{ mealie_compose_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0750'
+  tags: ['mealie', 'deploy']
+
+- name: Template Docker Compose file
+  template:
+    src: docker-compose.yml.j2
+    dest: "{{ mealie_compose_dir }}/docker-compose.yml"
+    owner: root
+    group: root
+    mode: '0640'
+  notify: restart mealie
+  tags: ['mealie', 'deploy']
+
+- name: Template environment file
+  template:
+    src: .env.j2
+    dest: "{{ mealie_compose_dir }}/.env"
+    owner: root
+    group: root
+    mode: '0600'
+  no_log: true
+  notify: restart mealie
+  tags: ['mealie', 'deploy']
+
+- name: Start Mealie containers
+  community.docker.docker_compose_v2:
+    project_src: "{{ mealie_compose_dir }}"
+    state: present
+    pull: always
+  tags: ['mealie', 'deploy']
+
+- name: Wait for Mealie to be ready
+  uri:
+    url: "http://localhost:{{ mealie_host_port }}"
+    status_code: [200, 302]
+  register: mealie_health
+  retries: 30
+  delay: 5
+  until: mealie_health is succeeded
+  tags: ['mealie', 'verify']
+
+- name: Display Mealie deployment status
+  debug:
+    msg:
+      - "========================================"
+      - "Mealie deployment complete!"
+      - "========================================"
+      - "URL: http://{{ ansible_host }}:{{ mealie_host_port }}"
+      - "Database: {{ mealie_db_name }} on {{ mealie_db_host }}"
+      - "========================================"
+  tags: ['mealie']
