@@ -30,6 +30,20 @@ postgresql_databases:
     lc_ctype: "C.UTF-8"
     template: "template0"
     description: "Database for Wazuh (SIEM)"
+  - name: "mealie"
+    owner: "mealie"
+    encoding: "UTF-8"
+    lc_collate: "C.UTF-8"
+    lc_ctype: "C.UTF-8"
+    template: "template0"
+    description: "Database for Mealie (Recipe Management)"
+  - name: "tandoor"
+    owner: "tandoor"
+    encoding: "UTF-8"
+    lc_collate: "C.UTF-8"
+    lc_ctype: "C.UTF-8"
+    template: "template0"
+    description: "Database for Tandoor Recipes"
 
 # ==============================================================================
 # Database Users (with 1Password Integration)
@@ -70,6 +84,8 @@ postgresql_backup_enabled: true
 postgresql_backup_retention_days: 30  # 30 days for homelab
 postgresql_backup_databases:
   - wazuh
+  - mealie
+  - tandoor
 
 # ==============================================================================
 # Additional Notes
