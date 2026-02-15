@@ -4,14 +4,28 @@ services:
     image: {{ tandoor_image }}
     container_name: tandoor
     restart: always
-    ports:
-      - "{{ tandoor_host_port }}:{{ tandoor_container_port }}"
     volumes:
       - tandoor-static:/opt/recipes/staticfiles
       - tandoor-media:/opt/recipes/mediafiles
+      - tandoor-socket:/tmp
     env_file:
       - .env
+
+  nginx:
+    image: nginx:mainline-alpine
+    container_name: tandoor-nginx
+    restart: always
+    ports:
+      - "{{ tandoor_host_port }}:80"
+    depends_on:
+      - tandoor
+    volumes:
+      - tandoor-static:/opt/recipes/staticfiles:ro
+      - tandoor-media:/opt/recipes/mediafiles:ro
+      - tandoor-socket:/tmp:ro
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
 
 volumes:
   tandoor-static:
   tandoor-media:
+  tandoor-socket:

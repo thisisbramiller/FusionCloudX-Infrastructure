@@ -136,6 +136,16 @@
   notify: restart tandoor
   tags: ['tandoor', 'deploy']
 
+- name: Template nginx configuration
+  template:
+    src: nginx.conf.j2
+    dest: "{{ tandoor_compose_dir }}/nginx.conf"
+    owner: root
+    group: root
+    mode: '0644'
+  notify: restart tandoor
+  tags: ['tandoor', 'deploy']
+
 - name: Start Tandoor containers
   community.docker.docker_compose_v2:
     project_src: "{{ tandoor_compose_dir }}"
