@@ -108,6 +108,9 @@
   notify: restart mealie
   tags: ['mealie', 'deploy']
 
+- name: Restart containers if configuration changed
+  meta: flush_handlers
+
 - name: Start Mealie containers
   community.docker.docker_compose_v2:
     project_src: "{{ mealie_compose_dir }}"

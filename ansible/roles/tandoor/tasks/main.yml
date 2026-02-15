@@ -146,6 +146,9 @@
   notify: restart tandoor
   tags: ['tandoor', 'deploy']
 
+- name: Restart containers if configuration changed
+  meta: flush_handlers
+
 - name: Start Tandoor containers
   community.docker.docker_compose_v2:
     project_src: "{{ tandoor_compose_dir }}"
