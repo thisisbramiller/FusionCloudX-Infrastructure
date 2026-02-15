@@ -1,0 +1,17 @@
+---
+services:
+  tandoor:
+    image: {{ tandoor_image }}
+    container_name: tandoor
+    restart: always
+    ports:
+      - "{{ tandoor_host_port }}:{{ tandoor_container_port }}"
+    volumes:
+      - tandoor-static:/opt/recipes/staticfiles
+      - tandoor-media:/opt/recipes/mediafiles
+    env_file:
+      - .env
+
+volumes:
+  tandoor-static:
+  tandoor-media:

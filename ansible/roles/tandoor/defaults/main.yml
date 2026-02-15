@@ -1,0 +1,26 @@
+---
+# ==============================================================================
+# Tandoor Role - Default Variables
+# ==============================================================================
+
+# Tandoor container image
+tandoor_image: "vabene1111/recipes:latest"
+
+# Port mapping (host:container)
+tandoor_host_port: 8080
+tandoor_container_port: 8080
+
+# Docker Compose project directory
+tandoor_compose_dir: "/opt/tandoor"
+
+# Application settings
+tandoor_timezone: "America/Chicago"
+
+# PostgreSQL connection (shared PostgreSQL LXC)
+tandoor_db_host: "192.168.40.200"
+tandoor_db_port: 5432
+tandoor_db_name: "tandoor"
+
+# 1Password items for credentials
+tandoor_onepassword_db_item: "PostgreSQL - Tandoor Database User"
+tandoor_onepassword_secret_key_item: "Tandoor Secret Key"

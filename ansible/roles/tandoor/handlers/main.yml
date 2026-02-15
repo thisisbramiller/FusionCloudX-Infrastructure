@@ -1,0 +1,10 @@
+---
+# ==============================================================================
+# Tandoor Role - Handlers
+# ==============================================================================
+
+- name: restart tandoor
+  community.docker.docker_compose_v2:
+    project_src: "{{ tandoor_compose_dir }}"
+    state: restarted
+  become: yes
