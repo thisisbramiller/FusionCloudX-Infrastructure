@@ -131,3 +131,41 @@ resource "onepassword_item" "wazuh_db_user" {
     symbols = true
   }
 }
+
+# Mealie database user password item in 1Password
+resource "onepassword_item" "mealie_db_user" {
+  vault    = var.onepassword_vault_id
+  category = "database"
+  title    = "PostgreSQL - Mealie Database User"
+  tags     = ["terraform", "postgresql", "mealie", "homelab"]
+
+  type     = "postgresql"
+  hostname = "${var.postgresql_lxc_config.hostname}.fusioncloudx.home"
+  port     = "5432"
+  database = "mealie"
+  username = "mealie"
+
+  password_recipe {
+    length  = 32
+    symbols = true
+  }
+}
+
+# Tandoor database user password item in 1Password
+resource "onepassword_item" "tandoor_db_user" {
+  vault    = var.onepassword_vault_id
+  category = "database"
+  title    = "PostgreSQL - Tandoor Database User"
+  tags     = ["terraform", "postgresql", "tandoor", "homelab"]
+
+  type     = "postgresql"
+  hostname = "${var.postgresql_lxc_config.hostname}.fusioncloudx.home"
+  port     = "5432"
+  database = "tandoor"
+  username = "tandoor"
+
+  password_recipe {
+    length  = 32
+    symbols = true
+  }
+}
