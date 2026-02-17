@@ -23,6 +23,14 @@
   when: certificates_deploy_server | bool
   notify: Restart nginx
 
+- name: Deploy server certificate chain (cert + intermediate CA)
+  copy:
+    content: "{{ certificates_server_cert }}{{ certificates_intermediate_ca }}"
+    dest: "{{ certificates_cert_path }}/{{ certificates_server_chain_filename }}"
+    mode: '0644'
+  when: certificates_deploy_server | bool
+  notify: Restart nginx
+
 - name: Deploy server private key
   copy:
     content: "{{ certificates_server_key }}"

@@ -9,6 +9,7 @@
 #
 # Requirements:
 #   - OP_CONNECT_HOST, OP_CONNECT_TOKEN, TF_VAR_onepassword_vault_id env vars
+#   - FusionCloudX certificates must be deployed first (run playbooks/common.yml --limit tandoor)
 # ==============================================================================
 
 - name: Load SSH Key from 1Password Connect

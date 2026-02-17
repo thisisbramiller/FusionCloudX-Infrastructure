@@ -68,30 +68,23 @@
   no_log: true
   tags: ['tandoor', 'secrets']
 
-- name: Generate Tandoor SECRET_KEY
-  set_fact:
-    tandoor_secret_key: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits length=50') }}"
+- name: Fetch Tandoor secret key from 1Password
+  onepassword.connect.field_info:
+    token: "{{ lookup('env', 'OP_CONNECT_TOKEN') }}"
+    item: "{{ tandoor_onepassword_secret_key_item }}"
+    field: "password"
+    vault: "{{ lookup('env', 'TF_VAR_onepassword_vault_id') }}"
+  environment:
+    OP_CONNECT_HOST: "{{ lookup('env', 'OP_CONNECT_HOST') }}"
+  delegate_to: localhost
+  become: no
   no_log: true
+  register: tandoor_secret_key_result
   tags: ['tandoor', 'secrets']
 
-- name: Check if secret key file already exists
-  stat:
-    path: "{{ tandoor_compose_dir }}/.secret_key"
-  register: tandoor_secret_key_file
-  tags: ['tandoor', 'secrets']
-
-- name: Read existing secret key
-  slurp:
-    src: "{{ tandoor_compose_dir }}/.secret_key"
-  register: tandoor_existing_secret_key
-  when: tandoor_secret_key_file.stat.exists
-  no_log: true
-  tags: ['tandoor', 'secrets']
-
-- name: Use existing secret key if available
+- name: Set secret key variable
   set_fact:
-    tandoor_secret_key: "{{ tandoor_existing_secret_key.content | b64decode }}"
-  when: tandoor_secret_key_file.stat.exists
+    tandoor_secret_key: "{{ tandoor_secret_key_result.field.value }}"
   no_log: true
   tags: ['tandoor', 'secrets']
 
@@ -102,17 +95,6 @@
     owner: root
     group: root
     mode: '0750'
-  tags: ['tandoor', 'deploy']
-
-- name: Persist secret key to file
-  copy:
-    content: "{{ tandoor_secret_key }}"
-    dest: "{{ tandoor_compose_dir }}/.secret_key"
-    owner: root
-    group: root
-    mode: '0600'
-  no_log: true
-  when: not tandoor_secret_key_file.stat.exists
   tags: ['tandoor', 'deploy']
 
 - name: Template Docker Compose file

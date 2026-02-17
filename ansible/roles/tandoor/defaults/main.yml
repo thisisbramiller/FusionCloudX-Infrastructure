@@ -10,7 +10,7 @@ tandoor_image: "vabene1111/recipes:latest"
 tandoor_https_port: 8080
 
 # SSL certificate paths (deployed by certificates role)
-tandoor_ssl_cert: "/etc/ssl/certs/server.crt"
+tandoor_ssl_cert: "/etc/ssl/certs/server-chain.crt"
 tandoor_ssl_key: "/etc/ssl/private/server.key"
 
 # Docker Compose project directory

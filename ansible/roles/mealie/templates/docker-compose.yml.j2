@@ -4,10 +4,6 @@ services:
     image: {{ mealie_image }}
     container_name: mealie
     restart: always
-    deploy:
-      resources:
-        limits:
-          memory: {{ mealie_memory_limit }}
     volumes:
       - mealie-data:/app/data/
     env_file:
