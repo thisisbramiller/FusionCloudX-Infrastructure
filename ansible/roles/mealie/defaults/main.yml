@@ -1,0 +1,32 @@
+---
+# ==============================================================================
+# Mealie Role - Default Variables
+# ==============================================================================
+
+# Mealie container image
+mealie_image: "ghcr.io/mealie-recipes/mealie:latest"
+
+# HTTPS port
+mealie_https_port: 9925
+
+# Internal container port (not exposed to host)
+mealie_container_port: 9000
+
+# SSL certificate paths (deployed by certificates role)
+mealie_ssl_cert: "/etc/ssl/certs/server-chain.crt"
+mealie_ssl_key: "/etc/ssl/private/server.key"
+
+# Docker Compose project directory
+mealie_compose_dir: "/opt/mealie"
+
+# Application settings
+mealie_allow_signup: true
+mealie_timezone: "America/Chicago"
+
+# PostgreSQL connection (resolved from inventory, override in host_vars if needed)
+mealie_db_host: "{{ hostvars['postgresql']['ansible_host'] | default('192.168.40.90') }}"
+mealie_db_port: 5432
+mealie_db_name: "mealie"
+
+# 1Password item for database credentials
+mealie_onepassword_item: "PostgreSQL - Mealie Database User"

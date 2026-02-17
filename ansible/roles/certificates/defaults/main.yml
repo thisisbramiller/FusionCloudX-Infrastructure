@@ -15,6 +15,7 @@ certificates_key_path: "/etc/ssl/private"
 certificates_root_ca_filename: "fusioncloudx-root-ca.crt"
 certificates_intermediate_ca_filename: "fusioncloudx-intermediate-ca.crt"
 certificates_server_cert_filename: "server.crt"
+certificates_server_chain_filename: "server-chain.crt"
 certificates_server_key_filename: "server.key"
 
 # 1Password vault name

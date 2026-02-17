@@ -50,9 +50,9 @@ Files in `terraform/`:
 | `cloud-init-gitlab.tf` | Enhanced cloud-init for GitLab (postfix, ufw, etc.) |
 | `qemu-vm.tf` | VMs via `for_each` from `vm_configs`; 10 clone retries |
 | `lxc-debian-template.tf` | Downloads Debian 12 LXC template |
-| `lxc-postgresql.tf` | PostgreSQL container + 1Password items for credentials |
-| `ssh-keys.tf` | Ansible SSH key generation + 1Password storage |
-| `onepassword-gitlab.tf` | GitLab root password + runner token in 1Password |
+| `lxc-postgresql.tf` | PostgreSQL LXC container definition |
+| `ssh-keys.tf` | Ansible SSH key generation (`tls_private_key`) |
+| `onepassword.tf` | All 1Password items (SSH key, PostgreSQL, GitLab, Tandoor credentials) |
 | `ansible-inventory.tf` | Dynamic inventory via Terraform Ansible provider |
 | `outputs.tf` | Infrastructure summary, URLs, 1Password item IDs |
 
@@ -181,11 +181,14 @@ GitLab VM (ID 1103) ──────────────┐         ↓
 
 | Item | Type | Contents |
 |------|------|----------|
-| GitLab Root User | Login | root username, 32-char password |
-| GitLab Runner Registration Token | Password | 32-char alphanumeric token |
+| Infrastructure Ansible SSH Key | Secure Note | ED25519 private/public key pair |
 | PostgreSQL Admin (postgres) | Database | postgres user credentials |
 | PostgreSQL - Wazuh Database User | Database | wazuh user credentials |
-| Infrastructure Ansible SSH Key | Secure Note | ED25519 private/public key pair |
+| PostgreSQL - Mealie Database User | Database | mealie user credentials |
+| PostgreSQL - Tandoor Database User | Database | tandoor user credentials |
+| GitLab Root User | Login | root username, 32-char password |
+| GitLab Runner Registration Token | Password | 32-char alphanumeric token |
+| Tandoor Secret Key | Password | 50-char Django SECRET_KEY |
 
 ## Certificate Management
 

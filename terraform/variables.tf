@@ -30,6 +30,20 @@ variable "vm_configs" {
       started    = true
       full_clone = true
     }
+    "mealie" = {
+      vm_id     = 1104
+      name      = "mealie"
+      memory_mb = 2048
+      cpu_cores = 2
+      started   = true
+    }
+    "tandoor" = {
+      vm_id     = 1105
+      name      = "tandoor"
+      memory_mb = 2048
+      cpu_cores = 2
+      started   = true
+    }
   }
 }
 
@@ -88,6 +102,16 @@ variable "postgresql_databases" {
       name        = "wazuh"
       description = "Database for Wazuh (SIEM)"
       owner       = "wazuh"
+    },
+    {
+      name        = "mealie"
+      description = "Database for Mealie (Recipe Management)"
+      owner       = "mealie"
+    },
+    {
+      name        = "tandoor"
+      description = "Database for Tandoor Recipes"
+      owner       = "tandoor"
     }
   ]
 }

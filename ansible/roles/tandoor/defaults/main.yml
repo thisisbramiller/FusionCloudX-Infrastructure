@@ -1,0 +1,29 @@
+---
+# ==============================================================================
+# Tandoor Role - Default Variables
+# ==============================================================================
+
+# Tandoor container image
+tandoor_image: "vabene1111/recipes:latest"
+
+# HTTPS port
+tandoor_https_port: 8080
+
+# SSL certificate paths (deployed by certificates role)
+tandoor_ssl_cert: "/etc/ssl/certs/server-chain.crt"
+tandoor_ssl_key: "/etc/ssl/private/server.key"
+
+# Docker Compose project directory
+tandoor_compose_dir: "/opt/tandoor"
+
+# Application settings
+tandoor_timezone: "America/Chicago"
+
+# PostgreSQL connection (resolved from inventory, override in host_vars if needed)
+tandoor_db_host: "{{ hostvars['postgresql']['ansible_host'] | default('192.168.40.90') }}"
+tandoor_db_port: 5432
+tandoor_db_name: "tandoor"
+
+# 1Password items for credentials
+tandoor_onepassword_db_item: "PostgreSQL - Tandoor Database User"
+tandoor_onepassword_secret_key_item: "Tandoor Secret Key"

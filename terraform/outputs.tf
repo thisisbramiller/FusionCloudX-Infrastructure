@@ -80,8 +80,13 @@ output "onepassword_items" {
       runner_token  = onepassword_item.gitlab_runner_token.id
     }
     postgresql = {
-      admin_password = onepassword_item.postgresql_admin.id
-      wazuh_password = onepassword_item.wazuh_db_user.id
+      admin_password   = onepassword_item.postgresql_admin.id
+      wazuh_password   = onepassword_item.wazuh_db_user.id
+      mealie_password  = onepassword_item.mealie_db_user.id
+      tandoor_password = onepassword_item.tandoor_db_user.id
+    }
+    tandoor = {
+      secret_key = onepassword_item.tandoor_secret_key.id
     }
     ssh = {
       ansible_key = onepassword_item.ansible_ssh_key.id

@@ -1,0 +1,56 @@
+---
+# ==============================================================================
+# Tandoor Deployment Playbook
+# ==============================================================================
+# Deploys Tandoor Recipes on the tandoor VM via Docker Compose
+#
+# Usage:
+#   ansible-playbook playbooks/tandoor.yml
+#
+# Requirements:
+#   - OP_CONNECT_HOST, OP_CONNECT_TOKEN, TF_VAR_onepassword_vault_id env vars
+#   - FusionCloudX certificates must be deployed first (run playbooks/common.yml --limit tandoor)
+# ==============================================================================
+
+- name: Load SSH Key from 1Password Connect
+  hosts: localhost
+  gather_facts: false
+  connection: local
+
+  roles:
+    - role: ssh-key-loader
+      tags: ['ssh-key', 'always']
+
+- name: Deploy Tandoor Recipes
+  hosts: tandoor
+  become: yes
+  gather_facts: yes
+  vars:
+    ansible_ssh_private_key_file: "/tmp/.ansible_ssh_key"
+
+  pre_tasks:
+    - name: Ensure 1Password Connect credentials are set
+      fail:
+        msg: "OP_CONNECT_HOST and OP_CONNECT_TOKEN environment variables must be set"
+      when: >
+        lookup('env', 'OP_CONNECT_HOST') == '' or
+        lookup('env', 'OP_CONNECT_TOKEN') == ''
+
+    - name: Display 1Password Connect status
+      debug:
+        msg: "Using 1Password Connect Server at {{ lookup('env', 'OP_CONNECT_HOST') }}"
+
+  roles:
+    - tandoor
+
+- name: Cleanup SSH Key
+  hosts: localhost
+  gather_facts: false
+  connection: local
+
+  tasks:
+    - name: Include ssh-key-loader cleanup tasks
+      include_role:
+        name: ssh-key-loader
+        tasks_from: cleanup.yml
+      tags: ['ssh-key', 'cleanup', 'always']
