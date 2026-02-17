@@ -85,6 +85,9 @@ output "onepassword_items" {
       mealie_password  = onepassword_item.mealie_db_user.id
       tandoor_password = onepassword_item.tandoor_db_user.id
     }
+    tandoor = {
+      secret_key = onepassword_item.tandoor_secret_key.id
+    }
     ssh = {
       ansible_key = onepassword_item.ansible_ssh_key.id
     }
