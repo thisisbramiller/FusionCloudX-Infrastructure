@@ -1,0 +1,37 @@
+resolver 127.0.0.11 ipv6=off valid=30s;
+
+server {
+    listen 443 ssl;
+    server_name _;
+
+    ssl_certificate /etc/nginx/ssl/server.crt;
+    ssl_certificate_key /etc/nginx/ssl/server.key;
+    ssl_protocols TLSv1.2 TLSv1.3;
+
+    # Large uploads for photos/videos (50GB max)
+    client_max_body_size 50000M;
+    client_body_buffer_size 1024k;
+
+    # Extended timeouts for large uploads and ML processing
+    proxy_read_timeout 600s;
+    proxy_send_timeout 600s;
+    send_timeout 600s;
+
+    # Disable request buffering for large uploads
+    proxy_request_buffering off;
+
+    location / {
+        set $upstream immich-server:{{ immich_server_port }};
+        proxy_set_header Host $http_host;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+
+        # WebSocket support (for real-time updates)
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+
+        proxy_pass http://$upstream;
+    }
+}

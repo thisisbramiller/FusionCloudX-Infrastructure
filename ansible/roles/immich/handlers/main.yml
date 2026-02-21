@@ -1,0 +1,10 @@
+---
+# ==============================================================================
+# Immich Role - Handlers
+# ==============================================================================
+
+- name: restart immich
+  community.docker.docker_compose_v2:
+    project_src: "{{ immich_compose_dir }}"
+    state: restarted
+  become: yes

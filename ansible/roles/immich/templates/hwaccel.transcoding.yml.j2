@@ -1,0 +1,7 @@
+---
+# Hardware-accelerated transcoding (VAAPI - AMD)
+# Activate by setting immich_gpu_transcoding: true after GPU passthrough
+services:
+  hwaccel-transcoding:
+    devices:
+      - /dev/dri:/dev/dri

@@ -1,0 +1,8 @@
+---
+# Hardware-accelerated machine learning (ROCm - AMD)
+# Activate by setting immich_gpu_ml: true after GPU passthrough
+services:
+  hwaccel-ml:
+    devices:
+      - /dev/dri:/dev/dri
+      - /dev/kfd:/dev/kfd
