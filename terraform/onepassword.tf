@@ -190,3 +190,19 @@ resource "onepassword_item" "tandoor_secret_key" {
     symbols = false # Django SECRET_KEY typically alphanumeric
   }
 }
+
+# ------------------------------------------------------------------------------
+# Immich Credentials
+# ------------------------------------------------------------------------------
+
+resource "onepassword_item" "immich_db_password" {
+  vault    = var.onepassword_vault_id
+  category = "password"
+  title    = "Immich Database Password"
+  tags     = ["terraform", "immich", "homelab"]
+
+  password_recipe {
+    length  = 32
+    symbols = false # Immich DB_PASSWORD must be alphanumeric
+  }
+}
