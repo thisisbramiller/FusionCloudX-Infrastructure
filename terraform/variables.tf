@@ -12,13 +12,14 @@ variable "proxmox_ssh_host" {
 
 variable "vm_configs" {
   type = map(object({
-    vm_id      = number
-    name       = string
-    memory_mb  = number
-    cpu_cores  = number
-    started    = bool
-    on_boot    = optional(bool, true)
-    full_clone = optional(bool, true)
+    vm_id        = number
+    name         = string
+    memory_mb    = number
+    cpu_cores    = number
+    started      = bool
+    on_boot      = optional(bool, true)
+    full_clone   = optional(bool, true)
+    datastore_id = optional(string, "vm-data")
   }))
 
   default = {
@@ -43,6 +44,14 @@ variable "vm_configs" {
       memory_mb = 2048
       cpu_cores = 2
       started   = true
+    }
+    "immich" = {
+      vm_id        = 1106
+      name         = "immich"
+      memory_mb    = 8192  # 8GB for ML processing (face recognition, CLIP search)
+      cpu_cores    = 4
+      started      = true
+      datastore_id = "local-zfs"  # NVMe SSD for database + Docker I/O performance
     }
   }
 }

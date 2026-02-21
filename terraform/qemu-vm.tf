@@ -30,9 +30,21 @@ resource "proxmox_virtual_environment_vm" "qemu-vm" {
     type  = "x86-64-v2-AES"
   }
 
+  # For VMs with non-default datastore: explicit disk block to place disk on target storage
+  # Template (ID 1000) disk lives on vm-data; this moves it during clone
+  dynamic "disk" {
+    for_each = each.value.datastore_id != "vm-data" ? [1] : []
+    content {
+      datastore_id = each.value.datastore_id
+      interface    = "scsi0"
+      size         = 32
+      file_format  = "raw" # ZFS uses raw, not qcow2
+    }
+  }
+
   initialization {
-    datastore_id = "vm-data"
-    file_format  = "qcow2"
+    datastore_id = each.value.datastore_id
+    file_format  = each.value.datastore_id != "vm-data" ? "raw" : "qcow2"
 
     ip_config {
       ipv4 {
