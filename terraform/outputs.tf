@@ -58,6 +58,11 @@ output "gitlab_url" {
   value       = "http://${try(proxmox_virtual_environment_vm.qemu-vm["gitlab"].ipv4_addresses[1][0], "IP-not-available")}"
 }
 
+output "immich_url" {
+  description = "Immich web interface URL"
+  value       = "https://${try(proxmox_virtual_environment_vm.qemu-vm["immich"].ipv4_addresses[1][0], "IP-not-available")}:9926"
+}
+
 output "postgresql_connection" {
   description = "PostgreSQL connection details"
   value = {
@@ -87,6 +92,9 @@ output "onepassword_items" {
     }
     tandoor = {
       secret_key = onepassword_item.tandoor_secret_key.id
+    }
+    immich = {
+      db_password = onepassword_item.immich_db_password.id
     }
     ssh = {
       ansible_key = onepassword_item.ansible_ssh_key.id
