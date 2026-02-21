@@ -1,0 +1,20 @@
+---
+# ==============================================================================
+# Immich Host Variables
+# ==============================================================================
+# Self-hosted photo management (Google Photos/iCloud replacement)
+# ==============================================================================
+
+# Application
+immich_domain: "immich.fusioncloudx.home"
+immich_url: "https://{{ ansible_host }}:{{ immich_https_port }}"
+
+# Certificate deployment (common role)
+certificates_deploy_server: true
+
+# Firewall rules
+firewall_rules:
+  - port: "{{ immich_https_port }}"
+    proto: tcp
+    rule: allow
+    comment: "Immich HTTPS"
