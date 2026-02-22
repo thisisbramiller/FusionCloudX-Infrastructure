@@ -61,11 +61,19 @@
     state: present
   tags: ['immich', 'nfs']
 
+- name: Check if NFS is already mounted
+  command: mountpoint -q {{ immich_upload_location }}
+  register: nfs_mounted
+  changed_when: false
+  failed_when: false
+  tags: ['immich', 'nfs']
+
 - name: Create NFS mount point
   file:
     path: "{{ immich_upload_location }}"
     state: directory
     mode: '0755'
+  when: nfs_mounted.rc != 0
   tags: ['immich', 'nfs']
 
 - name: Mount NFS photo library from UNAS Pro

@@ -6,5 +6,6 @@
 - name: restart tandoor
   community.docker.docker_compose_v2:
     project_src: "{{ tandoor_compose_dir }}"
-    state: restarted
+    state: present
+    recreate: always
   become: yes

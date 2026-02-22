@@ -7,19 +7,13 @@ services:
     env_file:
       - .env
     volumes:
-      - {{ immich_upload_location }}:/usr/src/app/upload
+      - {{ immich_upload_location }}:/data
       - /etc/localtime:/etc/localtime:ro
     depends_on:
-      database:
-        condition: service_healthy
-      redis:
-        condition: service_started
+      - redis
+      - database
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:2283/api/server/ping || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 60s
+      disable: false
 
   immich-machine-learning:
     image: {{ immich_ml_image }}:{{ immich_version }}
@@ -35,23 +29,20 @@ services:
       file: hwaccel.ml.yml
       service: hwaccel-ml
 {% endif %}
+    healthcheck:
+      disable: false
 
   redis:
     image: {{ immich_redis_image }}
     container_name: immich_redis
     restart: always
     healthcheck:
-      test: ["CMD-SHELL", "valkey-cli ping | grep PONG"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+      test: redis-cli ping || exit 1
 
   database:
     image: {{ immich_db_image }}
     container_name: immich_postgres
     restart: always
-    env_file:
-      - .env
     environment:
       POSTGRES_PASSWORD: ${DB_PASSWORD}
       POSTGRES_USER: ${DB_USERNAME}
@@ -59,23 +50,9 @@ services:
       POSTGRES_INITDB_ARGS: '--data-checksums'
     volumes:
       - {{ immich_db_data_location }}:/var/lib/postgresql/data
-    command:
-      [
-        "postgres",
-        "-c", "shared_preload_libraries=vchord.so",
-        "-c", "search_path=\"$$user\", public, vectors",
-        "-c", "logging_collector=on",
-        "-c", "max_wal_size=2GB",
-        "-c", "shared_buffers=512MB",
-        "-c", "wal_compression=on",
-      ]
     shm_size: 128mb
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready --dbname='${DB_DATABASE_NAME}' --username='${DB_USERNAME}'"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 30s
+      disable: false
 
   nginx:
     image: {{ immich_nginx_image }}
