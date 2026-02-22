@@ -277,7 +277,7 @@
           - "========================================"
 
 # ==============================================================================
-# Phase 7: Recipe Management (30-day trial)
+# Phase 7: Application Deployments
 # ==============================================================================
 
 - name: Deploy Mealie
@@ -325,6 +325,29 @@
 
   roles:
     - tandoor
+
+- name: Deploy Immich
+  hosts: immich
+  become: yes
+  gather_facts: yes
+  vars:
+    ansible_ssh_private_key_file: "/tmp/.ansible_ssh_key"
+  tags: ['immich', 'applications']
+
+  pre_tasks:
+    - name: Ensure 1Password Connect credentials are set
+      fail:
+        msg: "OP_CONNECT_HOST and OP_CONNECT_TOKEN environment variables must be set"
+      when: >
+        lookup('env', 'OP_CONNECT_HOST') == '' or
+        lookup('env', 'OP_CONNECT_TOKEN') == ''
+
+    - name: Display 1Password Connect status
+      debug:
+        msg: "Using 1Password Connect Server at {{ lookup('env', 'OP_CONNECT_HOST') }}"
+
+  roles:
+    - immich
 
 # ==============================================================================
 # Phase 8: Monitoring (future)

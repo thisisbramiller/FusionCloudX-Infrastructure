@@ -1,11 +1,11 @@
 ---
 # ==============================================================================
-# Tandoor Role - Handlers
+# Immich Role - Handlers
 # ==============================================================================
 
-- name: restart tandoor
+- name: restart immich
   community.docker.docker_compose_v2:
-    project_src: "{{ tandoor_compose_dir }}"
+    project_src: "{{ immich_compose_dir }}"
     state: present
     recreate: always
   become: yes

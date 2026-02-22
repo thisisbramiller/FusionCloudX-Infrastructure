@@ -1,0 +1,197 @@
+---
+# ==============================================================================
+# Immich Role - Main Tasks
+# ==============================================================================
+# Installs Docker, mounts NFS photo storage, and deploys Immich via Docker Compose
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# Docker Installation
+# ------------------------------------------------------------------------------
+
+- name: Install Docker prerequisites
+  apt:
+    name:
+      - ca-certificates
+      - curl
+      - gnupg
+    state: present
+    update_cache: yes
+  tags: ['immich', 'docker']
+
+- name: Add Docker GPG key
+  ansible.builtin.get_url:
+    url: https://download.docker.com/linux/ubuntu/gpg
+    dest: /etc/apt/keyrings/docker.asc
+    mode: '0644'
+  tags: ['immich', 'docker']
+
+- name: Add Docker repository
+  ansible.builtin.apt_repository:
+    repo: "deb [arch=amd64 signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable"
+    state: present
+    filename: docker
+  tags: ['immich', 'docker']
+
+- name: Install Docker CE and Compose plugin
+  apt:
+    name:
+      - docker-ce
+      - docker-ce-cli
+      - containerd.io
+      - docker-compose-plugin
+    state: present
+    update_cache: yes
+  tags: ['immich', 'docker']
+
+- name: Ensure Docker service is started and enabled
+  systemd:
+    name: docker
+    state: started
+    enabled: yes
+  tags: ['immich', 'docker']
+
+# ------------------------------------------------------------------------------
+# NFS Photo Storage
+# ------------------------------------------------------------------------------
+
+- name: Install NFS client
+  apt:
+    name: nfs-common
+    state: present
+  tags: ['immich', 'nfs']
+
+- name: Check if NFS is already mounted
+  command: mountpoint -q {{ immich_upload_location }}
+  register: nfs_mounted
+  changed_when: false
+  failed_when: false
+  tags: ['immich', 'nfs']
+
+- name: Create NFS mount point
+  file:
+    path: "{{ immich_upload_location }}"
+    state: directory
+    mode: '0755'
+  when: nfs_mounted.rc != 0
+  tags: ['immich', 'nfs']
+
+- name: Mount NFS photo library from UNAS Pro
+  ansible.posix.mount:
+    src: "{{ immich_nfs_server }}:{{ immich_nfs_export }}"
+    path: "{{ immich_upload_location }}"
+    fstype: nfs
+    opts: "{{ immich_nfs_mount_opts }}"
+    state: mounted
+  tags: ['immich', 'nfs']
+
+# ------------------------------------------------------------------------------
+# Credentials from 1Password
+# ------------------------------------------------------------------------------
+
+- name: Fetch Immich database password from 1Password
+  onepassword.connect.field_info:
+    token: "{{ lookup('env', 'OP_CONNECT_TOKEN') }}"
+    item: "{{ immich_onepassword_item }}"
+    field: "password"
+    vault: "{{ lookup('env', 'TF_VAR_onepassword_vault_id') }}"
+  environment:
+    OP_CONNECT_HOST: "{{ lookup('env', 'OP_CONNECT_HOST') }}"
+  delegate_to: localhost
+  become: no
+  no_log: true
+  register: immich_db_password_result
+  tags: ['immich', 'secrets']
+
+- name: Set database credential variables
+  set_fact:
+    immich_db_password: "{{ immich_db_password_result.field.value }}"
+  no_log: true
+  tags: ['immich', 'secrets']
+
+# ------------------------------------------------------------------------------
+# Deploy Immich Stack
+# ------------------------------------------------------------------------------
+
+- name: Create Immich compose directory
+  file:
+    path: "{{ immich_compose_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0750'
+  tags: ['immich', 'deploy']
+
+- name: Create database data directory
+  file:
+    path: "{{ immich_db_data_location }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0750'
+  tags: ['immich', 'deploy']
+
+- name: Template Docker Compose file
+  template:
+    src: docker-compose.yml.j2
+    dest: "{{ immich_compose_dir }}/docker-compose.yml"
+    owner: root
+    group: root
+    mode: '0640'
+  notify: restart immich
+  tags: ['immich', 'deploy']
+
+- name: Template environment file
+  template:
+    src: .env.j2
+    dest: "{{ immich_compose_dir }}/.env"
+    owner: root
+    group: root
+    mode: '0600'
+  no_log: true
+  notify: restart immich
+  tags: ['immich', 'deploy']
+
+- name: Template nginx configuration
+  template:
+    src: nginx.conf.j2
+    dest: "{{ immich_compose_dir }}/nginx.conf"
+    owner: root
+    group: root
+    mode: '0644'
+  notify: restart immich
+  tags: ['immich', 'deploy']
+
+- name: Restart containers if configuration changed
+  meta: flush_handlers
+
+- name: Start Immich containers
+  community.docker.docker_compose_v2:
+    project_src: "{{ immich_compose_dir }}"
+    state: present
+    pull: missing
+  tags: ['immich', 'deploy']
+
+- name: Wait for Immich to be ready
+  uri:
+    url: "https://localhost:{{ immich_https_port }}/api/server/ping"
+    validate_certs: no
+    status_code: [200]
+  register: immich_health
+  retries: 30
+  delay: 10
+  until: immich_health is succeeded
+  tags: ['immich', 'verify']
+
+- name: Display Immich deployment status
+  debug:
+    msg:
+      - "========================================"
+      - "Immich deployment complete!"
+      - "========================================"
+      - "URL: https://{{ ansible_host }}:{{ immich_https_port }}"
+      - "Photo storage: {{ immich_upload_location }} (NFS from UNAS Pro)"
+      - "Database: local SSD ({{ immich_db_data_location }})"
+      - "Version: {{ immich_version }}"
+      - "========================================"
+  tags: ['immich']

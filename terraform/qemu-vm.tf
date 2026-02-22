@@ -30,6 +30,18 @@ resource "proxmox_virtual_environment_vm" "qemu-vm" {
     type  = "x86-64-v2-AES"
   }
 
+  # For VMs with non-default datastore, place the OS disk (scsi1) on target storage.
+  # scsi0 is reserved for cloud-init; scsi1 is the cloned OS disk from the template.
+  dynamic "disk" {
+    for_each = each.value.datastore_id != "vm-data" ? [1] : []
+    content {
+      datastore_id = each.value.datastore_id
+      interface    = "scsi1"
+      size         = 32
+      file_format  = "raw"
+    }
+  }
+
   initialization {
     datastore_id = "vm-data"
     file_format  = "qcow2"
@@ -58,4 +70,3 @@ resource "proxmox_virtual_environment_vm" "qemu-vm" {
   }
 
 }
-

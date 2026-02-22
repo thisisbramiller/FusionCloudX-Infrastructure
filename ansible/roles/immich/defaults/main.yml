@@ -1,0 +1,52 @@
+---
+# ==============================================================================
+# Immich Role - Default Variables
+# ==============================================================================
+
+# Immich version (pinned for deliberate upgrades)
+immich_version: "v2.5.6"
+
+# HTTPS port (nginx SSL termination)
+immich_https_port: 9926
+
+# Internal Immich server port (not exposed to host)
+immich_server_port: 2283
+
+# SSL certificate paths (deployed by certificates role)
+immich_ssl_cert: "/etc/ssl/certs/server-chain.crt"
+immich_ssl_key: "/etc/ssl/private/server.key"
+
+# Docker Compose project directory
+immich_compose_dir: "/opt/immich"
+
+# Photo/video storage (NFS mount point)
+immich_upload_location: "/mnt/immich-library"
+
+# Database data directory (local SSD via VM disk on local-zfs)
+immich_db_data_location: "/opt/immich/postgres"
+
+# NFS configuration (UNAS Pro)
+immich_nfs_server: "192.168.40.137"
+immich_nfs_export: "/volume/8cb7f9c4-9b09-41da-945c-598b704935af/.srv/.unifi-drive/immich_library/.data"
+immich_nfs_mount_opts: "rw,hard,rsize=1048576,wsize=1048576"
+
+# 1Password item for database credentials
+immich_onepassword_item: "Immich Database Password"
+
+# Container images
+immich_server_image: "ghcr.io/immich-app/immich-server"
+immich_ml_image: "ghcr.io/immich-app/immich-machine-learning"
+immich_redis_image: "docker.io/valkey/valkey:9"
+immich_db_image: "ghcr.io/immich-app/postgres:14-vectorchord0.4.3-pgvectors0.2.0"
+immich_nginx_image: "nginx:1.29.5-alpine"
+
+# Database settings
+immich_db_name: "immich"
+immich_db_user: "postgres"
+
+# GPU acceleration (deferred until AMD RX 5500 passthrough)
+immich_gpu_transcoding: false
+immich_gpu_ml: false
+
+# Application settings
+immich_timezone: "America/Chicago"

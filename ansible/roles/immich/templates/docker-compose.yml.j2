@@ -1,0 +1,78 @@
+---
+services:
+  immich-server:
+    image: {{ immich_server_image }}:{{ immich_version }}
+    container_name: immich_server
+    restart: always
+    env_file:
+      - .env
+    volumes:
+      - {{ immich_upload_location }}:/usr/src/app/upload
+      - /etc/localtime:/etc/localtime:ro
+    depends_on:
+      - redis
+      - database
+{% if immich_gpu_transcoding %}
+    # GPU acceleration for transcoding (VAAPI - AMD)
+    extends:
+      file: hwaccel.transcoding.yml
+      service: hwaccel-transcoding
+{% endif %}
+    healthcheck:
+      disable: false
+
+  immich-machine-learning:
+    image: {{ immich_ml_image }}:{{ immich_version }}
+    container_name: immich_machine_learning
+    restart: always
+    env_file:
+      - .env
+    volumes:
+      - model-cache:/cache
+{% if immich_gpu_ml %}
+    # GPU acceleration for ML (ROCm - AMD)
+    extends:
+      file: hwaccel.ml.yml
+      service: hwaccel-ml
+{% endif %}
+    healthcheck:
+      disable: false
+
+  redis:
+    image: {{ immich_redis_image }}
+    container_name: immich_redis
+    restart: always
+    healthcheck:
+      test: redis-cli ping || exit 1
+
+  database:
+    image: {{ immich_db_image }}
+    container_name: immich_postgres
+    restart: always
+    environment:
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_USER: ${DB_USERNAME}
+      POSTGRES_DB: ${DB_DATABASE_NAME}
+      POSTGRES_INITDB_ARGS: '--data-checksums'
+    volumes:
+      - {{ immich_db_data_location }}:/var/lib/postgresql/data
+    shm_size: 128mb
+    healthcheck:
+      disable: false
+
+  nginx:
+    image: {{ immich_nginx_image }}
+    container_name: immich-nginx
+    restart: always
+    ports:
+      - "{{ immich_https_port }}:443"
+    depends_on:
+      immich-server:
+        condition: service_healthy
+    volumes:
+      - {{ immich_ssl_cert }}:/etc/nginx/ssl/server.crt:ro
+      - {{ immich_ssl_key }}:/etc/nginx/ssl/server.key:ro
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+
+volumes:
+  model-cache:
