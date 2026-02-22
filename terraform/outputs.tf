@@ -63,6 +63,11 @@ output "immich_url" {
   value       = "https://${try(proxmox_virtual_environment_vm.qemu-vm["immich"].ipv4_addresses[1][0], "IP-not-available")}:9926"
 }
 
+output "duplicati_url" {
+  description = "Duplicati web interface URL"
+  value       = "https://${try(proxmox_virtual_environment_vm.qemu-vm["duplicati"].ipv4_addresses[1][0], "IP-not-available")}:9927"
+}
+
 output "postgresql_connection" {
   description = "PostgreSQL connection details"
   value = {
@@ -95,6 +100,9 @@ output "onepassword_items" {
     }
     immich = {
       db_password = onepassword_item.immich_db_password.id
+    }
+    duplicati = {
+      web_password = onepassword_item.duplicati_web_password.id
     }
     ssh = {
       ansible_key = onepassword_item.ansible_ssh_key.id
