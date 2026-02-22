@@ -1,0 +1,20 @@
+---
+# ==============================================================================
+# Duplicati Host Variables
+# ==============================================================================
+# Versioned, encrypted, deduplicated backups of application data
+# ==============================================================================
+
+# Application
+duplicati_domain: "duplicati.fusioncloudx.home"
+duplicati_url: "https://{{ ansible_host }}:{{ duplicati_https_port }}"
+
+# Certificate deployment (common role)
+certificates_deploy_server: true
+
+# Firewall rules
+firewall_rules:
+  - port: "{{ duplicati_https_port }}"
+    proto: tcp
+    rule: allow
+    comment: "Duplicati HTTPS"
