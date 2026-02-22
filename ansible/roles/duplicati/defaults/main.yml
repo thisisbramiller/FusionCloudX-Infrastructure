@@ -1,0 +1,42 @@
+---
+# ==============================================================================
+# Duplicati Role - Default Variables
+# ==============================================================================
+
+# Duplicati version (Docker tag — "latest" tracks stable v2.2.x releases)
+duplicati_version: "latest"
+
+# Container images
+duplicati_image: "duplicati/duplicati"
+duplicati_nginx_image: "nginx:mainline-alpine"
+
+# HTTPS port (nginx SSL termination)
+duplicati_https_port: 9927
+
+# Internal Duplicati web UI port (not exposed to host)
+duplicati_container_port: 8200
+
+# SSL certificate paths (deployed by certificates role)
+duplicati_ssl_cert: "/etc/ssl/certs/server-chain.crt"
+duplicati_ssl_key: "/etc/ssl/private/server.key"
+
+# Docker Compose project directory
+duplicati_compose_dir: "/opt/duplicati"
+
+# Duplicati config/database directory
+duplicati_data_dir: "/opt/duplicati/data"
+
+# NFS configuration (UNAS Pro — backup destination)
+duplicati_nfs_server: "192.168.40.137"
+duplicati_nfs_export: "/volume/8cb7f9c4-9b09-41da-945c-598b704935af/.srv/.unifi-drive/backups/.data"
+duplicati_nfs_mount_opts: "rw,hard,rsize=1048576,wsize=1048576"
+duplicati_backup_mount: "/mnt/backups"
+
+# SSHFS source mount parent directory
+duplicati_sources_dir: "/mnt/sources"
+
+# 1Password item for web UI credentials
+duplicati_onepassword_item: "Duplicati Web UI Password"
+
+# Application settings
+duplicati_timezone: "America/Chicago"

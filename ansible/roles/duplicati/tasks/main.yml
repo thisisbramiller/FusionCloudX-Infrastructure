@@ -1,0 +1,229 @@
+---
+# ==============================================================================
+# Duplicati Role - Main Tasks
+# ==============================================================================
+# Installs Docker, mounts NFS backup destination, and deploys Duplicati
+# via Docker Compose with nginx SSL termination.
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# Docker Installation
+# ------------------------------------------------------------------------------
+
+- name: Install Docker prerequisites
+  apt:
+    name:
+      - ca-certificates
+      - curl
+      - gnupg
+    state: present
+    update_cache: yes
+  tags: ['duplicati', 'docker']
+
+- name: Add Docker GPG key
+  ansible.builtin.get_url:
+    url: https://download.docker.com/linux/ubuntu/gpg
+    dest: /etc/apt/keyrings/docker.asc
+    mode: '0644'
+  tags: ['duplicati', 'docker']
+
+- name: Add Docker repository
+  ansible.builtin.apt_repository:
+    repo: "deb [arch=amd64 signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable"
+    state: present
+    filename: docker
+  tags: ['duplicati', 'docker']
+
+- name: Install Docker CE and Compose plugin
+  apt:
+    name:
+      - docker-ce
+      - docker-ce-cli
+      - containerd.io
+      - docker-compose-plugin
+    state: present
+    update_cache: yes
+  tags: ['duplicati', 'docker']
+
+- name: Ensure Docker service is started and enabled
+  systemd:
+    name: docker
+    state: started
+    enabled: yes
+  tags: ['duplicati', 'docker']
+
+# ------------------------------------------------------------------------------
+# NFS + SSHFS Client Installation
+# ------------------------------------------------------------------------------
+
+- name: Install NFS and SSHFS clients
+  apt:
+    name:
+      - nfs-common
+      - sshfs
+      - fuse3
+    state: present
+  tags: ['duplicati', 'nfs', 'sshfs']
+
+- name: Enable user_allow_other in FUSE config
+  lineinfile:
+    path: /etc/fuse.conf
+    regexp: '^#?user_allow_other'
+    line: 'user_allow_other'
+    state: present
+  tags: ['duplicati', 'sshfs']
+
+# ------------------------------------------------------------------------------
+# NFS Backup Destination (UNAS Pro)
+# ------------------------------------------------------------------------------
+
+- name: Check if NFS is already mounted
+  command: mountpoint -q {{ duplicati_backup_mount }}
+  register: nfs_mounted
+  changed_when: false
+  failed_when: false
+  tags: ['duplicati', 'nfs']
+
+- name: Create NFS backup mount point
+  file:
+    path: "{{ duplicati_backup_mount }}"
+    state: directory
+    mode: '0755'
+  when: nfs_mounted.rc != 0
+  tags: ['duplicati', 'nfs']
+
+- name: Mount NFS backup destination from UNAS Pro
+  ansible.posix.mount:
+    src: "{{ duplicati_nfs_server }}:{{ duplicati_nfs_export }}"
+    path: "{{ duplicati_backup_mount }}"
+    fstype: nfs
+    opts: "{{ duplicati_nfs_mount_opts }}"
+    state: mounted
+  tags: ['duplicati', 'nfs']
+
+# ------------------------------------------------------------------------------
+# SSHFS Source Directory
+# ------------------------------------------------------------------------------
+
+- name: Create SSHFS sources directory
+  file:
+    path: "{{ duplicati_sources_dir }}"
+    state: directory
+    mode: '0755'
+  tags: ['duplicati', 'sshfs']
+
+# ------------------------------------------------------------------------------
+# Credentials from 1Password
+# ------------------------------------------------------------------------------
+
+- name: Fetch Duplicati web UI password from 1Password
+  onepassword.connect.field_info:
+    token: "{{ lookup('env', 'OP_CONNECT_TOKEN') }}"
+    item: "{{ duplicati_onepassword_item }}"
+    field: "password"
+    vault: "{{ lookup('env', 'TF_VAR_onepassword_vault_id') }}"
+  environment:
+    OP_CONNECT_HOST: "{{ lookup('env', 'OP_CONNECT_HOST') }}"
+  delegate_to: localhost
+  become: no
+  no_log: true
+  register: duplicati_web_password_result
+  tags: ['duplicati', 'secrets']
+
+- name: Set credential variables
+  set_fact:
+    duplicati_web_password: "{{ duplicati_web_password_result.field.value }}"
+  no_log: true
+  tags: ['duplicati', 'secrets']
+
+# ------------------------------------------------------------------------------
+# Deploy Duplicati Stack
+# ------------------------------------------------------------------------------
+
+- name: Create Duplicati compose directory
+  file:
+    path: "{{ duplicati_compose_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0750'
+  tags: ['duplicati', 'deploy']
+
+- name: Create Duplicati data directory
+  file:
+    path: "{{ duplicati_data_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0750'
+  tags: ['duplicati', 'deploy']
+
+- name: Template Docker Compose file
+  template:
+    src: docker-compose.yml.j2
+    dest: "{{ duplicati_compose_dir }}/docker-compose.yml"
+    owner: root
+    group: root
+    mode: '0640'
+  notify: restart duplicati
+  tags: ['duplicati', 'deploy']
+
+- name: Template environment file
+  template:
+    src: .env.j2
+    dest: "{{ duplicati_compose_dir }}/.env"
+    owner: root
+    group: root
+    mode: '0600'
+  no_log: true
+  notify: restart duplicati
+  tags: ['duplicati', 'deploy']
+
+- name: Template nginx configuration
+  template:
+    src: nginx.conf.j2
+    dest: "{{ duplicati_compose_dir }}/nginx.conf"
+    owner: root
+    group: root
+    mode: '0644'
+  notify: restart duplicati
+  tags: ['duplicati', 'deploy']
+
+- name: Restart containers if configuration changed
+  meta: flush_handlers
+
+- name: Start Duplicati containers
+  community.docker.docker_compose_v2:
+    project_src: "{{ duplicati_compose_dir }}"
+    state: present
+    pull: missing
+  tags: ['duplicati', 'deploy']
+
+- name: Wait for Duplicati to be ready
+  uri:
+    url: "https://localhost:{{ duplicati_https_port }}"
+    validate_certs: no
+    status_code: [200, 302]
+  register: duplicati_health
+  retries: 30
+  delay: 5
+  until: duplicati_health is succeeded
+  tags: ['duplicati', 'verify']
+
+- name: Display Duplicati deployment status
+  debug:
+    msg:
+      - "========================================"
+      - "Duplicati deployment complete!"
+      - "========================================"
+      - "URL: https://{{ ansible_host }}:{{ duplicati_https_port }}"
+      - "Backup destination: {{ duplicati_backup_mount }} (NFS to UNAS Pro)"
+      - "Sources directory: {{ duplicati_sources_dir }} (SSHFS mount point)"
+      - "Config data: {{ duplicati_data_dir }}"
+      - "========================================"
+      - "Next steps:"
+      - "1. Access web UI and log in with 1Password credentials"
+      - "2. Configure SSHFS source mounts"
+      - "3. Create backup jobs through the web UI"
+      - "========================================"
+  tags: ['duplicati']
