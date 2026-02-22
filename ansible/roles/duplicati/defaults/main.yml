@@ -4,7 +4,7 @@
 # ==============================================================================
 
 # Duplicati version (Docker tag — pinned to stable release)
-duplicati_version: "v2.2.0.3-stable"
+duplicati_version: "2.2.0.3-stable"
 
 # Container images
 duplicati_image: "duplicati/duplicati"
