@@ -53,6 +53,13 @@ variable "vm_configs" {
       started      = true
       datastore_id = "local-zfs"  # NVMe SSD for database + Docker I/O performance
     }
+    "duplicati" = {
+      vm_id     = 1107
+      name      = "duplicati"
+      memory_mb = 2048
+      cpu_cores = 2
+      started   = true
+    }
   }
 }
 

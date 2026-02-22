@@ -1,11 +1,11 @@
 ---
 # ==============================================================================
-# Immich Role - Handlers
+# Duplicati Role - Handlers
 # ==============================================================================
 
-- name: restart immich
+- name: restart duplicati
   community.docker.docker_compose_v2:
-    project_src: "{{ immich_compose_dir }}"
+    project_src: "{{ duplicati_compose_dir }}"
     state: present
     recreate: auto
   become: yes

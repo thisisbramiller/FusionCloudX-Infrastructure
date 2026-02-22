@@ -31,6 +31,14 @@ FusionCloudX Infrastructure is an Infrastructure-as-Code repository for managing
 - Photo originals on UNAS Pro NFS (`immich_library`), database on local SSD
 - Access: https://immich.fusioncloudx.home:9926
 
+**Duplicati VM** (ID 1107):
+- 2GB RAM, 2 CPU cores, 32GB disk on vm-data (NFS)
+- Versioned, encrypted, deduplicated application data backups via Docker Compose + nginx SSL
+- 2-container stack: duplicati (server mode) + nginx
+- Backup destination: NFS to UNAS Pro `backups` share (UNAS Pro handles B2 offsite)
+- SSHFS source mounts at `/mnt/sources` for reading application data from other VMs
+- Access: https://duplicati.fusioncloudx.home:9927
+
 **PostgreSQL LXC** (ID 2001):
 - Debian 12 unprivileged container, 4GB RAM, 2 CPU cores, 64GB disk
 - Hosts multiple databases (currently: wazuh)
@@ -47,6 +55,7 @@ Terraform (Provisioning)                    Ansible (Configuration)
 ├── Per-VM datastore support                ├── mealie role (Docker, nginx, compose)
 │   (local-zfs for Immich)                  ├── tandoor role (Docker, nginx, compose)
 └── Generate Ansible inventory              ├── immich role (Docker, NFS, compose)
+                                            ├── duplicati role (Docker, NFS, SSHFS, compose)
                                             └── Dynamic inventory via Terraform state
 ```
 
@@ -72,7 +81,7 @@ Files in `terraform/`:
 | `lxc-debian-template.tf` | Downloads Debian 12 LXC template |
 | `lxc-postgresql.tf` | PostgreSQL LXC container definition |
 | `ssh-keys.tf` | Ansible SSH key generation (`tls_private_key`) |
-| `onepassword.tf` | All 1Password items (SSH key, PostgreSQL, GitLab, Tandoor, Immich credentials) |
+| `onepassword.tf` | All 1Password items (SSH key, PostgreSQL, GitLab, Tandoor, Immich, Duplicati credentials) |
 | `ansible-inventory.tf` | Dynamic inventory via Terraform Ansible provider |
 | `outputs.tf` | Infrastructure summary, URLs, 1Password item IDs |
 
@@ -82,7 +91,7 @@ Files in `terraform/`:
 
 **Datastores**:
 - `nas-infrastructure`: Cloud images, cloud-init snippets, LXC templates
-- `vm-data`: VM/LXC disks (NFS, default for most VMs)
+- `vm-data`: VM/LXC disks (NFS, default for most VMs including Duplicati)
 - `local-zfs`: ZFS pool on nvme1n1 (NVMe SSD) for performance-tier VMs (Immich)
 - `local-lvm`: LVM-thin on nvme0n1 (338GB available, future PostgreSQL migration target)
 
@@ -100,6 +109,7 @@ Files in `ansible/`:
 | `inventory/host_vars/postgresql.yml` | Database definitions, firewall rules |
 | `inventory/host_vars/gitlab.yml` | GitLab domain, memory settings, HTTPS config |
 | `inventory/host_vars/immich.yml` | Immich domain, NFS config, feature flags |
+| `inventory/host_vars/duplicati.yml` | Duplicati domain, firewall rules |
 | `inventory/group_vars/vault.yml` | Encrypted fallback secrets (Ansible Vault) |
 
 **Roles**:
@@ -110,14 +120,16 @@ Files in `ansible/`:
 - `mealie/`: Mealie recipe management with Docker Compose + nginx SSL
 - `tandoor/`: Tandoor Recipes with Docker Compose + nginx SSL
 - `immich/`: Immich photo management — Docker, NFS mount, compose, nginx SSL, health checks
+- `duplicati/`: Duplicati backups — Docker, NFS destination, SSHFS prep, compose, nginx SSL
 
 **Playbooks**:
-- `site.yml`: Main orchestration (bootstrap, common, postgresql, gitlab, mealie, tandoor, immich)
+- `site.yml`: Main orchestration (bootstrap, common, postgresql, gitlab, mealie, tandoor, immich, duplicati)
 - `bootstrap.yml`: LXC container prerequisite installation (python3, sudo via raw module)
 - `common.yml`: Certificate deployment
 - `postgresql.yml`: Database server configuration
 - `gitlab.yml`: GitLab installation and configuration
 - `immich.yml`: Immich photo management deployment
+- `duplicati.yml`: Duplicati backup service deployment
 
 **Inventory Groups**:
 - `postgresql`: LXC containers (root SSH access)
@@ -145,6 +157,7 @@ ansible-galaxy collection install -r requirements.yml  # Install collections
 ansible-playbook playbooks/site.yml                   # Run all playbooks
 ansible-playbook playbooks/postgresql.yml             # PostgreSQL only
 ansible-playbook playbooks/gitlab.yml                 # GitLab only
+ansible-playbook playbooks/duplicati.yml              # Duplicati only
 ansible-playbook playbooks/common.yml --limit gitlab  # Certificates for gitlab
 ansible all -m ping                                   # Test connectivity
 ansible-inventory --graph                             # View dynamic inventory
@@ -193,6 +206,7 @@ GitLab VM (ID 1103) ──────────────┐         ↓
 Mealie VM (ID 1104) ──────────────┤    PostgreSQL LXC (ID 2001)
 Tandoor VM (ID 1105) ─────────────┤         │
 Immich VM (ID 1106) ──────────────┤         │
+Duplicati VM (ID 1107) ───────────┤         │
                                   ↓         │
                             Ansible playbooks
                             (bootstrap → common → apps)
@@ -219,6 +233,7 @@ Immich VM (ID 1106) ──────────────┤         │
 | GitLab Runner Registration Token | Password | 32-char alphanumeric token |
 | Tandoor Secret Key | Password | 50-char Django SECRET_KEY |
 | Immich Database Password | Password | 32-char alphanumeric database credential |
+| Duplicati Web UI Password | Password | 32-char alphanumeric web UI credential |
 
 ## Certificate Management
 
