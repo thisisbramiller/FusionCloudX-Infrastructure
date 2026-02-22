@@ -7,5 +7,5 @@
   community.docker.docker_compose_v2:
     project_src: "{{ duplicati_compose_dir }}"
     state: present
-    recreate: always
+    recreate: auto
   become: yes

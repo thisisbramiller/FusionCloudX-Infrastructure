@@ -3,12 +3,12 @@
 # Duplicati Role - Default Variables
 # ==============================================================================
 
-# Duplicati version (Docker tag — "latest" tracks stable v2.2.x releases)
-duplicati_version: "latest"
+# Duplicati version (Docker tag — pinned to stable release)
+duplicati_version: "v2.2.0.3-stable"
 
 # Container images
 duplicati_image: "duplicati/duplicati"
-duplicati_nginx_image: "nginx:mainline-alpine"
+duplicati_nginx_image: "nginx:mainline-alpine3.23"
 
 # HTTPS port (nginx SSL termination)
 duplicati_https_port: 9927
@@ -29,7 +29,7 @@ duplicati_data_dir: "/opt/duplicati/data"
 # NFS configuration (UNAS Pro — backup destination)
 duplicati_nfs_server: "192.168.40.137"
 duplicati_nfs_export: "/volume/8cb7f9c4-9b09-41da-945c-598b704935af/.srv/.unifi-drive/backups/.data"
-duplicati_nfs_mount_opts: "rw,hard,rsize=1048576,wsize=1048576"
+duplicati_nfs_mount_opts: "rw,hard,rsize=1048576,wsize=1048576,_netdev"
 duplicati_backup_mount: "/mnt/backups"
 
 # SSHFS source mount parent directory
@@ -39,4 +39,4 @@ duplicati_sources_dir: "/mnt/sources"
 duplicati_onepassword_item: "Duplicati Web UI Password"
 
 # Application settings
-duplicati_timezone: "America/Chicago"
+duplicati_timezone: "{{ timezone }}"

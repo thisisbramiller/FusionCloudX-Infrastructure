@@ -77,21 +77,6 @@
 # NFS Backup Destination (UNAS Pro)
 # ------------------------------------------------------------------------------
 
-- name: Check if NFS is already mounted
-  command: mountpoint -q {{ duplicati_backup_mount }}
-  register: nfs_mounted
-  changed_when: false
-  failed_when: false
-  tags: ['duplicati', 'nfs']
-
-- name: Create NFS backup mount point
-  file:
-    path: "{{ duplicati_backup_mount }}"
-    state: directory
-    mode: '0755'
-  when: nfs_mounted.rc != 0
-  tags: ['duplicati', 'nfs']
-
 - name: Mount NFS backup destination from UNAS Pro
   ansible.posix.mount:
     src: "{{ duplicati_nfs_server }}:{{ duplicati_nfs_export }}"
