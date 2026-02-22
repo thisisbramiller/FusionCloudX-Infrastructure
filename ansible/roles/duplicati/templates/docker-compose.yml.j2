@@ -1,0 +1,26 @@
+---
+services:
+  duplicati:
+    image: {{ duplicati_image }}:{{ duplicati_version }}
+    container_name: duplicati
+    restart: always
+    env_file:
+      - .env
+    volumes:
+      - {{ duplicati_data_dir }}:/data
+      - {{ duplicati_backup_mount }}:/backups
+      - {{ duplicati_sources_dir }}:/sources:ro,rslave
+      - /etc/localtime:/etc/localtime:ro
+
+  nginx:
+    image: {{ duplicati_nginx_image }}
+    container_name: duplicati-nginx
+    restart: always
+    ports:
+      - "{{ duplicati_https_port }}:443"
+    depends_on:
+      - duplicati
+    volumes:
+      - {{ duplicati_ssl_cert }}:/etc/nginx/ssl/server.crt:ro
+      - {{ duplicati_ssl_key }}:/etc/nginx/ssl/server.key:ro
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro

@@ -1,0 +1,11 @@
+---
+# ==============================================================================
+# Duplicati Role - Handlers
+# ==============================================================================
+
+- name: restart duplicati
+  community.docker.docker_compose_v2:
+    project_src: "{{ duplicati_compose_dir }}"
+    state: present
+    recreate: always
+  become: yes

@@ -206,3 +206,19 @@ resource "onepassword_item" "immich_db_password" {
     symbols = false # Immich DB_PASSWORD must be alphanumeric
   }
 }
+
+# ------------------------------------------------------------------------------
+# Duplicati Credentials
+# ------------------------------------------------------------------------------
+
+resource "onepassword_item" "duplicati_web_password" {
+  vault    = var.onepassword_vault_id
+  category = "password"
+  title    = "Duplicati Web UI Password"
+  tags     = ["terraform", "duplicati", "homelab"]
+
+  password_recipe {
+    length  = 32
+    symbols = false
+  }
+}
