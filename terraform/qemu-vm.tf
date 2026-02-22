@@ -30,6 +30,18 @@ resource "proxmox_virtual_environment_vm" "qemu-vm" {
     type  = "x86-64-v2-AES"
   }
 
+  # For VMs with non-default datastore, place the OS disk (scsi1) on target storage.
+  # scsi0 is reserved for cloud-init; scsi1 is the cloned OS disk from the template.
+  dynamic "disk" {
+    for_each = each.value.datastore_id != "vm-data" ? [1] : []
+    content {
+      datastore_id = each.value.datastore_id
+      interface    = "scsi1"
+      size         = 32
+      file_format  = "raw"
+    }
+  }
+
   initialization {
     datastore_id = "vm-data"
     file_format  = "qcow2"
@@ -54,46 +66,7 @@ resource "proxmox_virtual_environment_vm" "qemu-vm" {
   lifecycle {
     ignore_changes = [
       initialization, # Ignore cloud-init state changes
-      disk,           # Disk may be moved to different datastore post-clone
     ]
   }
 
-}
-
-# ==============================================================================
-# Post-Clone Disk Migration
-# ==============================================================================
-# The Proxmox provider doesn't support cloning VM disks to a different
-# datastore. For VMs that need local SSD storage (e.g. Immich for database
-# performance), we move the disk after clone via qm move-disk.
-# ==============================================================================
-
-resource "null_resource" "vm_disk_migration" {
-  for_each = {
-    for key, config in var.vm_configs : key => config
-    if config.datastore_id != "vm-data"
-  }
-
-  depends_on = [proxmox_virtual_environment_vm.qemu-vm]
-
-  triggers = {
-    vm_id        = var.vm_configs[each.key].vm_id
-    datastore_id = each.value.datastore_id
-  }
-
-  # Stop VM before disk move (provider may have started it)
-  provisioner "remote-exec" {
-    inline = [
-      "qm stop ${each.value.vm_id} --timeout 60 || true",
-      "sleep 5",
-      "qm move-disk ${each.value.vm_id} scsi1 ${each.value.datastore_id} --delete 1",
-      "qm start ${each.value.vm_id}",
-    ]
-
-    connection {
-      type = "ssh"
-      host = var.proxmox_ssh_host
-      user = "root"
-    }
-  }
 }
