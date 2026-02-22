@@ -7,11 +7,17 @@ services:
     env_file:
       - .env
     volumes:
-      - {{ immich_upload_location }}:/data
+      - {{ immich_upload_location }}:/usr/src/app/upload
       - /etc/localtime:/etc/localtime:ro
     depends_on:
       - redis
       - database
+{% if immich_gpu_transcoding %}
+    # GPU acceleration for transcoding (VAAPI - AMD)
+    extends:
+      file: hwaccel.transcoding.yml
+      service: hwaccel-transcoding
+{% endif %}
     healthcheck:
       disable: false
 

@@ -115,7 +115,7 @@
   community.docker.docker_compose_v2:
     project_src: "{{ mealie_compose_dir }}"
     state: present
-    pull: always
+    pull: missing
   tags: ['mealie', 'deploy']
 
 - name: Wait for Mealie to be ready

@@ -169,7 +169,7 @@
   community.docker.docker_compose_v2:
     project_src: "{{ immich_compose_dir }}"
     state: present
-    pull: always
+    pull: missing
   tags: ['immich', 'deploy']
 
 - name: Wait for Immich to be ready

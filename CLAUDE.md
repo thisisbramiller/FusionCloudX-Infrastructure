@@ -14,6 +14,23 @@ FusionCloudX Infrastructure is an Infrastructure-as-Code repository for managing
 - Access: https://gitlab.fusioncloudx.home
 - Memory-constrained settings: Puma workers=0, Sidekiq concurrency=10, Prometheus disabled
 
+**Mealie VM** (ID 1104):
+- 4GB RAM, 2 CPU cores, 32GB disk on vm-data (NFS)
+- Mealie recipe management with Docker Compose + nginx SSL termination
+- Access: https://mealie.fusioncloudx.home:9925
+
+**Tandoor VM** (ID 1105):
+- 4GB RAM, 2 CPU cores, 32GB disk on vm-data (NFS)
+- Tandoor Recipes with Docker Compose + nginx SSL termination
+- Access: https://tandoor.fusioncloudx.home:9924
+
+**Immich VM** (ID 1106):
+- 8GB RAM, 4 CPU cores, 32GB disk on `local-zfs` (NVMe SSD)
+- Self-hosted photo management (Google Photos/iCloud replacement)
+- 5-container Docker Compose stack: server, ML, redis (Valkey), PostgreSQL+pgvector, nginx
+- Photo originals on UNAS Pro NFS (`immich_library`), database on local SSD
+- Access: https://immich.fusioncloudx.home:9926
+
 **PostgreSQL LXC** (ID 2001):
 - Debian 12 unprivileged container, 4GB RAM, 2 CPU cores, 64GB disk
 - Hosts multiple databases (currently: wazuh)
@@ -27,7 +44,10 @@ Terraform (Provisioning)                    Ansible (Configuration)
 ├── Clone VMs from template                 ├── certificates role (CA + server certs)
 ├── Create LXC from standard template       ├── postgresql role (install, configure)
 ├── Create 1Password items                  ├── gitlab role (install, configure)
-└── Generate Ansible inventory              └── Dynamic inventory via Terraform state
+├── Per-VM datastore support                ├── mealie role (Docker, nginx, compose)
+│   (local-zfs for Immich)                  ├── tandoor role (Docker, nginx, compose)
+└── Generate Ansible inventory              ├── immich role (Docker, NFS, compose)
+                                            └── Dynamic inventory via Terraform state
 ```
 
 **Key Design Decisions**:
@@ -48,11 +68,11 @@ Files in `terraform/`:
 | `ubuntu-template.tf` | VM template (ID 1000) from Ubuntu Noble cloud image |
 | `cloud-init.tf` | Standard cloud-init (user_data + vendor_data) |
 | `cloud-init-gitlab.tf` | Enhanced cloud-init for GitLab (postfix, ufw, etc.) |
-| `qemu-vm.tf` | VMs via `for_each` from `vm_configs`; 10 clone retries |
+| `qemu-vm.tf` | VMs via `for_each` from `vm_configs`; 10 clone retries; per-VM datastore support |
 | `lxc-debian-template.tf` | Downloads Debian 12 LXC template |
 | `lxc-postgresql.tf` | PostgreSQL LXC container definition |
 | `ssh-keys.tf` | Ansible SSH key generation (`tls_private_key`) |
-| `onepassword.tf` | All 1Password items (SSH key, PostgreSQL, GitLab, Tandoor credentials) |
+| `onepassword.tf` | All 1Password items (SSH key, PostgreSQL, GitLab, Tandoor, Immich credentials) |
 | `ansible-inventory.tf` | Dynamic inventory via Terraform Ansible provider |
 | `outputs.tf` | Infrastructure summary, URLs, 1Password item IDs |
 
@@ -62,7 +82,9 @@ Files in `terraform/`:
 
 **Datastores**:
 - `nas-infrastructure`: Cloud images, cloud-init snippets, LXC templates
-- `vm-data`: VM/LXC disks
+- `vm-data`: VM/LXC disks (NFS, default for most VMs)
+- `local-zfs`: ZFS pool on nvme1n1 (NVMe SSD) for performance-tier VMs (Immich)
+- `local-lvm`: LVM-thin on nvme0n1 (338GB available, future PostgreSQL migration target)
 
 ## Ansible Structure
 
@@ -77,6 +99,7 @@ Files in `ansible/`:
 | `inventory/group_vars/postgresql.yml` | PostgreSQL tuning, HBA rules |
 | `inventory/host_vars/postgresql.yml` | Database definitions, firewall rules |
 | `inventory/host_vars/gitlab.yml` | GitLab domain, memory settings, HTTPS config |
+| `inventory/host_vars/immich.yml` | Immich domain, NFS config, feature flags |
 | `inventory/group_vars/vault.yml` | Encrypted fallback secrets (Ansible Vault) |
 
 **Roles**:
@@ -84,13 +107,17 @@ Files in `ansible/`:
 - `certificates/`: Retrieves certs from 1Password, installs CA to trust store, deploys server cert/key
 - `postgresql/`: Installs PostgreSQL 15, creates databases/users, configures pg_hba.conf
 - `gitlab/`: Installs GitLab CE Omnibus, configures gitlab.rb with memory-constrained settings
+- `mealie/`: Mealie recipe management with Docker Compose + nginx SSL
+- `tandoor/`: Tandoor Recipes with Docker Compose + nginx SSL
+- `immich/`: Immich photo management — Docker, NFS mount, compose, nginx SSL, health checks
 
 **Playbooks**:
-- `site.yml`: Main orchestration (contains inlined plays for bootstrap, common, postgresql, gitlab)
+- `site.yml`: Main orchestration (bootstrap, common, postgresql, gitlab, mealie, tandoor, immich)
 - `bootstrap.yml`: LXC container prerequisite installation (python3, sudo via raw module)
 - `common.yml`: Certificate deployment
 - `postgresql.yml`: Database server configuration
 - `gitlab.yml`: GitLab installation and configuration
+- `immich.yml`: Immich photo management deployment
 
 **Inventory Groups**:
 - `postgresql`: LXC containers (root SSH access)
@@ -163,7 +190,9 @@ op item get "GitLab Root User" --vault homelab --fields password  # Get password
 Ubuntu Template (ID 1000)              Standard Debian 12 Template
     ↓                                  (downloaded from Proxmox)
 GitLab VM (ID 1103) ──────────────┐         ↓
-                                  │    PostgreSQL LXC (ID 2001)
+Mealie VM (ID 1104) ──────────────┤    PostgreSQL LXC (ID 2001)
+Tandoor VM (ID 1105) ─────────────┤         │
+Immich VM (ID 1106) ──────────────┤         │
                                   ↓         │
                             Ansible playbooks
                             (bootstrap → common → apps)
@@ -189,6 +218,7 @@ GitLab VM (ID 1103) ──────────────┐         ↓
 | GitLab Root User | Login | root username, 32-char password |
 | GitLab Runner Registration Token | Password | 32-char alphanumeric token |
 | Tandoor Secret Key | Password | 50-char Django SECRET_KEY |
+| Immich Database Password | Password | 32-char alphanumeric database credential |
 
 ## Certificate Management
 
