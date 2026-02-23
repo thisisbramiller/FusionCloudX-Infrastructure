@@ -13,6 +13,7 @@ services:
       - {{ backrest_cache_dir }}:/cache
       - {{ backrest_repo_path }}:/repos/backrest-repo
       - {{ backrest_sources_dir }}:/sources:ro
+      - {{ backrest_pg_dumps_dir }}:/pg-dumps
       - {{ backrest_ssh_dir }}:/ssh:ro
       - /etc/localtime:/etc/localtime:ro
 

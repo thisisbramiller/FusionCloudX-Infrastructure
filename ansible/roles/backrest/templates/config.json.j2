@@ -1,0 +1,68 @@
+{{ '{' }}
+  "modno": 0,
+  "version": 4,
+  "instance": "{{ backrest_instance }}",
+  "repos": [
+    {{ '{' }}
+      "id": "backrest-repo",
+      "uri": "/repos/backrest-repo",
+      "password": "{{ backrest_restic_password }}",
+      "prunePolicy": {{ '{' }}
+        "schedule": {{ '{' }}
+          "cron": "0 4 * * 0"
+        {{ '}' }},
+        "maxUnusedPercent": "25"
+      {{ '}' }},
+      "checkPolicy": {{ '{' }}
+        "schedule": {{ '{' }}
+          "cron": "0 5 1 * *"
+        {{ '}' }},
+        "readDataSubsetPercent": 5
+      {{ '}' }},
+      "autoInitialize": true
+    {{ '}' }}
+  ],
+  "plans": [
+{% for plan in backrest_plans %}
+    {{ '{' }}
+      "id": "{{ plan.id }}",
+      "repo": "backrest-repo",
+      "paths": {{ plan.paths | to_json }},
+      "schedule": {{ '{' }}
+        "cron": "{{ plan.cron }}"
+      {{ '}' }},
+      "retention": {{ '{' }}
+        "policyKeepDaily": {{ plan.retention_daily | default(backrest_retention_daily) }},
+        "policyKeepWeekly": {{ plan.retention_weekly | default(backrest_retention_weekly) }},
+        "policyKeepMonthly": {{ plan.retention_monthly | default(backrest_retention_monthly) }},
+        "policyKeepYearly": {{ plan.retention_yearly | default(backrest_retention_yearly) }},
+        "policyKeepLastN": {{ plan.retention_keep_last | default(backrest_retention_keep_last) }}
+      {{ '}' }},
+{% if plan.hooks is defined and plan.hooks | length > 0 %}
+      "hooks": [
+{% for hook in plan.hooks %}
+        {{ '{' }}
+          "conditions": ["CONDITION_SNAPSHOT_START"],
+          "onError": "ON_ERROR_FATAL",
+          "actionCommand": {{ '{' }}
+            "command": {{ hook.command | to_json }}
+          {{ '}' }}
+        {{ '}' }}{{ "," if not loop.last else "" }}
+{% endfor %}
+      ]
+{% else %}
+      "hooks": []
+{% endif %}
+    {{ '}' }}{{ "," if not loop.last else "" }}
+{% endfor %}
+  ],
+  "auth": {{ '{' }}
+    "disabled": false,
+    "users": [
+      {{ '{' }}
+        "name": "{{ backrest_auth_user }}",
+        "passwordBcrypt": "{{ backrest_web_password_bcrypt }}"
+      {{ '}' }}
+    ]
+  {{ '}' }}
+{{ '}' }}
