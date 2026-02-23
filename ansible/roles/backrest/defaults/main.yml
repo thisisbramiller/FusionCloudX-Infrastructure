@@ -43,6 +43,9 @@ backrest_repo_path: "/mnt/backups/backrest-repo"
 # Source mount parent directory (NFS from source VMs)
 backrest_sources_dir: "/mnt/sources"
 
+# Source NFS mount options (read-only, no wsize needed)
+backrest_source_nfs_mount_opts: "ro,hard,rsize=1048576,_netdev"
+
 # Source VM mount definitions (mounted via NFS)
 # NFS exports must be configured on source VMs separately
 backrest_source_mounts: []

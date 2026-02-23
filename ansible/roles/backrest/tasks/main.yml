@@ -110,7 +110,7 @@
     src: "{{ item.src }}"
     path: "{{ item.path }}"
     fstype: nfs
-    opts: "ro,hard,rsize=1048576,wsize=1048576,_netdev"
+    opts: "{{ backrest_source_nfs_mount_opts }}"
     state: mounted
   loop: "{{ backrest_source_mounts }}"
   loop_control:
@@ -158,6 +158,10 @@
 
 # ------------------------------------------------------------------------------
 # Credentials from 1Password
+# ------------------------------------------------------------------------------
+# Note: backrest_restic_password is fetched here but not yet referenced in
+# templates. It will be used by config.json.j2 (follow-up PR) to configure
+# the restic repository password via Ansible rather than the web UI.
 # ------------------------------------------------------------------------------
 
 - name: Fetch Backrest restic repository password from 1Password
