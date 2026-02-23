@@ -199,10 +199,26 @@
   register: backrest_web_password_result
   tags: ['backrest', 'secrets']
 
+- name: Read existing config.json for bcrypt hash reuse
+  slurp:
+    src: "{{ backrest_config_dir }}/config.json"
+  register: existing_config_raw
+  failed_when: false
+  no_log: true
+  tags: ['backrest', 'secrets']
+
+- name: Extract existing bcrypt hash from config.json
+  set_fact:
+    _existing_bcrypt: "{{ (existing_config_raw.content | b64decode | from_json).auth.users[0].passwordBcrypt }}"
+  when: existing_config_raw.content is defined
+  failed_when: false
+  no_log: true
+  tags: ['backrest', 'secrets']
+
 - name: Set credential variables
   set_fact:
     backrest_restic_password: "{{ backrest_restic_password_result.field.value }}"
-    backrest_web_password_bcrypt: "{{ backrest_web_password_result.field.value | password_hash('bcrypt') }}"
+    backrest_web_password_bcrypt: "{{ _existing_bcrypt | default(backrest_web_password_result.field.value | password_hash('bcrypt')) }}"
   no_log: true
   tags: ['backrest', 'secrets']
 
