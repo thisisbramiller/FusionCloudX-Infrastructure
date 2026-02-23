@@ -1,0 +1,65 @@
+---
+# ==============================================================================
+# Backrest Role - Default Variables
+# ==============================================================================
+
+# Backrest version (Docker tag — pinned to stable release)
+backrest_version: "v1.12.0"
+
+# Container images
+backrest_image: "ghcr.io/garethgeorge/backrest"
+backrest_nginx_image: "nginx:mainline-alpine3.23"
+
+# HTTPS port (nginx SSL termination)
+backrest_https_port: 9928
+
+# Internal Backrest web UI port (not exposed to host)
+backrest_container_port: 9898
+
+# SSL certificate paths (deployed by certificates role)
+backrest_ssl_cert: "/etc/ssl/certs/server-chain.crt"
+backrest_ssl_key: "/etc/ssl/private/server.key"
+
+# Docker Compose project directory
+backrest_compose_dir: "/opt/backrest"
+
+# Backrest config and data directory
+backrest_data_dir: "/opt/backrest/data"
+backrest_config_dir: "/opt/backrest/config"
+backrest_cache_dir: "/opt/backrest/cache"
+
+# SSH key directory for pre-backup hooks
+backrest_ssh_dir: "/opt/backrest/ssh"
+
+# NFS configuration (UNAS Pro — backup destination)
+backrest_nfs_server: "192.168.40.137"
+backrest_nfs_export: "/volume/8cb7f9c4-9b09-41da-945c-598b704935af/.srv/.unifi-drive/backups/.data"
+backrest_nfs_mount_opts: "rw,hard,rsize=1048576,wsize=1048576,_netdev"
+backrest_backup_mount: "/mnt/backups"
+
+# Restic repository path (inside NFS mount)
+backrest_repo_path: "/mnt/backups/backrest-repo"
+
+# Source mount parent directory (NFS from source VMs)
+backrest_sources_dir: "/mnt/sources"
+
+# Source NFS mount options (read-only, no wsize needed)
+backrest_source_nfs_mount_opts: "ro,hard,rsize=1048576,_netdev"
+
+# Source VM mount definitions (mounted via NFS)
+# NFS exports must be configured on source VMs separately
+backrest_source_mounts: []
+# Example:
+#   - name: gitlab
+#     src: "gitlab.fusioncloudx.home:/var/opt/gitlab/backups"
+#     path: "/mnt/sources/gitlab"
+#   - name: mealie
+#     src: "mealie.fusioncloudx.home:/opt/mealie"
+#     path: "/mnt/sources/mealie"
+
+# 1Password item names
+backrest_ssh_key_item: "Backrest SSH Key"
+backrest_restic_password_item: "Backrest Restic Repository Password"
+
+# Application settings
+backrest_timezone: "{{ timezone }}"

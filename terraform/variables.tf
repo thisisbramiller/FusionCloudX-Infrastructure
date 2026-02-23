@@ -60,6 +60,13 @@ variable "vm_configs" {
       cpu_cores = 2
       started   = true
     }
+    "backrest" = {
+      vm_id     = 1108
+      name      = "backrest"
+      memory_mb = 2048
+      cpu_cores = 2
+      started   = true
+    }
   }
 }
 

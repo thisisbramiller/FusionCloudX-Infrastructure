@@ -1,0 +1,20 @@
+---
+# ==============================================================================
+# Backrest Host Variables
+# ==============================================================================
+# Centralized backup service using restic with pre-snapshot SSH hooks
+# ==============================================================================
+
+# Application
+backrest_domain: "backrest.fusioncloudx.home"
+backrest_url: "https://{{ ansible_host }}:{{ backrest_https_port }}"
+
+# Certificate deployment (common role)
+certificates_deploy_server: true
+
+# Firewall rules
+firewall_rules:
+  - port: "{{ backrest_https_port }}"
+    proto: tcp
+    rule: allow
+    comment: "Backrest HTTPS"
