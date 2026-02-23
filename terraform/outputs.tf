@@ -110,8 +110,9 @@ output "onepassword_items" {
       web_password = onepassword_item.duplicati_web_password.id
     }
     backrest = {
-      ssh_key        = onepassword_item.backrest_ssh_key.id
+      ssh_key         = onepassword_item.backrest_ssh_key.id
       restic_password = onepassword_item.backrest_restic_password.id
+      web_password    = onepassword_item.backrest_web_password.id
     }
     ssh = {
       ansible_key = onepassword_item.ansible_ssh_key.id
