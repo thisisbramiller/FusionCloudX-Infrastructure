@@ -372,6 +372,25 @@
   roles:
     - duplicati
 
+# ==============================================================================
+# Phase 8: Backup Client Configuration
+# ==============================================================================
+# Must run BEFORE Backrest deploy — source VMs need NFS exports configured
+# before Backrest can mount them.
+# ==============================================================================
+
+- name: Configure Backup Clients for Backrest
+  hosts: gitlab:mealie:tandoor:immich:postgresql
+  become: yes
+  gather_facts: yes
+  vars:
+    ansible_ssh_private_key_file: "/tmp/.ansible_ssh_key"
+  tags: ['backup-client', 'backups']
+
+  roles:
+    - role: backup-client
+      when: backup_client_nfs_exports is defined and backup_client_nfs_exports | length > 0
+
 - name: Deploy Backrest
   hosts: backrest
   become: yes
@@ -396,7 +415,7 @@
     - backrest
 
 # ==============================================================================
-# Phase 8: Monitoring (future)
+# Phase 9: Monitoring (future)
 # ==============================================================================
 
 # - name: Deploy Monitoring Stack
@@ -411,7 +430,7 @@
 #     - monitoring
 
 # ==============================================================================
-# Phase 9: Cleanup SSH Key
+# Phase 10: Cleanup SSH Key
 # ==============================================================================
 
 - name: Cleanup SSH Key
