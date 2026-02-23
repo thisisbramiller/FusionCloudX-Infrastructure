@@ -6,8 +6,8 @@
 # ==============================================================================
 
 # Backrest VM IP address (used in /etc/exports and UFW rules)
-# Source VMs use Cloudflare DNS (1.1.1.1) and cannot resolve .fusioncloudx.home
-backup_client_backrest_ip: "192.168.40.77"
+# Dynamic from Terraform inventory — always matches current Backrest VM IP
+backup_client_backrest_ip: "{{ hostvars['backrest']['ansible_host'] }}"
 
 # 1Password item containing the Backrest SSH public key
 backup_client_ssh_key_item: "Backrest SSH Key"
