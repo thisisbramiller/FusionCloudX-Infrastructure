@@ -88,6 +88,17 @@ postgresql_backup_databases:
   - tandoor
 
 # ==============================================================================
+# Backup Client Configuration
+# ==============================================================================
+# NFS cannot run in unprivileged LXC (kernel module dependency).
+# PostgreSQL backups use SSH-piped pg_dumpall from Backrest instead.
+# The SSH key is still deployed for Backrest pre-backup hooks.
+# ==============================================================================
+
+backup_client_ssh_user: "root"
+backup_client_nfs_exports: []
+
+# ==============================================================================
 # Additional Notes
 # ==============================================================================
 # - This is a SINGLE container hosting MULTIPLE databases

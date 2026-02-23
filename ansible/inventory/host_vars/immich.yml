@@ -18,3 +18,8 @@ firewall_rules:
     proto: tcp
     rule: allow
     comment: "Immich HTTPS"
+
+# Backup client configuration (for Backrest NFS exports)
+backup_client_nfs_exports:
+  - path: "/opt/immich"
+backup_client_dump_dir: "/opt/immich/db-dump"
