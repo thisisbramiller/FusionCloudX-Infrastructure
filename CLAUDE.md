@@ -43,10 +43,11 @@ FusionCloudX Infrastructure is an Infrastructure-as-Code repository for managing
 - 2GB RAM, 2 CPU cores, 32GB disk on vm-data (NFS)
 - Centralized restic-based backup with pre-snapshot SSH hooks via Docker Compose + nginx SSL
 - 2-container stack: backrest (web UI + restic engine) + nginx
+- Ansible-managed `config.json` with repos, plans, hooks, and web auth (web UI changes overwritten)
 - Backup destination: NFS to UNAS Pro `backups` share at `/mnt/backups/backrest-repo`
 - NFS source mounts at `/mnt/sources` for reading application data from other VMs
 - Dedicated ED25519 SSH key for pre-backup hooks stored in 1Password
-- Access: https://backrest.fusioncloudx.home:9928
+- Access: https://backrest.fusioncloudx.home:9928 (admin / password in 1Password)
 
 **PostgreSQL LXC** (ID 2001):
 - Debian 12 unprivileged container, 4GB RAM, 2 CPU cores, 64GB disk
@@ -65,7 +66,8 @@ Terraform (Provisioning)                    Ansible (Configuration)
 │   (local-zfs for Immich)                  ├── tandoor role (Docker, nginx, compose)
 └── Generate Ansible inventory              ├── immich role (Docker, NFS, compose)
                                             ├── duplicati role (Docker, NFS, SSHFS, compose)
-                                            ├── backrest role (Docker, NFS, SSH, compose)
+                                            ├── backrest role (Docker, NFS, SSH, config.json, compose)
+                                            ├── backup-client role (NFS server, exports, SSH key)
                                             └── Dynamic inventory via Terraform state
 ```
 
@@ -91,7 +93,7 @@ Files in `terraform/`:
 | `lxc-debian-template.tf` | Downloads Debian 12 LXC template |
 | `lxc-postgresql.tf` | PostgreSQL LXC container definition |
 | `ssh-keys.tf` | Ansible SSH key generation (`tls_private_key`) |
-| `onepassword.tf` | All 1Password items (SSH key, PostgreSQL, GitLab, Tandoor, Immich, Duplicati credentials) |
+| `onepassword.tf` | All 1Password items (SSH key, PostgreSQL, GitLab, Tandoor, Immich, Duplicati, Backrest credentials) |
 | `ansible-inventory.tf` | Dynamic inventory via Terraform Ansible provider |
 | `outputs.tf` | Infrastructure summary, URLs, 1Password item IDs |
 
@@ -119,8 +121,10 @@ Files in `ansible/`:
 | `inventory/host_vars/postgresql.yml` | Database definitions, firewall rules |
 | `inventory/host_vars/gitlab.yml` | GitLab domain, memory settings, HTTPS config |
 | `inventory/host_vars/immich.yml` | Immich domain, NFS config, feature flags |
+| `inventory/host_vars/mealie.yml` | Mealie backup client config |
+| `inventory/host_vars/tandoor.yml` | Tandoor backup client config |
 | `inventory/host_vars/duplicati.yml` | Duplicati domain, firewall rules |
-| `inventory/host_vars/backrest.yml` | Backrest domain, firewall rules |
+| `inventory/host_vars/backrest.yml` | Backrest domain, source mounts, backup plans |
 | `inventory/group_vars/vault.yml` | Encrypted fallback secrets (Ansible Vault) |
 
 **Roles**:
@@ -132,10 +136,11 @@ Files in `ansible/`:
 - `tandoor/`: Tandoor Recipes with Docker Compose + nginx SSL
 - `immich/`: Immich photo management — Docker, NFS mount, compose, nginx SSL, health checks
 - `duplicati/`: Duplicati backups — Docker, NFS destination, SSHFS prep, compose, nginx SSL
-- `backrest/`: Backrest restic backups — Docker, NFS destination/sources, SSH key, compose, nginx SSL
+- `backrest/`: Backrest restic backups — Docker, NFS destination/sources, SSH key, config.json, compose, nginx SSL
+- `backup-client/`: NFS server + exports + Backrest SSH key for source VMs
 
 **Playbooks**:
-- `site.yml`: Main orchestration (bootstrap, common, postgresql, gitlab, mealie, tandoor, immich, duplicati, backrest)
+- `site.yml`: Main orchestration (bootstrap, common, postgresql, gitlab, mealie, tandoor, immich, duplicati, backrest, backup-clients)
 - `bootstrap.yml`: LXC container prerequisite installation (python3, sudo via raw module)
 - `common.yml`: Certificate deployment
 - `postgresql.yml`: Database server configuration
@@ -143,6 +148,7 @@ Files in `ansible/`:
 - `immich.yml`: Immich photo management deployment
 - `duplicati.yml`: Duplicati backup service deployment
 - `backrest.yml`: Backrest backup service deployment
+- `backup-clients.yml`: NFS export + SSH key deployment on source VMs
 
 **Inventory Groups**:
 - `postgresql`: LXC containers (root SSH access)
@@ -172,6 +178,7 @@ ansible-playbook playbooks/postgresql.yml             # PostgreSQL only
 ansible-playbook playbooks/gitlab.yml                 # GitLab only
 ansible-playbook playbooks/duplicati.yml              # Duplicati only
 ansible-playbook playbooks/backrest.yml               # Backrest only
+ansible-playbook playbooks/backup-clients.yml         # Backup clients (NFS exports) only
 ansible-playbook playbooks/common.yml --limit gitlab  # Certificates for gitlab
 ansible all -m ping                                   # Test connectivity
 ansible-inventory --graph                             # View dynamic inventory
@@ -251,6 +258,7 @@ Backrest VM (ID 1108) ────────────┤         │
 | Duplicati Web UI Password | Password | 32-char alphanumeric web UI credential |
 | Backrest SSH Key | Secure Note | ED25519 key pair for pre-backup SSH hooks |
 | Backrest Restic Repository Password | Password | 64-char alphanumeric restic encryption password |
+| Backrest Web UI Password | Password | 32-char alphanumeric web UI credential |
 
 ## Certificate Management
 
