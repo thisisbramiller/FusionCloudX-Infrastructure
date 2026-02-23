@@ -68,6 +68,11 @@ output "duplicati_url" {
   value       = "https://${try(proxmox_virtual_environment_vm.qemu-vm["duplicati"].ipv4_addresses[1][0], "IP-not-available")}:9927"
 }
 
+output "backrest_url" {
+  description = "Backrest web interface URL"
+  value       = "https://${try(proxmox_virtual_environment_vm.qemu-vm["backrest"].ipv4_addresses[1][0], "IP-not-available")}:9928"
+}
+
 output "postgresql_connection" {
   description = "PostgreSQL connection details"
   value = {
@@ -103,6 +108,10 @@ output "onepassword_items" {
     }
     duplicati = {
       web_password = onepassword_item.duplicati_web_password.id
+    }
+    backrest = {
+      ssh_key        = onepassword_item.backrest_ssh_key.id
+      restic_password = onepassword_item.backrest_restic_password.id
     }
     ssh = {
       ansible_key = onepassword_item.ansible_ssh_key.id
