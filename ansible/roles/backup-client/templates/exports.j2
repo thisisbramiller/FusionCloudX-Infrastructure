@@ -1,0 +1,4 @@
+# Managed by Ansible - backup-client role
+{% for export in backup_client_nfs_exports %}
+{{ export.path }} {{ backup_client_backrest_ip }}({{ export.options | default('ro,sync,no_subtree_check,no_root_squash') }})
+{% endfor %}

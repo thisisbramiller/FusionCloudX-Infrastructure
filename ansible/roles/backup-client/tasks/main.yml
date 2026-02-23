@@ -1,0 +1,96 @@
+---
+# ==============================================================================
+# Backup Client Role - Main Tasks
+# ==============================================================================
+# Installs NFS server, exports directories for Backrest, and deploys the
+# Backrest SSH public key to authorized_keys for pre-backup hook access.
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# NFS Server Installation
+# ------------------------------------------------------------------------------
+
+- name: Install NFS server
+  apt:
+    name:
+      - nfs-kernel-server
+    state: present
+    update_cache: yes
+  tags: ['backup-client', 'nfs']
+
+# ------------------------------------------------------------------------------
+# Dump Directory (optional — for database dumps)
+# ------------------------------------------------------------------------------
+
+- name: Create dump directory
+  file:
+    path: "{{ backup_client_dump_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0750'
+  when: backup_client_dump_dir | length > 0
+  tags: ['backup-client', 'nfs']
+
+# ------------------------------------------------------------------------------
+# NFS Exports
+# ------------------------------------------------------------------------------
+
+- name: Template /etc/exports
+  template:
+    src: exports.j2
+    dest: /etc/exports
+    owner: root
+    group: root
+    mode: '0644'
+  notify: reload exports
+  tags: ['backup-client', 'nfs']
+
+- name: Ensure NFS server is started and enabled
+  systemd:
+    name: nfs-kernel-server
+    state: started
+    enabled: yes
+  tags: ['backup-client', 'nfs']
+
+# ------------------------------------------------------------------------------
+# Backrest SSH Key Deployment
+# ------------------------------------------------------------------------------
+
+- name: Fetch Backrest SSH public key from 1Password
+  onepassword.connect.field_info:
+    token: "{{ lookup('env', 'OP_CONNECT_TOKEN') }}"
+    item: "{{ backup_client_ssh_key_item }}"
+    field: "public_key"
+    section: "Public Key"
+    vault: "{{ lookup('env', 'TF_VAR_onepassword_vault_id') }}"
+  environment:
+    OP_CONNECT_HOST: "{{ lookup('env', 'OP_CONNECT_HOST') }}"
+  delegate_to: localhost
+  become: no
+  no_log: true
+  register: backup_client_ssh_key_result
+  tags: ['backup-client', 'ssh', 'secrets']
+
+- name: Deploy Backrest SSH public key to authorized_keys
+  ansible.posix.authorized_key:
+    user: "{{ backup_client_ssh_user }}"
+    key: "{{ backup_client_ssh_key_result.field.value }}"
+    comment: "backrest-pre-backup-hooks"
+    state: present
+  no_log: true
+  tags: ['backup-client', 'ssh']
+
+# ------------------------------------------------------------------------------
+# Firewall
+# ------------------------------------------------------------------------------
+
+- name: Allow NFS access from Backrest VM
+  community.general.ufw:
+    rule: allow
+    port: "2049"
+    proto: tcp
+    from_ip: "{{ backup_client_backrest_ip }}"
+    comment: "NFS access from Backrest"
+  when: backup_client_nfs_firewall
+  tags: ['backup-client', 'firewall']

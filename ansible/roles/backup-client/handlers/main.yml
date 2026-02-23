@@ -1,0 +1,14 @@
+---
+# ==============================================================================
+# Backup Client Role - Handlers
+# ==============================================================================
+
+- name: restart nfs
+  systemd:
+    name: nfs-kernel-server
+    state: restarted
+  become: yes
+
+- name: reload exports
+  command: exportfs -ra
+  become: yes
