@@ -1,0 +1,30 @@
+---
+services:
+  backrest:
+    image: {{ backrest_image }}:{{ backrest_version }}
+    container_name: backrest
+    restart: always
+    hostname: backrest
+    env_file:
+      - .env
+    volumes:
+      - {{ backrest_config_dir }}:/config
+      - {{ backrest_data_dir }}:/data
+      - {{ backrest_cache_dir }}:/cache
+      - {{ backrest_repo_path }}:/repos/backrest-repo
+      - {{ backrest_sources_dir }}:/sources:ro
+      - {{ backrest_ssh_dir }}:/ssh:ro
+      - /etc/localtime:/etc/localtime:ro
+
+  nginx:
+    image: {{ backrest_nginx_image }}
+    container_name: backrest-nginx
+    restart: always
+    ports:
+      - "{{ backrest_https_port }}:443"
+    depends_on:
+      - backrest
+    volumes:
+      - {{ backrest_ssl_cert }}:/etc/nginx/ssl/server.crt:ro
+      - {{ backrest_ssl_key }}:/etc/nginx/ssl/server.key:ro
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro

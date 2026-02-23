@@ -1,0 +1,293 @@
+---
+# ==============================================================================
+# Backrest Role - Main Tasks
+# ==============================================================================
+# Installs Docker, mounts NFS backup destination, deploys Backrest SSH key,
+# and deploys Backrest via Docker Compose with nginx SSL termination.
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# Docker Installation
+# ------------------------------------------------------------------------------
+
+- name: Install Docker prerequisites
+  apt:
+    name:
+      - ca-certificates
+      - curl
+      - gnupg
+    state: present
+    update_cache: yes
+  tags: ['backrest', 'docker']
+
+- name: Add Docker GPG key
+  ansible.builtin.get_url:
+    url: https://download.docker.com/linux/ubuntu/gpg
+    dest: /etc/apt/keyrings/docker.asc
+    mode: '0644'
+  tags: ['backrest', 'docker']
+
+- name: Add Docker repository
+  ansible.builtin.apt_repository:
+    repo: "deb [arch=amd64 signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable"
+    state: present
+    filename: docker
+  tags: ['backrest', 'docker']
+
+- name: Install Docker CE and Compose plugin
+  apt:
+    name:
+      - docker-ce
+      - docker-ce-cli
+      - containerd.io
+      - docker-compose-plugin
+    state: present
+    update_cache: yes
+  tags: ['backrest', 'docker']
+
+- name: Ensure Docker service is started and enabled
+  systemd:
+    name: docker
+    state: started
+    enabled: yes
+  tags: ['backrest', 'docker']
+
+# ------------------------------------------------------------------------------
+# NFS Client Installation
+# ------------------------------------------------------------------------------
+
+- name: Install NFS client
+  apt:
+    name:
+      - nfs-common
+    state: present
+  tags: ['backrest', 'nfs']
+
+# ------------------------------------------------------------------------------
+# NFS Backup Destination (UNAS Pro)
+# ------------------------------------------------------------------------------
+
+- name: Mount NFS backup destination from UNAS Pro
+  ansible.posix.mount:
+    src: "{{ backrest_nfs_server }}:{{ backrest_nfs_export }}"
+    path: "{{ backrest_backup_mount }}"
+    fstype: nfs
+    opts: "{{ backrest_nfs_mount_opts }}"
+    state: mounted
+  tags: ['backrest', 'nfs']
+
+- name: Create restic repository directory
+  file:
+    path: "{{ backrest_repo_path }}"
+    state: directory
+    mode: '0750'
+  tags: ['backrest', 'nfs']
+
+# ------------------------------------------------------------------------------
+# NFS Source Mounts (from source VMs)
+# ------------------------------------------------------------------------------
+
+- name: Create source mount parent directory
+  file:
+    path: "{{ backrest_sources_dir }}"
+    state: directory
+    mode: '0755'
+  tags: ['backrest', 'nfs']
+
+- name: Create source mount point directories
+  file:
+    path: "{{ item.path }}"
+    state: directory
+    mode: '0755'
+  loop: "{{ backrest_source_mounts }}"
+  loop_control:
+    label: "{{ item.name }}"
+  when: backrest_source_mounts | length > 0
+  tags: ['backrest', 'nfs']
+
+- name: Mount NFS source shares
+  ansible.posix.mount:
+    src: "{{ item.src }}"
+    path: "{{ item.path }}"
+    fstype: nfs
+    opts: "ro,hard,rsize=1048576,wsize=1048576,_netdev"
+    state: mounted
+  loop: "{{ backrest_source_mounts }}"
+  loop_control:
+    label: "{{ item.name }}"
+  when: backrest_source_mounts | length > 0
+  tags: ['backrest', 'nfs']
+
+# ------------------------------------------------------------------------------
+# SSH Key for Pre-Backup Hooks
+# ------------------------------------------------------------------------------
+
+- name: Create Backrest SSH directory
+  file:
+    path: "{{ backrest_ssh_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0700'
+  tags: ['backrest', 'ssh']
+
+- name: Fetch Backrest SSH private key from 1Password
+  onepassword.connect.field_info:
+    token: "{{ lookup('env', 'OP_CONNECT_TOKEN') }}"
+    item: "{{ backrest_ssh_key_item }}"
+    field: "private_key"
+    section: "Private Key"
+    vault: "{{ lookup('env', 'TF_VAR_onepassword_vault_id') }}"
+  environment:
+    OP_CONNECT_HOST: "{{ lookup('env', 'OP_CONNECT_HOST') }}"
+  delegate_to: localhost
+  become: no
+  no_log: true
+  register: backrest_ssh_key_result
+  tags: ['backrest', 'ssh', 'secrets']
+
+- name: Deploy Backrest SSH private key
+  copy:
+    content: "{{ backrest_ssh_key_result.field.value }}"
+    dest: "{{ backrest_ssh_dir }}/backrest_ed25519"
+    owner: root
+    group: root
+    mode: '0600'
+  no_log: true
+  tags: ['backrest', 'ssh']
+
+# ------------------------------------------------------------------------------
+# Credentials from 1Password
+# ------------------------------------------------------------------------------
+
+- name: Fetch Backrest restic repository password from 1Password
+  onepassword.connect.field_info:
+    token: "{{ lookup('env', 'OP_CONNECT_TOKEN') }}"
+    item: "{{ backrest_restic_password_item }}"
+    field: "password"
+    vault: "{{ lookup('env', 'TF_VAR_onepassword_vault_id') }}"
+  environment:
+    OP_CONNECT_HOST: "{{ lookup('env', 'OP_CONNECT_HOST') }}"
+  delegate_to: localhost
+  become: no
+  no_log: true
+  register: backrest_restic_password_result
+  tags: ['backrest', 'secrets']
+
+- name: Set credential variables
+  set_fact:
+    backrest_restic_password: "{{ backrest_restic_password_result.field.value }}"
+  no_log: true
+  tags: ['backrest', 'secrets']
+
+# ------------------------------------------------------------------------------
+# Deploy Backrest Stack
+# ------------------------------------------------------------------------------
+
+- name: Create Backrest compose directory
+  file:
+    path: "{{ backrest_compose_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0750'
+  tags: ['backrest', 'deploy']
+
+- name: Create Backrest data directory
+  file:
+    path: "{{ backrest_data_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0750'
+  tags: ['backrest', 'deploy']
+
+- name: Create Backrest config directory
+  file:
+    path: "{{ backrest_config_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0750'
+  tags: ['backrest', 'deploy']
+
+- name: Create Backrest cache directory
+  file:
+    path: "{{ backrest_cache_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0750'
+  tags: ['backrest', 'deploy']
+
+- name: Template Docker Compose file
+  template:
+    src: docker-compose.yml.j2
+    dest: "{{ backrest_compose_dir }}/docker-compose.yml"
+    owner: root
+    group: root
+    mode: '0640'
+  notify: restart backrest
+  tags: ['backrest', 'deploy']
+
+- name: Template environment file
+  template:
+    src: .env.j2
+    dest: "{{ backrest_compose_dir }}/.env"
+    owner: root
+    group: root
+    mode: '0600'
+  no_log: true
+  notify: restart backrest
+  tags: ['backrest', 'deploy']
+
+- name: Template nginx configuration
+  template:
+    src: nginx.conf.j2
+    dest: "{{ backrest_compose_dir }}/nginx.conf"
+    owner: root
+    group: root
+    mode: '0644'
+  notify: restart backrest
+  tags: ['backrest', 'deploy']
+
+- name: Restart containers if configuration changed
+  meta: flush_handlers
+
+- name: Start Backrest containers
+  community.docker.docker_compose_v2:
+    project_src: "{{ backrest_compose_dir }}"
+    state: present
+    pull: missing
+  tags: ['backrest', 'deploy']
+
+- name: Wait for Backrest to be ready
+  uri:
+    url: "https://localhost:{{ backrest_https_port }}"
+    validate_certs: no
+    status_code: [200, 302]
+  register: backrest_health
+  retries: 30
+  delay: 5
+  until: backrest_health is succeeded
+  tags: ['backrest', 'verify']
+
+- name: Display Backrest deployment status
+  debug:
+    msg:
+      - "========================================"
+      - "Backrest deployment complete!"
+      - "========================================"
+      - "URL: https://{{ ansible_host }}:{{ backrest_https_port }}"
+      - "Backup destination: {{ backrest_repo_path }} (NFS to UNAS Pro)"
+      - "Sources directory: {{ backrest_sources_dir }} (NFS mount points)"
+      - "SSH key: {{ backrest_ssh_dir }}/backrest_ed25519"
+      - "Config: {{ backrest_config_dir }}"
+      - "========================================"
+      - "Next steps:"
+      - "1. Access web UI and configure repositories"
+      - "2. Add backup plans via the Backrest UI"
+      - "3. Configure pre-backup SSH hooks for native dumps"
+      - "4. Set up NFS exports on source VMs (separate PR)"
+      - "========================================"
+  tags: ['backrest']

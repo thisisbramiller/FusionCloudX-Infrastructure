@@ -1,0 +1,11 @@
+---
+# ==============================================================================
+# Backrest Role - Handlers
+# ==============================================================================
+
+- name: restart backrest
+  community.docker.docker_compose_v2:
+    project_src: "{{ backrest_compose_dir }}"
+    state: present
+    recreate: auto
+  become: yes
