@@ -2,7 +2,8 @@
 # ==============================================================================
 # Backrest Host Variables
 # ==============================================================================
-# Centralized backup service using restic with pre-snapshot SSH hooks
+# Centralized backup service using restic with pre-snapshot SSH hooks.
+# Config is Ansible-managed via config.json.j2 — web UI changes are overwritten.
 # ==============================================================================
 
 # Application
@@ -18,3 +19,66 @@ firewall_rules:
     proto: tcp
     rule: allow
     comment: "Backrest HTTPS"
+
+# ==============================================================================
+# NFS Source Mounts (from source VMs)
+# ==============================================================================
+# Uses hostvars[]['ansible_host'] for dynamic IPs from Terraform inventory.
+# These are mounted read-only on the Backrest VM at /mnt/sources/<name>.
+# ==============================================================================
+
+backrest_source_mounts:
+  - name: gitlab
+    src: "{{ hostvars['gitlab']['ansible_host'] }}:/var/opt/gitlab/backups"
+    path: "/mnt/sources/gitlab"
+  - name: mealie
+    src: "{{ hostvars['mealie']['ansible_host'] }}:/opt/mealie"
+    path: "/mnt/sources/mealie"
+  - name: tandoor
+    src: "{{ hostvars['tandoor']['ansible_host'] }}:/opt/tandoor"
+    path: "/mnt/sources/tandoor"
+  - name: immich
+    src: "{{ hostvars['immich']['ansible_host'] }}:/opt/immich"
+    path: "/mnt/sources/immich"
+  # PostgreSQL: NFS cannot run in unprivileged LXC — uses SSH-piped dumps instead
+  # Dumps are written to /opt/backrest/pg-dumps on the Backrest VM host
+
+# ==============================================================================
+# Backup Plans
+# ==============================================================================
+# Each plan maps to a Backrest plan in config.json.j2.
+# Hooks use SSH from inside the container: /ssh/backrest_ed25519 (key),
+# /sources/<name> (mount points).
+# ==============================================================================
+
+backrest_plans:
+  - id: postgresql-dumps
+    paths:
+      - "/pg-dumps"
+    cron: "0 1 * * *"
+    hooks:
+      - command: "ssh -i /ssh/backrest_ed25519 -o StrictHostKeyChecking=no root@{{ hostvars['postgresql']['ansible_host'] }} 'pg_dumpall -U postgres' > /pg-dumps/pg_dumpall.sql"
+
+  - id: gitlab-backups
+    paths:
+      - "/sources/gitlab"
+    cron: "0 3 * * *"
+    hooks:
+      - command: "ssh -i /ssh/backrest_ed25519 -o StrictHostKeyChecking=no ansible@{{ hostvars['gitlab']['ansible_host'] }} 'sudo gitlab-backup create CRON=1'"
+
+  - id: immich-appdata
+    paths:
+      - "/sources/immich"
+    cron: "0 2 * * *"
+    hooks:
+      - command: "ssh -i /ssh/backrest_ed25519 -o StrictHostKeyChecking=no ansible@{{ hostvars['immich']['ansible_host'] }} 'sudo sh -c \"docker exec immich_postgres pg_dumpall -U postgres > /opt/immich/db-dump/pg_dumpall.sql\"'"
+
+  - id: mealie-appdata
+    paths:
+      - "/sources/mealie"
+    cron: "0 2 * * *"
+
+  - id: tandoor-appdata
+    paths:
+      - "/sources/tandoor"
+    cron: "0 2 * * *"
