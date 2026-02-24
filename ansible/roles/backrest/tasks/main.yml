@@ -215,10 +215,25 @@
   no_log: true
   tags: ['backrest', 'secrets']
 
+- name: Generate Go-compatible bcrypt hash for web password
+  command: >
+    {{ ansible_playbook_python }} -c
+    "import bcrypt, base64, sys;
+    h = bcrypt.hashpw(sys.argv[1].encode(), bcrypt.gensalt(rounds=10));
+    print(base64.b64encode(h).decode(), end='')"
+    "{{ backrest_web_password_result.field.value }}"
+  delegate_to: localhost
+  become: no
+  no_log: true
+  changed_when: false
+  register: _bcrypt_hash_result
+  when: _existing_bcrypt is not defined
+  tags: ['backrest', 'secrets']
+
 - name: Set credential variables
   set_fact:
     backrest_restic_password: "{{ backrest_restic_password_result.field.value }}"
-    backrest_web_password_bcrypt: "{{ _existing_bcrypt | default(backrest_web_password_result.field.value | password_hash('bcrypt')) }}"
+    backrest_web_password_bcrypt: "{{ _existing_bcrypt | default(_bcrypt_hash_result.stdout) }}"
   no_log: true
   tags: ['backrest', 'secrets']
 
