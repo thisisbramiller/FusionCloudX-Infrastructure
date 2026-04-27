@@ -1,4 +1,24 @@
 # Managed by Ansible - backup-client role
+#
+# NFS exports for Backrest backup access.
+#
+# Default options: ro,sync,no_subtree_check,no_root_squash
+#
+# `no_root_squash` is intentional and required: the Backrest container
+# runs as root and must read root-owned application data on each source
+# VM (e.g. /opt/mealie at mode 750 root:root, /var/opt/gitlab/backups at
+# mode 700 git:root). Without `no_root_squash`, root requests would be
+# mapped to nobody/nfsnobody and reads would fail.
+#
+# Compensating controls limit the blast radius:
+#   - Exports are read-only (`ro`)
+#   - Exports are restricted by IP to the Backrest VM only
+#   - Mounts use NFSv4 (`nfsvers=4`) per backrest_source_nfs_mount_opts
+#   - Network is a trusted homelab LAN (no untrusted clients reach 2049)
+#
+# This trades defense-in-depth for the read access Backrest needs to
+# capture application data. Documented here so future maintainers see
+# the explicit decision rather than assume it was an oversight.
 {% for export in backup_client_nfs_exports %}
 {{ export.path }} {{ backup_client_backrest_ip }}({{ export.options | default('ro,sync,no_subtree_check,no_root_squash') }})
 {% endfor %}
