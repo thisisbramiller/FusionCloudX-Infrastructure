@@ -76,9 +76,9 @@ backrest_plans:
   - id: mealie-appdata
     paths:
       - "/sources/mealie"
-    cron: "0 2 * * *"
+    cron: "15 2 * * *"
 
   - id: tandoor-appdata
     paths:
       - "/sources/tandoor"
-    cron: "0 2 * * *"
+    cron: "30 2 * * *"
