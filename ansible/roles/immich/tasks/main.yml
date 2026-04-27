@@ -126,9 +126,14 @@
   file:
     path: "{{ immich_db_data_location }}"
     state: directory
-    owner: root
-    group: root
-    mode: '0750'
+    # Postgres runs as uid 999 inside the immich-app/postgres image and
+    # needs to traverse this directory to read its own data files
+    # (global/pg_filenode.map etc.). Owning as root:root 0750 caused
+    # `PostgresError: could not open file ... Permission denied` on
+    # restart because uid 999 falls under "other" and gets no access.
+    owner: "999"
+    group: "999"
+    mode: '0700'
   tags: ['immich', 'deploy']
 
 - name: Template Docker Compose file
