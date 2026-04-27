@@ -57,21 +57,21 @@ backrest_plans:
       - "/pg-dumps"
     cron: "0 1 * * *"
     hooks:
-      - command: "ssh -i /ssh/backrest_ed25519 -o StrictHostKeyChecking=no root@{{ hostvars['postgresql']['ansible_host'] }} 'pg_dumpall -U postgres' > /pg-dumps/pg_dumpall.sql"
+      - command: "ssh -i /ssh/backrest_ed25519 -o StrictHostKeyChecking=accept-new root@{{ hostvars['postgresql']['ansible_host'] }} 'pg_dumpall -U postgres' > /pg-dumps/pg_dumpall.sql"
 
   - id: gitlab-backups
     paths:
       - "/sources/gitlab"
     cron: "0 3 * * *"
     hooks:
-      - command: "ssh -i /ssh/backrest_ed25519 -o StrictHostKeyChecking=no ansible@{{ hostvars['gitlab']['ansible_host'] }} 'sudo gitlab-backup create CRON=1'"
+      - command: "ssh -i /ssh/backrest_ed25519 -o StrictHostKeyChecking=accept-new ansible@{{ hostvars['gitlab']['ansible_host'] }} 'sudo gitlab-backup create CRON=1'"
 
   - id: immich-appdata
     paths:
       - "/sources/immich"
     cron: "0 2 * * *"
     hooks:
-      - command: "ssh -i /ssh/backrest_ed25519 -o StrictHostKeyChecking=no ansible@{{ hostvars['immich']['ansible_host'] }} 'sudo sh -c \"docker exec immich_postgres pg_dumpall -U postgres > /opt/immich/db-dump/pg_dumpall.sql\"'"
+      - command: "ssh -i /ssh/backrest_ed25519 -o StrictHostKeyChecking=accept-new ansible@{{ hostvars['immich']['ansible_host'] }} 'sudo sh -c \"docker exec immich_postgres pg_dumpall -U postgres > /opt/immich/db-dump/pg_dumpall.sql\"'"
 
   - id: mealie-appdata
     paths:
