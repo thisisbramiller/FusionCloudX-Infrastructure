@@ -44,7 +44,6 @@
 
   roles:
     - role: backup-client
-      when: backup_client_nfs_exports is defined and backup_client_nfs_exports | length > 0
 
 - name: Cleanup SSH Key
   hosts: localhost

@@ -4,6 +4,10 @@
 # ==============================================================================
 # Installs NFS server, exports directories for Backrest, and deploys the
 # Backrest SSH public key to authorized_keys for pre-backup hook access.
+#
+# NFS tasks self-gate on backup_client_nfs_exports being non-empty so that
+# hosts which cannot export NFS (e.g. unprivileged LXCs like postgresql)
+# still get the SSH key deployed for SSH-piped backup hooks.
 # ==============================================================================
 
 # ------------------------------------------------------------------------------
@@ -16,6 +20,7 @@
       - nfs-kernel-server
     state: present
     update_cache: yes
+  when: backup_client_nfs_exports | length > 0
   tags: ['backup-client', 'nfs']
 
 # ------------------------------------------------------------------------------
@@ -44,6 +49,7 @@
     group: root
     mode: '0644'
   notify: reload exports
+  when: backup_client_nfs_exports | length > 0
   tags: ['backup-client', 'nfs']
 
 - name: Ensure NFS server is started and enabled
@@ -51,6 +57,7 @@
     name: nfs-kernel-server
     state: started
     enabled: yes
+  when: backup_client_nfs_exports | length > 0
   tags: ['backup-client', 'nfs']
 
 # ------------------------------------------------------------------------------
@@ -92,5 +99,7 @@
     proto: tcp
     from_ip: "{{ backup_client_backrest_ip }}"
     comment: "NFS access from Backrest"
-  when: backup_client_nfs_firewall
+  when:
+    - backup_client_nfs_firewall
+    - backup_client_nfs_exports | length > 0
   tags: ['backup-client', 'firewall']
