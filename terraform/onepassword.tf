@@ -281,6 +281,19 @@ resource "onepassword_item" "backrest_ssh_key" {
   }
 }
 
+# Backrest web UI authentication password
+resource "onepassword_item" "backrest_web_password" {
+  vault    = var.onepassword_vault_id
+  category = "password"
+  title    = "Backrest Web UI Password"
+  tags     = ["terraform", "backrest", "homelab"]
+
+  password_recipe {
+    length  = 32
+    symbols = false
+  }
+}
+
 # Backrest restic repository encryption password
 resource "onepassword_item" "backrest_restic_password" {
   vault    = var.onepassword_vault_id

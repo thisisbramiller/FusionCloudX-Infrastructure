@@ -31,6 +31,9 @@ backrest_cache_dir: "/opt/backrest/cache"
 # SSH key directory for pre-backup hooks
 backrest_ssh_dir: "/opt/backrest/ssh"
 
+# Local directory for PostgreSQL dumps (SSH-piped, no NFS — LXC can't export)
+backrest_pg_dumps_dir: "/opt/backrest/pg-dumps"
+
 # NFS configuration (UNAS Pro — backup destination)
 backrest_nfs_server: "192.168.40.137"
 backrest_nfs_export: "/volume/8cb7f9c4-9b09-41da-945c-598b704935af/.srv/.unifi-drive/backups/.data"
@@ -44,7 +47,8 @@ backrest_repo_path: "/mnt/backups/backrest-repo"
 backrest_sources_dir: "/mnt/sources"
 
 # Source NFS mount options (read-only, no wsize needed)
-backrest_source_nfs_mount_opts: "ro,hard,rsize=1048576,_netdev"
+# Force NFSv4 so only port 2049/tcp is needed (no rpcbind/mountd/statd).
+backrest_source_nfs_mount_opts: "ro,hard,nfsvers=4,rsize=1048576,_netdev"
 
 # Source VM mount definitions (mounted via NFS)
 # NFS exports must be configured on source VMs separately
@@ -60,6 +64,23 @@ backrest_source_mounts: []
 # 1Password item names
 backrest_ssh_key_item: "Backrest SSH Key"
 backrest_restic_password_item: "Backrest Restic Repository Password"
+backrest_web_password_item: "Backrest Web UI Password"
+
+# Web UI authentication
+backrest_auth_user: "admin"
+
+# Backrest instance identifier
+backrest_instance: "backrest-fusioncloudx"
+
+# Backup plans (set in host_vars)
+backrest_plans: []
+
+# Default retention policy
+backrest_retention_daily: 7
+backrest_retention_weekly: 4
+backrest_retention_monthly: 12
+backrest_retention_yearly: 3
+backrest_retention_keep_last: 3
 
 # Application settings
 backrest_timezone: "{{ timezone }}"

@@ -1,0 +1,27 @@
+---
+# ==============================================================================
+# Backup Client Role - Default Variables
+# ==============================================================================
+# Configures source VMs as NFS-exporting backup clients for Backrest.
+# ==============================================================================
+
+# Backrest VM IP address (used in /etc/exports and UFW rules)
+# Dynamic from Terraform inventory — always matches current Backrest VM IP
+backup_client_backrest_ip: "{{ hostvars['backrest']['ansible_host'] }}"
+
+# 1Password item containing the Backrest SSH public key
+backup_client_ssh_key_item: "Backrest SSH Key"
+
+# User to deploy the SSH authorized_key for (ansible for VMs, root for LXC)
+backup_client_ssh_user: "ansible"
+
+# NFS exports to configure on this host
+# Each entry: { path: "/path/to/export" }
+# Options default to ro,sync,no_subtree_check,no_root_squash
+backup_client_nfs_exports: []
+
+# Optional dump directory to create (e.g., for database dumps)
+backup_client_dump_dir: ""
+
+# Whether to configure UFW rule for NFS access
+backup_client_nfs_firewall: true

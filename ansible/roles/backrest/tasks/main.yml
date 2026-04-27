@@ -87,6 +87,15 @@
 # NFS Source Mounts (from source VMs)
 # ------------------------------------------------------------------------------
 
+- name: Create PostgreSQL dumps directory (SSH-piped, no NFS)
+  file:
+    path: "{{ backrest_pg_dumps_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0750'
+  tags: ['backrest', 'nfs']
+
 - name: Create source mount parent directory
   file:
     path: "{{ backrest_sources_dir }}"
@@ -94,7 +103,7 @@
     mode: '0755'
   tags: ['backrest', 'nfs']
 
-- name: Create source mount point directories
+- name: Create source mount point directories (skip if already mounted)
   file:
     path: "{{ item.path }}"
     state: directory
@@ -102,7 +111,9 @@
   loop: "{{ backrest_source_mounts }}"
   loop_control:
     label: "{{ item.name }}"
-  when: backrest_source_mounts | length > 0
+  when:
+    - backrest_source_mounts | length > 0
+    - item.path not in ansible_mounts | map(attribute='mount') | list
   tags: ['backrest', 'nfs']
 
 - name: Mount NFS source shares
@@ -159,10 +170,6 @@
 # ------------------------------------------------------------------------------
 # Credentials from 1Password
 # ------------------------------------------------------------------------------
-# Note: backrest_restic_password is fetched here but not yet referenced in
-# templates. It will be used by config.json.j2 (follow-up PR) to configure
-# the restic repository password via Ansible rather than the web UI.
-# ------------------------------------------------------------------------------
 
 - name: Fetch Backrest restic repository password from 1Password
   onepassword.connect.field_info:
@@ -178,9 +185,55 @@
   register: backrest_restic_password_result
   tags: ['backrest', 'secrets']
 
+- name: Fetch Backrest web UI password from 1Password
+  onepassword.connect.field_info:
+    token: "{{ lookup('env', 'OP_CONNECT_TOKEN') }}"
+    item: "{{ backrest_web_password_item }}"
+    field: "password"
+    vault: "{{ lookup('env', 'TF_VAR_onepassword_vault_id') }}"
+  environment:
+    OP_CONNECT_HOST: "{{ lookup('env', 'OP_CONNECT_HOST') }}"
+  delegate_to: localhost
+  become: no
+  no_log: true
+  register: backrest_web_password_result
+  tags: ['backrest', 'secrets']
+
+- name: Read existing config.json for bcrypt hash reuse
+  slurp:
+    src: "{{ backrest_config_dir }}/config.json"
+  register: existing_config_raw
+  failed_when: false
+  no_log: true
+  tags: ['backrest', 'secrets']
+
+- name: Extract existing bcrypt hash from config.json
+  set_fact:
+    _existing_bcrypt: "{{ (existing_config_raw.content | b64decode | from_json).auth.users[0].passwordBcrypt }}"
+  when: existing_config_raw.content is defined
+  failed_when: false
+  no_log: true
+  tags: ['backrest', 'secrets']
+
+- name: Generate Go-compatible bcrypt hash for web password
+  command: >
+    {{ ansible_playbook_python }} -c
+    "import bcrypt, base64, sys;
+    h = bcrypt.hashpw(sys.argv[1].encode(), bcrypt.gensalt(rounds=10));
+    print(base64.b64encode(h).decode(), end='')"
+    "{{ backrest_web_password_result.field.value }}"
+  delegate_to: localhost
+  become: no
+  no_log: true
+  changed_when: false
+  register: _bcrypt_hash_result
+  when: _existing_bcrypt is not defined
+  tags: ['backrest', 'secrets']
+
 - name: Set credential variables
   set_fact:
     backrest_restic_password: "{{ backrest_restic_password_result.field.value }}"
+    backrest_web_password_bcrypt: "{{ _existing_bcrypt | default(_bcrypt_hash_result.stdout) }}"
   no_log: true
   tags: ['backrest', 'secrets']
 
@@ -255,6 +308,17 @@
   notify: restart backrest
   tags: ['backrest', 'deploy']
 
+- name: Template Backrest config.json
+  template:
+    src: config.json.j2
+    dest: "{{ backrest_config_dir }}/config.json"
+    owner: root
+    group: root
+    mode: '0600'
+  no_log: true
+  notify: restart backrest
+  tags: ['backrest', 'deploy']
+
 - name: Restart containers if configuration changed
   meta: flush_handlers
 
@@ -283,15 +347,12 @@
       - "Backrest deployment complete!"
       - "========================================"
       - "URL: https://{{ ansible_host }}:{{ backrest_https_port }}"
+      - "Auth: {{ backrest_auth_user }} (password in 1Password)"
+      - "Config: Ansible-managed ({{ backrest_config_dir }}/config.json)"
       - "Backup destination: {{ backrest_repo_path }} (NFS to UNAS Pro)"
       - "Sources directory: {{ backrest_sources_dir }} (NFS mount points)"
       - "SSH key: {{ backrest_ssh_dir }}/backrest_ed25519"
-      - "Config: {{ backrest_config_dir }}"
-      - "========================================"
-      - "Next steps:"
-      - "1. Access web UI and configure repositories"
-      - "2. Add backup plans via the Backrest UI"
-      - "3. Configure pre-backup SSH hooks for native dumps"
-      - "4. Set up NFS exports on source VMs (separate PR)"
+      - "Active plans: {{ backrest_plans | map(attribute='id') | list | join(', ') | default('none') }}"
+      - "Source mounts: {{ backrest_source_mounts | map(attribute='name') | list | join(', ') | default('none') }}"
       - "========================================"
   tags: ['backrest']
