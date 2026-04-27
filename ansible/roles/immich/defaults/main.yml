@@ -4,7 +4,7 @@
 # ==============================================================================
 
 # Immich version (pinned for deliberate upgrades)
-immich_version: "v2.5.6"
+immich_version: "v2.7.5"
 
 # HTTPS port (nginx SSL termination)
 immich_https_port: 9926
