@@ -135,7 +135,7 @@
   community.docker.docker_compose_v2:
     project_src: "{{ tandoor_compose_dir }}"
     state: present
-    pull: missing
+    pull: always
   tags: ['tandoor', 'deploy']
 
 - name: Wait for Tandoor to be ready
