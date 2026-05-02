@@ -3,8 +3,14 @@
 # Tandoor Role - Default Variables
 # ==============================================================================
 
-# Tandoor container image
-tandoor_image: "vabene1111/recipes:latest"
+# Tandoor version (pinned for deliberate upgrades; upstream uses "X.Y.Z" without v prefix)
+tandoor_version: "2.6.9"
+
+# Tandoor container image (tag applied separately in compose template)
+tandoor_image: "vabene1111/recipes"
+
+# nginx image used for SSL termination (pinned)
+tandoor_nginx_image: "nginx:1.29.5-alpine"
 
 # HTTPS port
 tandoor_https_port: 8080
