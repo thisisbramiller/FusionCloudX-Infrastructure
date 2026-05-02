@@ -25,6 +25,15 @@ tandoor_compose_dir: "/opt/tandoor"
 # Application settings
 tandoor_timezone: "America/Chicago"
 
+# Django ALLOWED_HOSTS — must include every Host header value Tandoor will see.
+# Required as of Tandoor 2.6.x (older versions defaulted to permissive). When
+# unset, Django returns HTTP 400 for every request. Override in host_vars to
+# add/remove entries.
+tandoor_allowed_hosts:
+  - "tandoor.fusioncloudx.home"
+  - "{{ ansible_host }}"
+  - "localhost"
+
 # PostgreSQL connection (resolved from inventory, override in host_vars if needed)
 tandoor_db_host: "{{ hostvars['postgresql']['ansible_host'] | default('192.168.40.90') }}"
 tandoor_db_port: 5432
