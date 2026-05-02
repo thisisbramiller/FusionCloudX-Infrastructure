@@ -3,8 +3,14 @@
 # Mealie Role - Default Variables
 # ==============================================================================
 
-# Mealie container image
-mealie_image: "ghcr.io/mealie-recipes/mealie:latest"
+# Mealie version (pinned for deliberate upgrades)
+mealie_version: "v3.16.0"
+
+# Mealie container image (tag applied separately in compose template)
+mealie_image: "ghcr.io/mealie-recipes/mealie"
+
+# nginx image used for SSL termination (pinned)
+mealie_nginx_image: "nginx:1.29.5-alpine"
 
 # HTTPS port
 mealie_https_port: 9925

@@ -1,7 +1,7 @@
 ---
 services:
   mealie:
-    image: {{ mealie_image }}
+    image: {{ mealie_image }}:{{ mealie_version }}
     container_name: mealie
     restart: always
     volumes:
@@ -10,7 +10,7 @@ services:
       - .env
 
   nginx:
-    image: nginx:mainline-alpine
+    image: {{ mealie_nginx_image }}
     container_name: mealie-nginx
     restart: always
     ports:
