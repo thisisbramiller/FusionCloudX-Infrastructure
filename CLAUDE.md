@@ -22,7 +22,7 @@ FusionCloudX Infrastructure is an Infrastructure-as-Code repository for managing
 **Tandoor VM** (ID 1105):
 - 4GB RAM, 2 CPU cores, 32GB disk on vm-data (NFS)
 - Tandoor Recipes with Docker Compose + nginx SSL termination
-- Access: https://tandoor.fusioncloudx.home:9924
+- Access: https://tandoor.fusioncloudx.home:8080
 
 **Immich VM** (ID 1106):
 - 8GB RAM, 4 CPU cores, 32GB disk on `local-zfs` (NVMe SSD)
