@@ -1,0 +1,11 @@
+---
+# ==============================================================================
+# Run It Up Host Variables
+# ==============================================================================
+# "Run It Up" savings-tracker PWA with Docker Compose + nginx SSL termination.
+# SQLite-backed (no external DB). App builds from its synced source repo.
+# ==============================================================================
+
+# Backup client configuration (for Backrest NFS exports)
+backup_client_nfs_exports:
+  - path: "/opt/runitup"

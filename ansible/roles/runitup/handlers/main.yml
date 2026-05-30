@@ -1,0 +1,12 @@
+---
+# ==============================================================================
+# Run It Up Role - Handlers
+# ==============================================================================
+
+- name: restart runitup
+  community.docker.docker_compose_v2:
+    project_src: "{{ runitup_compose_dir }}"
+    state: present
+    build: always
+    recreate: always
+  become: yes

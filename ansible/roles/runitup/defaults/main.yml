@@ -1,0 +1,42 @@
+---
+# ==============================================================================
+# Run It Up Role - Default Variables
+# ==============================================================================
+# Self-hosted "Run It Up" savings-tracker PWA. SQLite-backed (no external DB).
+# Built from the app repo via its own multi-stage Dockerfile, fronted by an
+# nginx sidecar that terminates TLS with the FusionCloudX wildcard cert.
+# ==============================================================================
+
+# nginx image used for SSL termination (pinned)
+runitup_nginx_image: "nginx:1.29.5-alpine"
+
+# HTTPS port (exposed on the host; next free after backrest 9928)
+runitup_https_port: 9929
+
+# Internal container port (not exposed to host) — the app listens here
+runitup_container_port: 3001
+
+# SSL certificate paths (deployed by certificates role — shared wildcard cert
+# *.fusioncloudx.home, identical to the mealie role)
+runitup_ssl_cert: "/etc/ssl/certs/server-chain.crt"
+runitup_ssl_key: "/etc/ssl/private/server.key"
+
+# Docker Compose project directory
+runitup_compose_dir: "/opt/runitup"
+
+# Application source repository
+# NOTE: The app repo MUST be pushed to this remote BEFORE the first deploy.
+#       The app's own Dockerfile performs the multi-stage build; this role only
+#       clones/updates the source and runs `docker compose up -d --build`.
+#       Override in host_vars/runitup.yml once the real remote exists.
+runitup_repo_url: "https://gitlab.fusioncloudx.home/branden/run-it-up-tracker.git"
+runitup_repo_version: "main"
+
+# Where the app source is checked out inside the compose dir
+runitup_app_dir: "{{ runitup_compose_dir }}/app"
+
+# Host directory holding the SQLite data (named-volume target, exported for backup)
+runitup_data_dir: "{{ runitup_compose_dir }}/data"
+
+# Application settings
+runitup_timezone: "America/Chicago"

@@ -26,7 +26,7 @@ variable "vm_configs" {
     "gitlab" = {
       vm_id      = 1103
       name       = "gitlab"
-      memory_mb  = 16384  # 16GB for installation (can reduce to 4GB after installation if needed)
+      memory_mb  = 16384 # 16GB for installation (can reduce to 4GB after installation if needed)
       cpu_cores  = 8     # 8 cores for faster installation (can reduce to 4 cores after installation if needed)
       started    = true
       full_clone = true
@@ -48,10 +48,10 @@ variable "vm_configs" {
     "immich" = {
       vm_id        = 1106
       name         = "immich"
-      memory_mb    = 8192  # 8GB for ML processing (face recognition, CLIP search)
+      memory_mb    = 8192 # 8GB for ML processing (face recognition, CLIP search)
       cpu_cores    = 4
       started      = true
-      datastore_id = "local-zfs"  # NVMe SSD for database + Docker I/O performance
+      datastore_id = "local-zfs" # NVMe SSD for database + Docker I/O performance
     }
     "duplicati" = {
       vm_id     = 1107
@@ -63,6 +63,13 @@ variable "vm_configs" {
     "backrest" = {
       vm_id     = 1108
       name      = "backrest"
+      memory_mb = 2048
+      cpu_cores = 2
+      started   = true
+    }
+    "runitup" = {
+      vm_id     = 1111
+      name      = "runitup"
       memory_mb = 2048
       cpu_cores = 2
       started   = true

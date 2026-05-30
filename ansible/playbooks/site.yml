@@ -303,6 +303,20 @@
   roles:
     - mealie
 
+- name: Deploy Run It Up
+  hosts: runitup
+  become: yes
+  gather_facts: yes
+  vars:
+    ansible_ssh_private_key_file: "/tmp/.ansible_ssh_key"
+  tags: ['runitup', 'applications']
+
+  # NOTE: No 1Password pre-check here — Run It Up is SQLite-backed and the
+  # runitup role fetches no secrets. Certificates are still deployed in Phase 4.
+
+  roles:
+    - runitup
+
 - name: Deploy Tandoor
   hosts: tandoor
   become: yes
@@ -380,7 +394,7 @@
 # ==============================================================================
 
 - name: Configure Backup Clients for Backrest
-  hosts: gitlab:mealie:tandoor:immich:postgresql
+  hosts: gitlab:mealie:tandoor:immich:runitup:postgresql
   become: yes
   gather_facts: yes
   vars:

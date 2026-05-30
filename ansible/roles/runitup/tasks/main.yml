@@ -1,0 +1,142 @@
+---
+# ==============================================================================
+# Run It Up Role - Main Tasks
+# ==============================================================================
+# Installs Docker, syncs the app source repo, and deploys "Run It Up" via
+# Docker Compose. The app builds from its own multi-stage Dockerfile; an nginx
+# sidecar terminates TLS. SQLite data lives on a named volume mapped to the
+# host so the backup-client can export it.
+# ==============================================================================
+
+- name: Install Docker prerequisites
+  apt:
+    name:
+      - ca-certificates
+      - curl
+      - gnupg
+      - git
+    state: present
+    update_cache: yes
+  tags: ['runitup', 'docker']
+
+- name: Add Docker GPG key
+  ansible.builtin.get_url:
+    url: https://download.docker.com/linux/ubuntu/gpg
+    dest: /etc/apt/keyrings/docker.asc
+    mode: '0644'
+  tags: ['runitup', 'docker']
+
+- name: Add Docker repository
+  ansible.builtin.apt_repository:
+    repo: "deb [arch=amd64 signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable"
+    state: present
+    filename: docker
+  tags: ['runitup', 'docker']
+
+- name: Install Docker CE and Compose plugin
+  apt:
+    name:
+      - docker-ce
+      - docker-ce-cli
+      - containerd.io
+      - docker-compose-plugin
+    state: present
+    update_cache: yes
+  tags: ['runitup', 'docker']
+
+- name: Ensure Docker service is started and enabled
+  systemd:
+    name: docker
+    state: started
+    enabled: yes
+  tags: ['runitup', 'docker']
+
+- name: Create Run It Up compose directory
+  file:
+    path: "{{ runitup_compose_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0750'
+  tags: ['runitup', 'deploy']
+
+- name: Create Run It Up data directory (SQLite volume target)
+  file:
+    path: "{{ runitup_data_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0750'
+  tags: ['runitup', 'deploy']
+
+- name: Clone/update Run It Up app source repository
+  ansible.builtin.git:
+    repo: "{{ runitup_repo_url }}"
+    dest: "{{ runitup_app_dir }}"
+    version: "{{ runitup_repo_version }}"
+    force: yes
+  notify: restart runitup
+  tags: ['runitup', 'deploy']
+
+- name: Template Docker Compose file
+  template:
+    src: docker-compose.yml.j2
+    dest: "{{ runitup_compose_dir }}/docker-compose.yml"
+    owner: root
+    group: root
+    mode: '0640'
+  notify: restart runitup
+  tags: ['runitup', 'deploy']
+
+- name: Template environment file
+  template:
+    src: .env.j2
+    dest: "{{ runitup_compose_dir }}/.env"
+    owner: root
+    group: root
+    mode: '0600'
+  notify: restart runitup
+  tags: ['runitup', 'deploy']
+
+- name: Template nginx configuration
+  template:
+    src: nginx.conf.j2
+    dest: "{{ runitup_compose_dir }}/nginx.conf"
+    owner: root
+    group: root
+    mode: '0644'
+  notify: restart runitup
+  tags: ['runitup', 'deploy']
+
+- name: Restart containers if configuration changed
+  meta: flush_handlers
+
+- name: Build and start Run It Up containers
+  community.docker.docker_compose_v2:
+    project_src: "{{ runitup_compose_dir }}"
+    state: present
+    build: always
+  tags: ['runitup', 'deploy']
+
+- name: Wait for Run It Up to be ready
+  uri:
+    url: "https://localhost:{{ runitup_https_port }}/api/health"
+    validate_certs: no
+    status_code: [200, 204]
+  register: runitup_health
+  retries: 30
+  delay: 5
+  until: runitup_health is succeeded
+  tags: ['runitup', 'verify']
+
+- name: Display Run It Up deployment status
+  debug:
+    msg:
+      - "========================================"
+      - "Run It Up deployment complete!"
+      - "========================================"
+      - "URL: https://{{ ansible_host }}:{{ runitup_https_port }}"
+      - "Source: {{ runitup_repo_url }} ({{ runitup_repo_version }})"
+      - "Data (SQLite): {{ runitup_data_dir }}"
+      - "========================================"
+  tags: ['runitup']
