@@ -41,10 +41,12 @@ jobs:
           # -- not permissions -- was the dominant cause of the green-but-empty reviews.
           # (anthropics/claude-code-action #1087.)
           prompt: '/code-review:code-review --comment ${{ github.repository }}/pull/${{ github.event.pull_request.number }}'
-          # Also publish a tracking/result comment -- guards against the empty-result
-          # (orphaned-TodoWrite) path seen in #1087.
-          track_progress: true
-          # Allow the plugin's posting tools so the SDK sandbox doesn't deny gh / inline comments.
-          claude_args: |
-            --allowed-tools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Bash(gh pr list:*),Bash(gh issue view:*),Bash(gh search:*),Bash(gh issue list:*)"
-          # See https://github.com/anthropics/claude-code-action/blob/main/docs/usage.md
+          # Consolidate review feedback into one PR comment -- the canonical input for
+          # pull_request-triggered reviews (docs/usage.md). NOTE: do NOT add a custom
+          # --allowed-tools here; it replaces the allowlist and would strip the plugin's
+          # own Read/Grep/review tools.
+          use_sticky_comment: true
+          # IMPORTANT: claude-code-action only runs once this workflow matches the copy on
+          # the DEFAULT BRANCH (App-token validation). Changes take effect after merge to
+          # main, NOT on the PR that introduces them -- the PR's own review check will fail
+          # validation, which is expected. See docs/usage.md.
