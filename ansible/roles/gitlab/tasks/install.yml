@@ -49,17 +49,16 @@
     mode: '0600'
   when: not ansible_check_mode
 
-- name: Install GitLab package
-  apt:
-    name: "{{ gitlab_edition }}{{ '=' + gitlab_version if gitlab_version else '' }}"
-    state: present
-    update_cache: yes
-  environment:
-    DEBIAN_FRONTEND: noninteractive
-    EXTERNAL_URL: "{{ gitlab_external_url }}"
-  register: gitlab_install_result
-  notify: reconfigure gitlab
-
+# Fetch the root password from 1Password BEFORE installing GitLab, so it can be
+# injected into GitLab's first `gitlab-ctl reconfigure` (triggered by the package
+# post-install when EXTERNAL_URL is set). GitLab only honours a chosen root
+# password via the GITLAB_ROOT_PASSWORD env var on the INITIAL reconfigure, when
+# the root user is first created.
+#
+# NOTE: writing /etc/gitlab/initial_root_password does NOT set the password — that
+# file is written *by* GitLab as informational output, not read by it. The prior
+# file-copy approach was therefore a silent no-op: GitLab kept its own auto-generated
+# password while the file (and operator) believed it was the 1Password value.
 - name: Retrieve GitLab root password from 1Password
   onepassword.connect.field_info:
     item: "GitLab Root User"
@@ -71,13 +70,17 @@
   no_log: true
   tags: ['secrets']
 
-- name: Set GitLab initial root password
-  copy:
-    content: "{{ gitlab_password_result.field.value }}"
-    dest: /etc/gitlab/initial_root_password
-    owner: root
-    group: root
-    mode: '0600'
-  when: gitlab_password_result.field.value is defined
-  no_log: true
+- name: Install GitLab package (sets root password from 1Password on first reconfigure)
+  apt:
+    name: "{{ gitlab_edition }}{{ '=' + gitlab_version if gitlab_version else '' }}"
+    state: present
+    update_cache: yes
+  environment:
+    DEBIAN_FRONTEND: noninteractive
+    EXTERNAL_URL: "{{ gitlab_external_url }}"
+    # GITLAB_ROOT_PASSWORD is consumed by the post-install `gitlab-ctl reconfigure`
+    # to seed the root user's password on first init (fresh installs only).
+    GITLAB_ROOT_PASSWORD: "{{ gitlab_password_result.field.value }}"
+  register: gitlab_install_result
+  no_log: true # task env carries the root password secret
   notify: reconfigure gitlab
