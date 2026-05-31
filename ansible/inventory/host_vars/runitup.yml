@@ -9,3 +9,11 @@
 # Backup client configuration (for Backrest NFS exports)
 backup_client_nfs_exports:
   - path: "/opt/runitup"
+
+# App source repo (private GitHub). Token-free here for DR clarity; the PAT is
+# supplied at deploy time via -e runitup_repo_url=... (a credential, not committed).
+runitup_repo_url: "https://github.com/thisisbramiller/run-it-up-tracker.git"
+
+# Force SSH to present only the loaded ansible key (not local agent keys), else a
+# controller with many agent keys hits "Too many authentication failures".
+ansible_ssh_common_args: "-o IdentitiesOnly=yes -o PreferredAuthentications=publickey"

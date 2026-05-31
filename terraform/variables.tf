@@ -70,8 +70,8 @@ variable "vm_configs" {
     "runitup" = {
       vm_id     = 1111
       name      = "runitup"
-      memory_mb = 2048
-      cpu_cores = 2
+      memory_mb = 4096 # 4GB headroom for the on-VM multi-stage Docker build (npm ci + vite build)
+      cpu_cores = 4    # 4 cores — faster builds; host is 16-thread with plenty of headroom
       started   = true
     }
   }
