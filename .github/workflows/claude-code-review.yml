@@ -42,10 +42,17 @@ jobs:
           # (anthropics/claude-code-action #1087.)
           prompt: '/code-review:code-review --comment ${{ github.repository }}/pull/${{ github.event.pull_request.number }}'
           # Consolidate review feedback into one PR comment -- the canonical input for
-          # pull_request-triggered reviews (docs/usage.md). NOTE: do NOT add a custom
-          # --allowed-tools here; it replaces the allowlist and would strip the plugin's
-          # own Read/Grep/review tools.
+          # pull_request-triggered reviews (docs/usage.md).
           use_sticky_comment: true
+          # The action's default gate allows the plugin's review/analysis tools (it reads
+          # via subagents) but DENIES its two WRITE tools (gh pr comment + the inline-comment
+          # MCP tool), so posting is silently denied (permission_denials_count > 0,
+          # "No buffered inline comments"). Mirror the plugin command's OWN declared
+          # allowed-tools so it can post. Additive, not a replace: the plugin uses
+          # Task/subagents (not in its declared list) without issue, proving declared
+          # tools supplement the base set rather than replace it.
+          claude_args: |
+            --allowed-tools "Bash(gh issue view:*),Bash(gh search:*),Bash(gh issue list:*),Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Bash(gh pr list:*),mcp__github_inline_comment__create_inline_comment"
           # IMPORTANT: claude-code-action only runs once this workflow matches the copy on
           # the DEFAULT BRANCH (App-token validation). Changes take effect after merge to
           # main, NOT on the PR that introduces them -- the PR's own review check will fail
