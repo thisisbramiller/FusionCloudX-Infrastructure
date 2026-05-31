@@ -18,6 +18,10 @@ terraform {
       source  = "hashicorp/tls"
       version = "~> 4.0"
     }
+    unifi = {
+      source  = "ubiquiti-community/unifi"
+      version = "0.41.25" # exact pin — rides an undocumented v2 API; revalidate after UniFi OS bumps
+    }
   }
 }
 
@@ -54,5 +58,20 @@ provider "onepassword" {
   # For 1Password Connect (more advanced):
   #   export OP_CONNECT_HOST="http://localhost:8080"
   #   export OP_CONNECT_TOKEN="your-connect-token"
+}
+
+# ==============================================================================
+# UniFi Provider Configuration (ubiquiti-community/unifi)
+# ==============================================================================
+# Manages UniFi static DNS records on the UDM Pro (UniFi OS 5.1.12 / Network
+# 10.3.58). The api_key is supplied via the UNIFI_API_KEY environment variable
+# (sourced from Keychain/.zprofile, same posture as the proxmox SSH agent and
+# the 1Password token) and is never committed.
+# ==============================================================================
+
+provider "unifi" {
+  api_url        = "https://192.168.40.1" # UDM Pro; NO trailing /api
+  allow_insecure = true                   # UDM ships a self-signed cert
+  # api_key  -> UNIFI_API_KEY env var
 }
 

@@ -37,3 +37,6 @@ Thumbs.db
 
 # macOS files
 .DS_Store
+
+# Playwright MCP browser-automation artifacts (snapshots + console logs — ephemeral scratch)
+.playwright-mcp/
