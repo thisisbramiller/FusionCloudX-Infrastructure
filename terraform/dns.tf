@@ -2,28 +2,32 @@
 # UniFi static DNS records for the FusionCloudX VM fleet (DNS-only).
 # Provider: ubiquiti-community/unifi (see provider.tf). Validated on UDM Pro
 # UniFi OS 5.1.12 / Network 10.3.58. record_type MUST be set ("A") — the UDM
-# returns HTTP 500 if it is omitted (upstream issue #137).
+# returns HTTP 500 if omitted (upstream issue #137).
 #
-# Phase 1 (runitup-first POC): ONLY runitup — the one fleet VM with no existing
-# per-client Device DNS record, so the static create has no overlap.
+# Migration (done before this applies): each VM's per-client Device DNS
+# (local_dns_record) was cleared — keeping its fixed_ip reservation — so the
+# static record has no overlap. Physical/non-Terraform devices (nzxt, nas,
+# printer, pi, echo, zero, opconnect) intentionally STAY on Device DNS.
 #
-# Phase 2 (fleet rollout, follow-up): uncomment the rest AFTER clearing each
-# client's local_dns_record (keep fixed_ip). Once the VM resources live in this
-# module, switch `value` to proxmox_virtual_environment_vm.qemu-vm[<k>].ipv4_addresses[1][0]
-# so the record follows the VM on rebuild.
+# NOTE: ui.fusioncloudx.home is the UniFi console's own record (192.168.254.1)
+# — it is NOT a VM and is deliberately NOT managed here. Do not add it.
+#
+# Values are explicit (decoupled from the proxmox provider so a DNS apply needs
+# no proxmox refresh). The fixed_ip reservations keep these stable. Future
+# enhancement: source value from proxmox_virtual_environment_vm[*].ipv4_addresses
+# once the full fleet (incl. runitup) lives in one module + MACs are pinned.
 # ==============================================================================
 
 locals {
   fcx_dns_records = {
-    runitup = "192.168.40.25"
-    # --- Phase 2: pending per-client Device-DNS migration (clear local_dns_record, keep fixed_ip) ---
-    # gitlab     = "192.168.40.220"
-    # mealie     = "192.168.40.167"
-    # tandoor    = "192.168.40.128"
-    # immich     = "192.168.40.85"
-    # duplicati  = "192.168.40.180"
-    # backrest   = "192.168.40.204"
-    # postgresql = "192.168.40.251"
+    runitup    = "192.168.40.25"
+    gitlab     = "192.168.40.220"
+    mealie     = "192.168.40.167"
+    tandoor    = "192.168.40.128"
+    immich     = "192.168.40.85"
+    duplicati  = "192.168.40.180"
+    backrest   = "192.168.40.204"
+    postgresql = "192.168.40.251"
   }
 }
 
