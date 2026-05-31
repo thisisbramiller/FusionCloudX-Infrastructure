@@ -5,6 +5,15 @@
 # Ansible references these by item *title* (not resource name).
 # ==============================================================================
 
+locals {
+  # Provenance stamp applied to every Terraform-managed 1Password item so anyone
+  # browsing the vault can see what created it and that hand-edits are overwritten.
+  op_managed_by = <<-EOT
+    Managed by Terraform — thisisbramiller/FusionCloudX-Infrastructure (terraform/onepassword.tf).
+    Do not edit by hand; manual changes are overwritten on `terraform apply`.
+  EOT
+}
+
 # ------------------------------------------------------------------------------
 # SSH Key
 # ------------------------------------------------------------------------------
@@ -70,10 +79,11 @@ resource "onepassword_item" "ansible_ssh_key" {
 
 # PostgreSQL Admin (postgres) password
 resource "onepassword_item" "postgresql_admin" {
-  vault    = var.onepassword_vault_id
-  category = "database"
-  title    = "PostgreSQL Admin (postgres)"
-  tags     = ["terraform", "postgresql", "homelab", "admin"]
+  vault      = var.onepassword_vault_id
+  category   = "database"
+  title      = "PostgreSQL Admin (postgres)"
+  note_value = local.op_managed_by
+  tags       = ["terraform", "postgresql", "homelab", "admin"]
 
   type     = "postgresql"
   hostname = "${var.postgresql_lxc_config.hostname}.fusioncloudx.home"
@@ -89,10 +99,11 @@ resource "onepassword_item" "postgresql_admin" {
 
 # Wazuh database user password
 resource "onepassword_item" "wazuh_db_user" {
-  vault    = var.onepassword_vault_id
-  category = "database"
-  title    = "PostgreSQL - Wazuh Database User"
-  tags     = ["terraform", "postgresql", "wazuh", "homelab"]
+  vault      = var.onepassword_vault_id
+  category   = "database"
+  title      = "PostgreSQL - Wazuh Database User"
+  note_value = local.op_managed_by
+  tags       = ["terraform", "postgresql", "wazuh", "homelab"]
 
   type     = "postgresql"
   hostname = "${var.postgresql_lxc_config.hostname}.fusioncloudx.home"
@@ -108,10 +119,11 @@ resource "onepassword_item" "wazuh_db_user" {
 
 # Mealie database user password
 resource "onepassword_item" "mealie_db_user" {
-  vault    = var.onepassword_vault_id
-  category = "database"
-  title    = "PostgreSQL - Mealie Database User"
-  tags     = ["terraform", "postgresql", "mealie", "homelab"]
+  vault      = var.onepassword_vault_id
+  category   = "database"
+  title      = "PostgreSQL - Mealie Database User"
+  note_value = local.op_managed_by
+  tags       = ["terraform", "postgresql", "mealie", "homelab"]
 
   type     = "postgresql"
   hostname = "${var.postgresql_lxc_config.hostname}.fusioncloudx.home"
@@ -127,10 +139,11 @@ resource "onepassword_item" "mealie_db_user" {
 
 # Tandoor database user password
 resource "onepassword_item" "tandoor_db_user" {
-  vault    = var.onepassword_vault_id
-  category = "database"
-  title    = "PostgreSQL - Tandoor Database User"
-  tags     = ["terraform", "postgresql", "tandoor", "homelab"]
+  vault      = var.onepassword_vault_id
+  category   = "database"
+  title      = "PostgreSQL - Tandoor Database User"
+  note_value = local.op_managed_by
+  tags       = ["terraform", "postgresql", "tandoor", "homelab"]
 
   type     = "postgresql"
   hostname = "${var.postgresql_lxc_config.hostname}.fusioncloudx.home"
@@ -150,10 +163,11 @@ resource "onepassword_item" "tandoor_db_user" {
 
 # GitLab root user password
 resource "onepassword_item" "gitlab_root_password" {
-  vault    = var.onepassword_vault_id
-  category = "login"
-  title    = "GitLab Root User"
-  tags     = ["terraform", "gitlab", "homelab"]
+  vault      = var.onepassword_vault_id
+  category   = "login"
+  title      = "GitLab Root User"
+  note_value = local.op_managed_by
+  tags       = ["terraform", "gitlab", "homelab"]
 
   username = "root"
   password_recipe {
@@ -164,10 +178,11 @@ resource "onepassword_item" "gitlab_root_password" {
 
 # GitLab runner registration token (for future CI/CD use)
 resource "onepassword_item" "gitlab_runner_token" {
-  vault    = var.onepassword_vault_id
-  category = "password"
-  title    = "GitLab Runner Registration Token"
-  tags     = ["terraform", "gitlab", "homelab"]
+  vault      = var.onepassword_vault_id
+  category   = "password"
+  title      = "GitLab Runner Registration Token"
+  note_value = local.op_managed_by
+  tags       = ["terraform", "gitlab", "homelab"]
 
   password_recipe {
     length  = 32
@@ -180,10 +195,11 @@ resource "onepassword_item" "gitlab_runner_token" {
 # ------------------------------------------------------------------------------
 
 resource "onepassword_item" "tandoor_secret_key" {
-  vault    = var.onepassword_vault_id
-  category = "password"
-  title    = "Tandoor Secret Key"
-  tags     = ["terraform", "tandoor", "homelab"]
+  vault      = var.onepassword_vault_id
+  category   = "password"
+  title      = "Tandoor Secret Key"
+  note_value = local.op_managed_by
+  tags       = ["terraform", "tandoor", "homelab"]
 
   password_recipe {
     length  = 50
@@ -196,10 +212,11 @@ resource "onepassword_item" "tandoor_secret_key" {
 # ------------------------------------------------------------------------------
 
 resource "onepassword_item" "immich_db_password" {
-  vault    = var.onepassword_vault_id
-  category = "password"
-  title    = "Immich Database Password"
-  tags     = ["terraform", "immich", "homelab"]
+  vault      = var.onepassword_vault_id
+  category   = "password"
+  title      = "Immich Database Password"
+  note_value = local.op_managed_by
+  tags       = ["terraform", "immich", "homelab"]
 
   password_recipe {
     length  = 32
@@ -212,10 +229,11 @@ resource "onepassword_item" "immich_db_password" {
 # ------------------------------------------------------------------------------
 
 resource "onepassword_item" "duplicati_web_password" {
-  vault    = var.onepassword_vault_id
-  category = "password"
-  title    = "Duplicati Web UI Password"
-  tags     = ["terraform", "duplicati", "homelab"]
+  vault      = var.onepassword_vault_id
+  category   = "password"
+  title      = "Duplicati Web UI Password"
+  note_value = local.op_managed_by
+  tags       = ["terraform", "duplicati", "homelab"]
 
   password_recipe {
     length  = 32
@@ -283,10 +301,11 @@ resource "onepassword_item" "backrest_ssh_key" {
 
 # Backrest web UI authentication password
 resource "onepassword_item" "backrest_web_password" {
-  vault    = var.onepassword_vault_id
-  category = "password"
-  title    = "Backrest Web UI Password"
-  tags     = ["terraform", "backrest", "homelab"]
+  vault      = var.onepassword_vault_id
+  category   = "password"
+  title      = "Backrest Web UI Password"
+  note_value = local.op_managed_by
+  tags       = ["terraform", "backrest", "homelab"]
 
   password_recipe {
     length  = 32
@@ -296,10 +315,11 @@ resource "onepassword_item" "backrest_web_password" {
 
 # Backrest restic repository encryption password
 resource "onepassword_item" "backrest_restic_password" {
-  vault    = var.onepassword_vault_id
-  category = "password"
-  title    = "Backrest Restic Repository Password"
-  tags     = ["terraform", "backrest", "restic", "homelab"]
+  vault      = var.onepassword_vault_id
+  category   = "password"
+  title      = "Backrest Restic Repository Password"
+  note_value = local.op_managed_by
+  tags       = ["terraform", "backrest", "restic", "homelab"]
 
   password_recipe {
     length  = 64
