@@ -49,4 +49,5 @@ jobs:
           # IMPORTANT: claude-code-action only runs once this workflow matches the copy on
           # the DEFAULT BRANCH (App-token validation). Changes take effect after merge to
           # main, NOT on the PR that introduces them -- the PR's own review check will fail
-          # validation, which is expected. See docs/usage.md.
+          # validation, which is expected.
+          # See https://github.com/anthropics/claude-code-action/blob/main/docs/usage.md
