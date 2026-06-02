@@ -14,6 +14,9 @@
 # then append a forced-command authorized_keys line over keyboard-interactive
 # SSH (expect; macOS has no sshpass and the UNAS uses PAM keyboard-interactive).
 # Idempotent: only appends if the exact public key is not already present.
+#
+# NOTE: a firmware update may also rotate the UNAS SSH host key. If this script
+# then aborts with a host-key mismatch, run:  ssh-keygen -R 192.168.40.137  first.
 # =============================================================================
 set -euo pipefail
 
@@ -44,10 +47,10 @@ else
 fi
 REMOTE_EOF
 B64="$(printf '%s' "$REMOTE" | base64 | tr -d '\n')"
-RCMD="echo $B64 | base64 -d | bash"
+RCMD="echo \"$B64\" | base64 -d | bash"
 
 UNAS_PW="$PW" UNAS_RCMD="$RCMD" expect <<'EXP'
-log_user 1
+log_user 1 ;# stays 1: logs only remote OUTPUT (>>>ADDED/>>>ALREADY_PRESENT); the send'd password is never echoed
 set timeout 45
 set pw $env(UNAS_PW)
 set rcmd $env(UNAS_RCMD)
