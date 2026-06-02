@@ -14,11 +14,22 @@
     fail_msg: "nfs_mount requires nfs_mount_label, nfs_mount_src (host:export), nfs_mount_path, nfs_mount_opts"
   tags: ['nfs']
 
+- name: "nfs_mount: check if already mounted ({{ nfs_mount_label }})"
+  ansible.builtin.command: "mountpoint -q {{ nfs_mount_path }}"
+  register: _nfs_already_mounted
+  changed_when: false
+  failed_when: false
+  tags: ['nfs']
+
+# Only manage the dir when it is NOT already a mountpoint. Once the NFS share
+# is mounted, the path is the all-squashed export root and chmod'ing it fails
+# with EPERM, which would break idempotent re-runs.
 - name: "nfs_mount: ensure mount point exists ({{ nfs_mount_label }})"
   ansible.builtin.file:
     path: "{{ nfs_mount_path }}"
     state: directory
     mode: '0755'
+  when: _nfs_already_mounted.rc != 0
   tags: ['nfs']
 
 - name: "nfs_mount: mount with mountd-reconcile ({{ nfs_mount_label }})"
