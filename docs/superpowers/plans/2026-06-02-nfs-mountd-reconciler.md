@@ -328,18 +328,20 @@ nfs_mount_settle_delay: 8
           UNAS reconcile key rejected (rc={{ _nfs_unas_bounce.rc }}). A UniFi OS
           firmware update wipes /root/.ssh/authorized_keys on the UNAS overlay.
           Re-install it: scripts/bootstrap-unas-reconcile-key.sh
-      when:
-        - _nfs_server_host == nfs_mount_unas_host
-        - _nfs_unas_bounce.rc != 0
-        - _nfs_unas_bounce.stderr is search('Permission denied|publickey')
+      when: >-
+        _nfs_server_host == nfs_mount_unas_host
+        and _nfs_unas_bounce is defined
+        and _nfs_unas_bounce.rc != 0
+        and _nfs_unas_bounce.stderr is search('Permission denied|publickey')
 
     - name: "nfs_mount: FAIL — UNAS unreachable for reconcile"
       ansible.builtin.fail:
         msg: "Could not reach the UNAS at {{ nfs_mount_unas_host }} to bounce nfs-mountd: {{ _nfs_unas_bounce.stderr }}"
-      when:
-        - _nfs_server_host == nfs_mount_unas_host
-        - _nfs_unas_bounce.rc != 0
-        - not (_nfs_unas_bounce.stderr is search('Permission denied|publickey'))
+      when: >-
+        _nfs_server_host == nfs_mount_unas_host
+        and _nfs_unas_bounce is defined
+        and _nfs_unas_bounce.rc != 0
+        and not (_nfs_unas_bounce.stderr is search('Permission denied|publickey'))
 
     # ---- Managed-VM path: we already hold root via the ansible key ----
     - name: "nfs_mount: bounce nfs-mountd on managed server {{ _nfs_server_host }}"
