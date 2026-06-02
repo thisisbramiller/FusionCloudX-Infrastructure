@@ -14,7 +14,7 @@ When a Proxmox VM is rebuilt clean-room (`terraform -replace`), it gets a new MA
 
 ## Architecture (one paragraph)
 
-A shared Ansible role wraps every UNAS NFS mount in a `block`/`rescue`: attempt the mount; on denial, SSH to the UNAS with a dedicated key whose `authorized_keys` entry is locked to exactly `systemctl restart nfs-mountd.service` (OpenSSH `restrict` + forced `command=`), wait for the resolver to settle, and retry the mount. The scoped private key is the **only** UNAS credential the unattended runner holds — it can do nothing but bounce mountd. The root password is used **once**, by a separate operator-run bootstrap playbook, to install that `authorized_keys` line; it is re-run only after a UniFi OS firmware update (which wipes the overlay).
+A shared Ansible role wraps every UNAS NFS mount in a `block`/`rescue`: attempt the mount; on denial, SSH to the UNAS with a dedicated key whose `authorized_keys` entry is locked to exactly `systemctl restart nfs-mountd.service` (OpenSSH `restrict` + forced `command=`), wait for the resolver to settle, and retry the mount. The scoped private key is the **only** UNAS credential the unattended runner holds — it can do nothing but bounce mountd. The root password is used **once**, by a separate operator-run bootstrap script, to install that `authorized_keys` line; it is re-run only after a UniFi OS firmware update (which wipes the overlay).
 
 ---
 
@@ -43,7 +43,7 @@ Ground truth from read-only SSH recon of the UNAS (2026-06-02):
 - `AllowGroups root unifi-drive-ssh` — root is allowed; the scoped key goes in **root's** `authorized_keys`.
 - `/root/.ssh` exists and is **empty** (no `authorized_keys` today) — bootstrap installs it.
 - Restart target confirmed: `nfs-mountd.service`, `FragmentPath=/lib/systemd/system/nfs-mountd.service`, `ExecStart=/usr/sbin/rpc.mountd`, **no ExecReload** (must restart, not reload).
-- Overlay root FS → `authorized_keys` survives **reboot** (rw layer persists) but is expected to be **wiped on firmware update** (overlay regeneration). The design is robust to this: a wiped key fails loudly with a "run the bootstrap playbook" message; no silent root fallback.
+- Overlay root FS → `authorized_keys` survives **reboot** (rw layer persists) but is expected to be **wiped on firmware update** (overlay regeneration). The design is robust to this: a wiped key fails loudly with a "run the bootstrap script" message; no silent root fallback.
 
 ---
 
@@ -64,11 +64,13 @@ Shared role that wraps a single UNAS NFS mount with reconcile-on-failure. Invoke
   - Load the scoped key from 1Password Connect to the temp file **once** (`run_once`, `delegate_to: localhost`, `no_log`), reusing the `onepassword.connect.field_info` pattern from `ssh-key-loader`.
   - `block:` attempt `ansible.posix.mount` with the caller's `src`/`path`/`opts`, `state: mounted`.
   - `rescue:` (a) `delegate_to: localhost` run `ssh -i {{ key }} -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new root@{{ unas_host }} true` → forced command bounces mountd; (b) `wait_for`/`pause` `settle_delay`; (c) retry the mount with `retries`/`until`. On final failure, fail with the original mount error **plus** a hint to check DNS/PTR.
-  - Distinguish **key-auth failure** (key wiped post-firmware-update) → fail with: *"UNAS reconcile key rejected — run `playbooks/unas-bootstrap-nfs-reconcile-key.yml` (firmware update wipes it)."*
+  - Distinguish **key-auth failure** (key wiped post-firmware-update) → fail with: *"UNAS reconcile key rejected — run `scripts/bootstrap-unas-reconcile-key.sh` (firmware update wipes it)."*
 - `tasks/cleanup.yml` — remove the temp key file (called at playbook end, like `ssh-key-loader` cleanup).
 
-### New: `ansible/playbooks/unas-bootstrap-nfs-reconcile-key.yml`
-Operator-run, **not** part of `site.yml`. Installs/refreshes the forced-command `authorized_keys` line on the UNAS using the **root password** (1Password item "Claude UNAS Pro SSH", keyboard-interactive, Touch-ID). Idempotent (`ansible.posix.authorized_key` or `lineinfile` with the exact `restrict,command=` entry). Run once initially, and after every UniFi OS firmware update. Documents the dependency in its header.
+### New: `scripts/bootstrap-unas-reconcile-key.sh`
+Operator-run shell script (`expect` + keyboard-interactive SSH + 1Password desktop/Touch-ID), **not** part of `site.yml`. Installs/refreshes the forced-command `authorized_keys` line on the UNAS using the **root password** (1Password item "Claude UNAS Pro SSH"). Idempotent + clean rotation: no-op if the exact line is present, else strip any prior `nfs-mountd` reconcile line and write the current one (other root keys untouched). Run once initially, and after every UniFi OS firmware update. Documents the dependency in its header.
+
+**Tooling decision — shell script, not Ansible (researched 2026-06-02):** a native Ansible playbook is *feasible* (the `paramiko` connection does keyboard-interactive auth without `sshpass`) but buys nothing here. The UNAS is an out-of-band locked appliance (not in inventory; the default `ssh` plugin hard-refuses keyboard-interactive), there is no fleet/convergence to gain, `authorized_keys` is *designed to be wiped* on firmware upgrade, and the bootstrap runs precisely when pubkey is unavailable (a procedural password repair — `expect`'s native idiom). `ansible.posix.authorized_key`'s one real edge (clean key rotation) is captured by the script's strip-then-write; secrets stay simpler (`op read` → `expect`, no Vault wiring). Operator-gated regardless — the root password never enters the unattended pipeline (the A+ isolation).
 
 The `authorized_keys` entry installed:
 ```
@@ -81,17 +83,17 @@ restrict,command="systemctl restart nfs-mountd.service" ssh-ed25519 AAAA...<reco
 - `ansible/roles/backrest/tasks/main.yml` — the destination mount (~71) and the **looped** source mounts (~120). The looped case calls the shared role per item (or the role accepts a list); plan to keep it DRY.
 
 ### 1Password
-- New item **"UNAS NFS Reconciler Key"** — the ed25519 **private** key (Connect-readable by the controller). Public key is pasted into the bootstrap playbook / a vars file.
-- Existing **"Claude UNAS Pro SSH"** (root password) — used **only** by the bootstrap playbook, never by `site.yml`.
+- New item **"UNAS NFS Reconciler Key"** — the ed25519 **private** key (Connect-readable by the controller). Public key is pasted into the bootstrap script / a vars file.
+- Existing **"Claude UNAS Pro SSH"** (root password) — used **only** by the bootstrap script, never by `site.yml`.
 
 ### Docs / runbook
-- A short runbook note (and a one-line update to the memory file `project_unas_nfs_mountd_resolver_fix`): *after a UniFi OS firmware update, run the bootstrap playbook to reinstall the reconcile key.*
+- A short runbook note (and a one-line update to the memory file `project_unas_nfs_mountd_resolver_fix`): *after a UniFi OS firmware update, run the bootstrap script to reinstall the reconcile key.*
 
 ---
 
 ## Data flow
 
-1. **(one-time / post-firmware-update)** Operator runs `unas-bootstrap-nfs-reconcile-key.yml` → root password → installs the forced-command `authorized_keys` on the UNAS.
+1. **(one-time / post-firmware-update)** Operator runs `bootstrap-unas-reconcile-key.sh` → root password → installs the forced-command `authorized_keys` on the UNAS.
 2. `terraform apply` rebuilds a VM → new IP; `dns.tf` updates the A record + reservation.
 3. `ansible-playbook site.yml` runs the VM's role → `include_role: nfs_mount`.
 4. Mount attempt:
@@ -106,13 +108,13 @@ restrict,command="systemctl restart nfs-mountd.service" ssh-ed25519 AAAA...<reco
 | Mount succeeds | No bounce. Idempotent. |
 | Mount denied, bounce fixes it | Recover silently within retries; report `changed`. |
 | Mount denied, bounce succeeds, still denied after N retries | Fail loudly — PTR genuinely unresolved (DNS problem, not mountd). Surface the mount error + a DNS hint. |
-| Scoped key rejected (wiped by firmware update) | Fail loudly with the explicit "run the bootstrap playbook" message. **No silent password fallback** (preserves isolation). |
+| Scoped key rejected (wiped by firmware update) | Fail loudly with the explicit "run the bootstrap script" message. **No silent password fallback** (preserves isolation). |
 | UNAS unreachable | Fail loudly with the SSH error. |
 
 ## Security
 
 - **Forced command + `restrict`** → the unattended runner's key can do *nothing* but restart mountd. Leaked key = at-worst a ~1s mountd blip, never data access.
-- **No root password in the unattended path.** It is reachable only by the operator-run bootstrap playbook. A compromised `site.yml` runner cannot escalate to root on the UNAS.
+- **No root password in the unattended path.** It is reachable only by the operator-run bootstrap script. A compromised `site.yml` runner cannot escalate to root on the UNAS.
 - Private key loaded from **1Password Connect** to a `0600` temp file, `no_log`, removed by cleanup — consistent with the fleet secret pattern. Never plaintext in config.
 - Host-key verification for the UNAS (`accept-new` on first contact, pinned thereafter).
 
@@ -123,8 +125,8 @@ Real-system verification (this is infra glue, not unit-testable logic — the "t
 1. **Red → green (the proven reproduction, now hands-off):** `terraform -replace` duplicati VM (+ its DNS) → `terraform apply` → `ansible-playbook site.yml --limit duplicati,localhost`. Expect: mount initially **denied** → rescue bounces mountd → retry **mounts** → play exits **0**. Capture the task output showing the rescue path fired and the mount recovered.
 2. **Idempotency:** re-run `site.yml --limit duplicati,localhost` → mount already mounted → `changed: false` on the mount, rescue **not** triggered.
 3. **Forced-command scoping (security proof):** `ssh -i <scoped_key> root@unas "cat /etc/shadow"` → the requested command is **ignored**; only the mountd restart runs (exit reflects the restart). Proves the key cannot run arbitrary commands.
-4. **No-fallback proof:** temporarily point the role at a bad/absent key → run must **fail** with the "run the bootstrap playbook" message (proves no silent root fallback).
-5. **Bootstrap idempotency:** run `unas-bootstrap-nfs-reconcile-key.yml` twice → second run `changed: false`.
+4. **No-fallback proof:** temporarily point the role at a bad/absent key → run must **fail** with the "run the bootstrap script" message (proves no silent root fallback).
+5. **Bootstrap idempotency:** run `bootstrap-unas-reconcile-key.sh` twice → second run `changed: false`.
 
 ## Scope
 
