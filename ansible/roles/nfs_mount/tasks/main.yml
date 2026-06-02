@@ -47,54 +47,53 @@
       ansible.builtin.set_fact:
         _nfs_server_host: "{{ nfs_mount_src.split(':')[0] }}"
 
-    # ---- UNAS path: bounce mountd via the scoped forced-command key ----
-    - name: "nfs_mount: load UNAS reconcile key from 1Password Connect"
-      onepassword.connect.field_info:
-        token: "{{ lookup('env', 'OP_CONNECT_TOKEN') }}"
-        item: "{{ nfs_mount_reconcile_key_item }}"
-        field: "{{ nfs_mount_reconcile_key_field }}"
-        section: "{{ nfs_mount_reconcile_key_section }}"
-        vault: "{{ lookup('env', 'TF_VAR_onepassword_vault_id') }}"
-      environment:
-        OP_CONNECT_HOST: "{{ lookup('env', 'OP_CONNECT_HOST') }}"
+    # ---- UNAS path: bounce mountd via the scoped forced-command key.
+    #      block/always guarantees the temp private key is removed even if a
+    #      task in the block fails. NOTE: Ansible `always:` runs on task
+    #      failures and normal completion, but NOT reliably on a hard
+    #      SIGINT/SIGTERM or controller crash. The residual is bounded: the key
+    #      is forced-command scoped (can only restart nfs-mountd, never read
+    #      data) and lives 0600 on the controller's /tmp. (PR #40 review.)
+    - name: "nfs_mount: reconcile via UNAS scoped key ({{ nfs_mount_label }})"
+      when: _nfs_server_host == nfs_mount_unas_host
       delegate_to: localhost
       become: false
-      no_log: true
-      register: _nfs_reconcile_key
-      when: _nfs_server_host == nfs_mount_unas_host
+      block:
+        - name: "nfs_mount: load UNAS reconcile key from 1Password Connect"
+          onepassword.connect.field_info:
+            token: "{{ lookup('env', 'OP_CONNECT_TOKEN') }}"
+            item: "{{ nfs_mount_reconcile_key_item }}"
+            field: "{{ nfs_mount_reconcile_key_field }}"
+            section: "{{ nfs_mount_reconcile_key_section }}"
+            vault: "{{ lookup('env', 'TF_VAR_onepassword_vault_id') }}"
+          environment:
+            OP_CONNECT_HOST: "{{ lookup('env', 'OP_CONNECT_HOST') }}"
+          no_log: true
+          register: _nfs_reconcile_key
 
-    - name: "nfs_mount: write UNAS reconcile key to secure temp file"
-      ansible.builtin.copy:
-        content: "{{ _nfs_reconcile_key.field.value }}\n"
-        dest: "{{ nfs_mount_reconcile_key_temp_path }}"
-        mode: '0600'
-      delegate_to: localhost
-      become: false
-      no_log: true
-      when: _nfs_server_host == nfs_mount_unas_host
+        - name: "nfs_mount: write UNAS reconcile key to secure temp file"
+          ansible.builtin.copy:
+            content: "{{ _nfs_reconcile_key.field.value }}\n"
+            dest: "{{ nfs_mount_reconcile_key_temp_path }}"
+            mode: '0600'
+          no_log: true
 
-    - name: "nfs_mount: bounce nfs-mountd on the UNAS (scoped forced-command key)"
-      ansible.builtin.command:
-        cmd: >-
-          ssh -i {{ nfs_mount_reconcile_key_temp_path }} -o IdentitiesOnly=yes
-          -o StrictHostKeyChecking=accept-new
-          -o UserKnownHostsFile={{ nfs_mount_reconcile_known_hosts }}
-          -o BatchMode=yes -o ConnectTimeout=15
-          root@{{ nfs_mount_unas_host }} reconcile
-      delegate_to: localhost
-      become: false
-      changed_when: _nfs_unas_bounce.rc == 0
-      failed_when: false
-      register: _nfs_unas_bounce
-      when: _nfs_server_host == nfs_mount_unas_host
-
-    - name: "nfs_mount: remove UNAS reconcile key temp file"
-      ansible.builtin.file:
-        path: "{{ nfs_mount_reconcile_key_temp_path }}"
-        state: absent
-      delegate_to: localhost
-      become: false
-      when: _nfs_server_host == nfs_mount_unas_host
+        - name: "nfs_mount: bounce nfs-mountd on the UNAS (scoped forced-command key)"
+          ansible.builtin.command:
+            cmd: >-
+              ssh -i {{ nfs_mount_reconcile_key_temp_path }} -o IdentitiesOnly=yes
+              -o StrictHostKeyChecking=accept-new
+              -o UserKnownHostsFile={{ nfs_mount_reconcile_known_hosts }}
+              -o BatchMode=yes -o ConnectTimeout=15
+              root@{{ nfs_mount_unas_host }} reconcile
+          changed_when: _nfs_unas_bounce.rc == 0
+          failed_when: false
+          register: _nfs_unas_bounce
+      always:
+        - name: "nfs_mount: remove UNAS reconcile key temp file"
+          ansible.builtin.file:
+            path: "{{ nfs_mount_reconcile_key_temp_path }}"
+            state: absent
 
     - name: "nfs_mount: FAIL — UNAS reconcile key rejected (wiped by firmware update)"
       ansible.builtin.fail:
