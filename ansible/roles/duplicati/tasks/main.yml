@@ -77,13 +77,14 @@
 # NFS Backup Destination (UNAS Pro)
 # ------------------------------------------------------------------------------
 
-- name: Mount NFS backup destination from UNAS Pro
-  ansible.posix.mount:
-    src: "{{ duplicati_nfs_server }}:{{ duplicati_nfs_export }}"
-    path: "{{ duplicati_backup_mount }}"
-    fstype: nfs
-    opts: "{{ duplicati_nfs_mount_opts }}"
-    state: mounted
+- name: Mount NFS backup destination from UNAS Pro (with mountd reconcile)
+  ansible.builtin.include_role:
+    name: nfs_mount
+  vars:
+    nfs_mount_label: "duplicati-backups"
+    nfs_mount_src: "{{ duplicati_nfs_server }}:{{ duplicati_nfs_export }}"
+    nfs_mount_path: "{{ duplicati_backup_mount }}"
+    nfs_mount_opts: "{{ duplicati_nfs_mount_opts }}"
   tags: ['duplicati', 'nfs']
 
 # ------------------------------------------------------------------------------

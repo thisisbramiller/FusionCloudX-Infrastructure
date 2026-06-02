@@ -67,13 +67,14 @@
 # NFS Backup Destination (UNAS Pro)
 # ------------------------------------------------------------------------------
 
-- name: Mount NFS backup destination from UNAS Pro
-  ansible.posix.mount:
-    src: "{{ backrest_nfs_server }}:{{ backrest_nfs_export }}"
-    path: "{{ backrest_backup_mount }}"
-    fstype: nfs
-    opts: "{{ backrest_nfs_mount_opts }}"
-    state: mounted
+- name: Mount NFS backup destination from UNAS Pro (with mountd reconcile)
+  ansible.builtin.include_role:
+    name: nfs_mount
+  vars:
+    nfs_mount_label: "backrest-backups"
+    nfs_mount_src: "{{ backrest_nfs_server }}:{{ backrest_nfs_export }}"
+    nfs_mount_path: "{{ backrest_backup_mount }}"
+    nfs_mount_opts: "{{ backrest_nfs_mount_opts }}"
   tags: ['backrest', 'nfs']
 
 - name: Create restic repository directory
@@ -116,13 +117,14 @@
     - item.path not in ansible_mounts | map(attribute='mount') | list
   tags: ['backrest', 'nfs']
 
-- name: Mount NFS source shares
-  ansible.posix.mount:
-    src: "{{ item.src }}"
-    path: "{{ item.path }}"
-    fstype: nfs
-    opts: "{{ backrest_source_nfs_mount_opts }}"
-    state: mounted
+- name: Mount NFS source shares (with mountd reconcile)
+  ansible.builtin.include_role:
+    name: nfs_mount
+  vars:
+    nfs_mount_label: "{{ item.name }}"
+    nfs_mount_src: "{{ item.src }}"
+    nfs_mount_path: "{{ item.path }}"
+    nfs_mount_opts: "{{ backrest_source_nfs_mount_opts }}"
   loop: "{{ backrest_source_mounts }}"
   loop_control:
     label: "{{ item.name }}"
