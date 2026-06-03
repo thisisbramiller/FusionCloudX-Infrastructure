@@ -38,6 +38,13 @@
 locals {
   # The 6 QEMU VMs: gitlab, mealie, tandoor, immich, duplicati, backrest
   fcx_vms = toset(keys(var.vm_configs))
+
+  # Resolve each host's live DHCP IP ONCE so its reservation and its DNS record
+  # always pin the SAME address (PR #41 review: makes the shared source explicit
+  # + DRYs the repeated expression). VMs: guest-agent ipv4_addresses[1][0];
+  # LXC: container interfaces API ipv4["eth0"].
+  vm_ip  = { for k in local.fcx_vms : k => proxmox_virtual_environment_vm.qemu-vm[k].ipv4_addresses[1][0] }
+  lxc_ip = proxmox_virtual_environment_container.postgresql.ipv4["eth0"]
 }
 
 # ------------------------------------------------------------------------------
@@ -56,8 +63,10 @@ resource "unifi_client" "vm" {
   # lower-case and allow_existing adoption matches case-sensitively (the
   # provider returns "not found" otherwise). Normalize so the existing
   # controller client is adopted instead of erroring.
+  # Index [1] = the first real NIC ([0] is the bpg placeholder 00:00:.../127).
+  # Assumes a SINGLE-NIC guest; a multi-NIC VM would need a per-host override.
   mac      = lower(proxmox_virtual_environment_vm.qemu-vm[each.key].mac_addresses[1])
-  fixed_ip = proxmox_virtual_environment_vm.qemu-vm[each.key].ipv4_addresses[1][0]
+  fixed_ip = local.vm_ip[each.key]
   name     = each.key
 
   # Adopt the controller-auto-created client (observe-then-pin); no import.
@@ -66,7 +75,7 @@ resource "unifi_client" "vm" {
 
 resource "unifi_client" "lxc" {
   mac      = lower(proxmox_virtual_environment_container.postgresql.network_interface[0].mac_address)
-  fixed_ip = proxmox_virtual_environment_container.postgresql.ipv4["eth0"]
+  fixed_ip = local.lxc_ip
   name     = "postgresql"
 
   # Adopt the controller-auto-created client (observe-then-pin); no import.
@@ -81,14 +90,14 @@ resource "unifi_dns_record" "vm" {
   for_each = local.fcx_vms
 
   name        = "${each.key}.fusioncloudx.home"
-  value       = proxmox_virtual_environment_vm.qemu-vm[each.key].ipv4_addresses[1][0]
+  value       = local.vm_ip[each.key]
   record_type = "A"
   enabled     = true
 }
 
 resource "unifi_dns_record" "lxc" {
   name        = "postgresql.fusioncloudx.home"
-  value       = proxmox_virtual_environment_container.postgresql.ipv4["eth0"]
+  value       = local.lxc_ip
   record_type = "A"
   enabled     = true
 }
