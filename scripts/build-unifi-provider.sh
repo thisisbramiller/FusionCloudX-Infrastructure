@@ -35,7 +35,11 @@ go mod verify
 
 echo ">> build -> ${DEST}/terraform-provider-unifi_v${VERSION}"
 mkdir -p "$DEST"
-go build -o "${DEST}/terraform-provider-unifi_v${VERSION}" .
+# -trimpath + -buildid= make the binary REPRODUCIBLE (same source + toolchain ->
+# identical bytes), so a rebuild at the pinned SHA satisfies the committed h1:
+# lockfile checksum. Without these, the embedded mktemp build path + build-id
+# differ every run and break the lock.
+go build -trimpath -ldflags=-buildid= -o "${DEST}/terraform-provider-unifi_v${VERSION}" .
 
 cat <<EOF
 
