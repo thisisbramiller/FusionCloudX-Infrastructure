@@ -395,7 +395,12 @@
         lookup('env', 'OP_CONNECT_TOKEN') == ''
 
   roles:
+    # Self-skips when the backup stack is disabled in terraform
+    # (enable_backup_stack=false → backrest not built → absent from inventory).
+    # The role's backup_client_backrest_ip default dereferences
+    # hostvars['backrest'], so gating the whole role avoids that lookup.
     - role: backup-client
+      when: "'backrest' in groups['all']"
 
 - name: Deploy Backrest
   hosts: backrest

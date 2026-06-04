@@ -26,7 +26,7 @@ variable "vm_configs" {
     "gitlab" = {
       vm_id      = 1103
       name       = "gitlab"
-      memory_mb  = 16384  # 16GB for installation (can reduce to 4GB after installation if needed)
+      memory_mb  = 16384 # 16GB for installation (can reduce to 4GB after installation if needed)
       cpu_cores  = 8     # 8 cores for faster installation (can reduce to 4 cores after installation if needed)
       started    = true
       full_clone = true
@@ -48,10 +48,10 @@ variable "vm_configs" {
     "immich" = {
       vm_id        = 1106
       name         = "immich"
-      memory_mb    = 8192  # 8GB for ML processing (face recognition, CLIP search)
+      memory_mb    = 8192 # 8GB for ML processing (face recognition, CLIP search)
       cpu_cores    = 4
       started      = true
-      datastore_id = "local-zfs"  # NVMe SSD for database + Docker I/O performance
+      datastore_id = "local-zfs" # NVMe SSD for database + Docker I/O performance
     }
     "duplicati" = {
       vm_id     = 1107
@@ -68,6 +68,27 @@ variable "vm_configs" {
       started   = true
     }
   }
+}
+
+# ==============================================================================
+# Backup Stack Toggle
+# ==============================================================================
+# The app-level backup stack (backrest + duplicati) is redundant during active
+# development: the fleet is rebuilt constantly (only ephemeral data) and the
+# UNAS Pro itself is backed up + snapshotted. Setting enable_backup_stack=false
+# excludes those VMs from the build (saves ~19min of serial clone time per
+# rebuild and skips the known-incomplete backup-client wiring). Flip to true
+# when working the backup strategy. Every consumer of the VM set keys off
+# local.enabled_vm_configs (qemu-vm + cloud-init for_each, dns.tf fcx_vms;
+# ansible-inventory follows qemu-vm; outputs are try()-guarded), and the
+# ansible "Configure Backup Clients" role self-skips when backrest is absent
+# from the inventory.
+# ==============================================================================
+
+variable "enable_backup_stack" {
+  type        = bool
+  default     = true
+  description = "When false, exclude the app-level backup stack (local.backup_stack_members = backrest + duplicati) from the build. Use during dev; re-enable for backup-strategy work."
 }
 
 # ==============================================================================

@@ -16,12 +16,12 @@ output "infrastructure_summary" {
     vms = {
       for key, vm in proxmox_virtual_environment_vm.qemu-vm :
       key => {
-        id       = vm.id
-        name     = vm.name
-        ip       = try(vm.ipv4_addresses[1][0], "IP not available")
-        cpu      = vm.cpu[0].cores
-        memory   = vm.memory[0].dedicated
-        status   = vm.started ? "running" : "stopped"
+        id     = vm.id
+        name   = vm.name
+        ip     = try(vm.ipv4_addresses[1][0], "IP not available")
+        cpu    = vm.cpu[0].cores
+        memory = vm.memory[0].dedicated
+        status = vm.started ? "running" : "stopped"
       }
     }
 
@@ -76,9 +76,9 @@ output "backrest_url" {
 output "postgresql_connection" {
   description = "PostgreSQL connection details"
   value = {
-    host     = try(proxmox_virtual_environment_container.postgresql.ipv4["eth0"], "IP not available")
-    port     = 5432
-    hostname = proxmox_virtual_environment_container.postgresql.initialization[0].hostname
+    host      = try(proxmox_virtual_environment_container.postgresql.ipv4["eth0"], "IP not available")
+    port      = 5432
+    hostname  = proxmox_virtual_environment_container.postgresql.initialization[0].hostname
     databases = [for db in var.postgresql_databases : db.name]
   }
 }
