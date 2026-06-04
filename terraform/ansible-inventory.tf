@@ -12,32 +12,32 @@
 resource "ansible_group" "postgresql" {
   name = "postgresql"
   variables = {
-    ansible_user                = "root"
-    ansible_python_interpreter  = "/usr/bin/python3"
-    ansible_ssh_common_args     = "-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
+    ansible_user               = "root"
+    ansible_python_interpreter = "/usr/bin/python3"
+    ansible_ssh_common_args    = "-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
   }
 }
 
 resource "ansible_group" "application_servers" {
   name = "application_servers"
   variables = {
-    ansible_user                = "ansible"
-    ansible_python_interpreter  = "/usr/bin/python3"
-    ansible_ssh_common_args     = "-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
+    ansible_user               = "ansible"
+    ansible_python_interpreter = "/usr/bin/python3"
+    ansible_ssh_common_args    = "-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
   }
 }
 
 resource "ansible_group" "monitoring" {
   name = "monitoring"
   variables = {
-    ansible_user                = "ansible"
-    ansible_python_interpreter  = "/usr/bin/python3"
-    ansible_ssh_common_args     = "-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
+    ansible_user               = "ansible"
+    ansible_python_interpreter = "/usr/bin/python3"
+    ansible_ssh_common_args    = "-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
   }
 }
 
 resource "ansible_group" "homelab" {
-  name     = "homelab"
+  name = "homelab"
   children = [
     ansible_group.postgresql.name,
     ansible_group.application_servers.name,

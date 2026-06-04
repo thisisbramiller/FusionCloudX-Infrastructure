@@ -1,5 +1,17 @@
+# VMs to actually build. When enable_backup_stack is false, the backup-stack
+# members (backrest + duplicati) are filtered out so dev rebuilds skip them.
+# This is the single source of truth for the VM set: cloud-init.tf and dns.tf
+# (fcx_vms) key off it; ansible-inventory follows the qemu-vm resource; outputs
+# are try()-guarded for the gated VMs.
+locals {
+  enabled_vm_configs = {
+    for k, v in var.vm_configs : k => v
+    if var.enable_backup_stack || !contains(var.backup_stack_members, k)
+  }
+}
+
 resource "proxmox_virtual_environment_vm" "qemu-vm" {
-  for_each = var.vm_configs
+  for_each = local.enabled_vm_configs
 
   vm_id     = each.value.vm_id
   name      = each.value.name
