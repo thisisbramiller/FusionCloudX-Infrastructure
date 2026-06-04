@@ -1,16 +1,22 @@
-# VMs to actually build. When enable_backup_stack is false, the backup-stack
-# members (backrest + duplicati) are filtered out so dev rebuilds skip them.
-# This is the single source of truth for the VM set: cloud-init.tf and dns.tf
-# (fcx_vms) key off it; ansible-inventory follows the qemu-vm resource; outputs
-# are try()-guarded for the gated VMs.
+# VMs to actually build — the single source of truth for the VM set (cloud-init
+# and dns.tf fcx_vms key off it; ansible-inventory follows the qemu-vm resource;
+# outputs are try()-guarded for excluded VMs). Two composable dev knobs exclude
+# workloads: var.disabled_workloads (any VM) + enable_backup_stack=false
+# (backrest + duplicati). See the Workload Toggles block in variables.tf.
 locals {
-  # The app-level backup stack gated by enable_backup_stack. A local (not a var)
-  # so it can't be overridden to accidentally gate a non-backup VM.
+  # The app-level backup stack, auto-excluded when enable_backup_stack=false.
+  # A local (not a var) so it can't be overridden to gate a non-backup VM.
   backup_stack_members = ["backrest", "duplicati"]
+
+  # Effective exclusion set: the general dev list + the backup stack when off.
+  effective_disabled_workloads = concat(
+    var.disabled_workloads,
+    var.enable_backup_stack ? [] : local.backup_stack_members,
+  )
 
   enabled_vm_configs = {
     for k, v in var.vm_configs : k => v
-    if var.enable_backup_stack || !contains(local.backup_stack_members, k)
+    if !contains(local.effective_disabled_workloads, k)
   }
 }
 
