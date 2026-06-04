@@ -67,8 +67,13 @@
     method: GET
     status_code: [200, 302]
   register: https_check
-  retries: 3
+  # Cold-boot budget: GitLab's bundled nginx 302s to /users/sign_in fairly early,
+  # but the old 3x10=30s ceiling was right at the edge (passed only because nginx
+  # came up just in time on the 2026-06-03 rebuild). 18x10=180s gives margin for a
+  # cold reconfigure without waiting on a warm host (`until` exits on first success).
+  retries: 18
   delay: 10
+  until: https_check is succeeded
   when: gitlab_enable_https
   tags: ['gitlab', 'configure', 'verify']
 

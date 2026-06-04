@@ -144,8 +144,14 @@
     validate_certs: no
     status_code: [200, 302]
   register: tandoor_health
-  retries: 30
-  delay: 5
+  # Cold-boot budget: on a fresh DB the entrypoint runs ALL Django migrations
+  # + collectstatic (~850 files, 2326 post-processed) BEFORE gunicorn binds
+  # unix:/tmp/tandoor.sock. The old 30x5=150s ceiling timed out ~80s before the
+  # socket appeared (clean-room rebuild 2026-06-03), nginx 502'd, and the hard
+  # fail aborted the whole site.yml run. 60x10=600s ceiling absorbs cold boot;
+  # `until` still exits the instant it's ready, so a warm host costs one poll.
+  retries: 60
+  delay: 10
   until: tandoor_health is succeeded
   tags: ['tandoor', 'verify']
 
