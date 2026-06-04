@@ -71,24 +71,48 @@ variable "vm_configs" {
 }
 
 # ==============================================================================
-# Backup Stack Toggle
+# Workload Toggles (dev escape hatches)
 # ==============================================================================
-# The app-level backup stack (backrest + duplicati) is redundant during active
-# development: the fleet is rebuilt constantly (only ephemeral data) and the
-# UNAS Pro itself is backed up + snapshotted. Setting enable_backup_stack=false
-# excludes those VMs from the build (saves ~19min of serial clone time per
-# rebuild and skips the known-incomplete backup-client wiring). Flip to true
-# when working the backup strategy. Every consumer of the VM set keys off
-# local.enabled_vm_configs (qemu-vm + cloud-init for_each, dns.tf fcx_vms;
-# ansible-inventory follows qemu-vm; outputs are try()-guarded), and the
-# ansible "Configure Backup Clients" role self-skips when backrest is absent
-# from the inventory.
+# Build only the workloads a given dev cycle needs. Two composable knobs feed
+# local.enabled_vm_configs (the single source of truth: qemu-vm + cloud-init
+# for_each, dns.tf fcx_vms; ansible-inventory follows qemu-vm; outputs are
+# try()-guarded). Single-host app plays auto-skip when their host is absent, and
+# the "Configure Backup Clients" role self-skips when backrest is absent.
+#
+#   - enable_backup_stack=false : drop the redundant app-level backup stack
+#     (backrest + duplicati). Redundant in dev because the fleet is rebuilt
+#     constantly (ephemeral data) and the UNAS Pro is backed up + snapshotted.
+#     Saves ~19min of serial clone time; skips the known-incomplete backup-client
+#     wiring. Flip to true for backup-strategy work.
+#   - disabled_workloads=[...] : general escape hatch to drop any other VM(s),
+#     e.g. ["gitlab"] to skip GitLab's ~18min clone during non-SCM dev.
+#
+# CAVEAT: with backrest built, host_vars/backrest.yml dereferences hostvars[<vm>]
+# for its NFS source-mounts + backup hooks for gitlab, mealie, tandoor, immich
+# (NOT duplicati) -- so disabling any of those four while the backup stack is ON
+# breaks ansible template rendering. duplicati is safe to disable independently
+# (backrest never references it). The robust fix (inventory-driven backrest
+# mounts/hooks) is deferred to the backup-strategy work.
 # ==============================================================================
 
+# Semantic convenience for the backup stack as a unit -- equivalent to
+# disabled_workloads = local.backup_stack_members. Kept as a first-class named
+# toggle (clearer intent + stable interface), not folded into the list.
 variable "enable_backup_stack" {
   type        = bool
   default     = true
   description = "When false, exclude the app-level backup stack (local.backup_stack_members = backrest + duplicati) from the build. Use during dev; re-enable for backup-strategy work."
+}
+
+variable "disabled_workloads" {
+  type        = list(string)
+  default     = []
+  description = "Dev escape hatch: vm_configs keys to EXCLUDE from the build (e.g. [\"gitlab\",\"mealie\"]). Composes with enable_backup_stack. Only disable a backrest-referenced app (gitlab/mealie/tandoor/immich) while the backup stack is off (see Workload Toggles comment)."
+
+  validation {
+    condition     = alltrue([for k in var.disabled_workloads : contains(keys(var.vm_configs), k)])
+    error_message = "disabled_workloads contains an unknown key. Valid keys: ${join(", ", keys(var.vm_configs))}."
+  }
 }
 
 # ==============================================================================
