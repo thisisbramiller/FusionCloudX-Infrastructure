@@ -9,10 +9,12 @@ locals {
   backup_stack_members = ["backrest", "duplicati"]
 
   # Effective exclusion set: the general dev list + the backup stack when off.
-  effective_disabled_workloads = concat(
+  # distinct() so a backup-stack member also passed in disabled_workloads
+  # appears once.
+  effective_disabled_workloads = distinct(concat(
     var.disabled_workloads,
     var.enable_backup_stack ? [] : local.backup_stack_members,
-  )
+  ))
 
   enabled_vm_configs = {
     for k, v in var.vm_configs : k => v

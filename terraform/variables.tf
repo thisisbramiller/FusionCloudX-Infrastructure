@@ -87,13 +87,17 @@ variable "vm_configs" {
 #   - disabled_workloads=[...] : general escape hatch to drop any other VM(s),
 #     e.g. ["gitlab"] to skip GitLab's ~18min clone during non-SCM dev.
 #
-# CAVEAT: only disable an APP (gitlab/mealie/tandoor/immich) while the backup
-# stack is OFF. With backrest built, host_vars/backrest.yml dereferences
-# hostvars[<app>] for its NFS source-mounts + backup hooks and would fail at
-# template time. The robust fix (inventory-driven backrest mounts/hooks) is
-# deferred to the backup-strategy work.
+# CAVEAT: with backrest built, host_vars/backrest.yml dereferences hostvars[<vm>]
+# for its NFS source-mounts + backup hooks for gitlab, mealie, tandoor, immich
+# (NOT duplicati) -- so disabling any of those four while the backup stack is ON
+# breaks ansible template rendering. duplicati is safe to disable independently
+# (backrest never references it). The robust fix (inventory-driven backrest
+# mounts/hooks) is deferred to the backup-strategy work.
 # ==============================================================================
 
+# Semantic convenience for the backup stack as a unit -- equivalent to
+# disabled_workloads = local.backup_stack_members. Kept as a first-class named
+# toggle (clearer intent + stable interface), not folded into the list.
 variable "enable_backup_stack" {
   type        = bool
   default     = true
@@ -103,7 +107,12 @@ variable "enable_backup_stack" {
 variable "disabled_workloads" {
   type        = list(string)
   default     = []
-  description = "Dev escape hatch: vm_configs keys to EXCLUDE from the build (e.g. [\"gitlab\",\"mealie\"]). Composes with enable_backup_stack. Valid keys: gitlab, mealie, tandoor, immich, duplicati, backrest. Only disable an app while the backup stack is off (see Workload Toggles comment)."
+  description = "Dev escape hatch: vm_configs keys to EXCLUDE from the build (e.g. [\"gitlab\",\"mealie\"]). Composes with enable_backup_stack. Only disable a backrest-referenced app (gitlab/mealie/tandoor/immich) while the backup stack is off (see Workload Toggles comment)."
+
+  validation {
+    condition     = alltrue([for k in var.disabled_workloads : contains(keys(var.vm_configs), k)])
+    error_message = "disabled_workloads contains an unknown key. Valid keys: ${join(", ", keys(var.vm_configs))}."
+  }
 }
 
 # ==============================================================================

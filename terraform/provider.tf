@@ -1,5 +1,5 @@
 terraform {
-  required_version = ">= 1.0"
+  required_version = ">= 1.9" # cross-variable validation (disabled_workloads -> var.vm_configs) requires 1.9+
 
   required_providers {
     proxmox = {
