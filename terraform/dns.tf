@@ -36,8 +36,9 @@
 # ==============================================================================
 
 locals {
-  # The 6 QEMU VMs: gitlab, mealie, tandoor, immich, duplicati, backrest
-  fcx_vms = toset(keys(local.enabled_vm_configs)) # gated by enable_backup_stack (see qemu-vm.tf)
+  # The active QEMU VMs (gated by enable_backup_stack; see qemu-vm.tf).
+  # Full set: gitlab, mealie, tandoor, immich, duplicati, backrest.
+  fcx_vms = toset(keys(local.enabled_vm_configs))
 
   # Resolve each host's live DHCP IP ONCE so its reservation and its DNS record
   # always pin the SAME address (PR #41 review: makes the shared source explicit

@@ -88,13 +88,7 @@ variable "vm_configs" {
 variable "enable_backup_stack" {
   type        = bool
   default     = true
-  description = "When false, exclude the backup-stack VMs (backup_stack_members) from the build. Use during dev; re-enable for backup-strategy work."
-}
-
-variable "backup_stack_members" {
-  type        = list(string)
-  default     = ["backrest", "duplicati"]
-  description = "vm_configs keys gated by enable_backup_stack (the app-level backup stack)."
+  description = "When false, exclude the app-level backup stack (local.backup_stack_members = backrest + duplicati) from the build. Use during dev; re-enable for backup-strategy work."
 }
 
 # ==============================================================================

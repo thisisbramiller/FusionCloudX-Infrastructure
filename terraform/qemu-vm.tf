@@ -4,9 +4,13 @@
 # (fcx_vms) key off it; ansible-inventory follows the qemu-vm resource; outputs
 # are try()-guarded for the gated VMs.
 locals {
+  # The app-level backup stack gated by enable_backup_stack. A local (not a var)
+  # so it can't be overridden to accidentally gate a non-backup VM.
+  backup_stack_members = ["backrest", "duplicati"]
+
   enabled_vm_configs = {
     for k, v in var.vm_configs : k => v
-    if var.enable_backup_stack || !contains(var.backup_stack_members, k)
+    if var.enable_backup_stack || !contains(local.backup_stack_members, k)
   }
 }
 
