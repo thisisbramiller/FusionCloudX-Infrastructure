@@ -1,0 +1,30 @@
+---
+# ==============================================================================
+# nfs_mount role — Default Variables
+# ==============================================================================
+# Mounts an NFS share and self-heals the rpc.mountd stale-resolver denial that
+# follows a client VM rebuild (new DHCP IP). See
+# docs/superpowers/specs/2026-06-02-nfs-mountd-reconciler-design.md
+# ==============================================================================
+
+# The UNAS Pro (locked appliance). Mounts served by this host are reconciled
+# with the scoped forced-command key; any other server is reconciled by a
+# direct delegated restart (we already hold root on managed VMs).
+nfs_mount_unas_host: "192.168.40.137"
+
+# 1Password Connect coordinates for the scoped reconcile PRIVATE key.
+nfs_mount_reconcile_key_item: "UNAS NFS Reconciler Key"
+nfs_mount_reconcile_key_section: "Private Key"
+nfs_mount_reconcile_key_field: "private_key"
+nfs_mount_reconcile_key_temp_path: "/tmp/.unas_nfs_reconcile_key"
+nfs_mount_reconcile_known_hosts: "/tmp/.unas_reconcile_known_hosts"
+
+# Retry behavior after a reconcile bounce.
+nfs_mount_retries: 3
+nfs_mount_settle_delay: 8
+
+# Caller MUST set (no defaults — fail fast if missing):
+#   nfs_mount_label : short name for task output (e.g. "immich-library")
+#   nfs_mount_src   : "<server>:<export>"
+#   nfs_mount_path  : local mount point
+#   nfs_mount_opts  : mount options string

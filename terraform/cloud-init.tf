@@ -1,5 +1,5 @@
 resource "proxmox_virtual_environment_file" "user_data_cloud_config" {
-  for_each     = var.vm_configs
+  for_each     = local.enabled_vm_configs # gated by enable_backup_stack (see qemu-vm.tf)
   content_type = "snippets"
   datastore_id = "nas-infrastructure"
   node_name    = "pve"

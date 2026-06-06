@@ -116,13 +116,12 @@
       tags: ['always']
 
   roles:
+    # Certs are retrieved in-playbook from 1Password Connect by the role's
+    # retrieve-certs.yml. Do NOT pass certificates_* role-params here: role
+    # params outrank (and shadow) the role's set_facts and would require a
+    # manual /tmp/*.pem file, breaking the terraform->ansible IaC pipeline.
     - role: certificates
       tags: ['certificates']
-      vars:
-        certificates_root_ca: "{{ lookup('file', '/tmp/root-ca.pem') | default('') }}"
-        certificates_intermediate_ca: "{{ lookup('file', '/tmp/intermediate-ca.pem') | default('') }}"
-        certificates_server_cert: "{{ lookup('file', '/tmp/server-cert.pem') | default('') }}"
-        certificates_server_key: "{{ lookup('file', '/tmp/server-key.pem') | default('') }}"
 
   post_tasks:
     - name: Verify certificate deployment
@@ -410,7 +409,12 @@
         lookup('env', 'OP_CONNECT_TOKEN') == ''
 
   roles:
+    # Self-skips when the backup stack is disabled in terraform
+    # (enable_backup_stack=false → backrest not built → absent from inventory).
+    # The role's backup_client_backrest_ip default dereferences
+    # hostvars['backrest'], so gating the whole role avoids that lookup.
     - role: backup-client
+      when: "'backrest' in groups['all']"
 
 - name: Deploy Backrest
   hosts: backrest
