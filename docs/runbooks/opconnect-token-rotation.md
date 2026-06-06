@@ -101,10 +101,13 @@ security add-generic-password -U -a "$USER" -s opconnectfcxtoken -w '<newtoken>'
 Keychain at shell startup — no direct edits to `.zprofile` are needed unless the variable
 names or the Keychain key name changed.
 
-**DR 1Password document:**
-Update the `1password-credentials.json` document stored in the infra vault to include the
-new token value and the new deadline date. This is the out-of-band recovery copy and must
-stay current.
+**DR artifacts — do NOT touch the credentials document on a token rotation:**
+The access token lives in Keychain (`opconnectfcxtoken`), updated above — that IS its
+recovery copy. The `1password-credentials.json` document stored in the infra vault is the
+Connect **server identity blob** (emitted once by `op connect server create`); it has a
+separate lifecycle and does **not** change when the access token rotates — do not edit it to
+embed the token. If you keep a separate "opconnect token metadata" note, update it with the
+new issuance date + T+90d deadline only.
 
 ### Step 4 — Restart every long-lived consumer
 

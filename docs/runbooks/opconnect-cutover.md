@@ -252,10 +252,14 @@ confirmation required before any destruction proceeds.**
 ### Step 2 — [OP] Cold off-box backup
 
 ```bash
-vzdump 100   # route output to off-box storage
+pvesm status                                          # find the OFF-BOX storage id (e.g. pbs / nfs-backup)
+vzdump 100 --storage <off-box-storage-id> --mode stop  # bare `vzdump 100` defaults to node-LOCAL — must target off-box
 ```
 
-This is zero-surface insurance (offline backup), not a running fallback.
+This is zero-surface insurance (offline backup), not a running fallback. **Bare `vzdump 100`
+writes to the node's default storage (often `local`) — if that is the same node you then delete
+in Step 4, the insurance is gone.** Pass an explicit off-box `--storage` and **confirm the dump
+file landed off-box (`pvesm list <off-box-storage-id> | grep vzdump-.*-100-`) before Step 3.**
 
 ### Step 3 — [OP][CUT] Retire the old identity
 

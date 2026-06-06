@@ -70,7 +70,12 @@
 
     - name: Display opconnect bootstrap auth status
       ansible.builtin.debug:
-        msg: "Bootstrapping 1Password Connect via the Service Account token (SA-token auth path)."
+        msg: >-
+          {% if lookup('env', 'OP_SERVICE_ACCOUNT_TOKEN') != '' -%}
+          Bootstrapping 1Password Connect via the Service Account token (PATH B — from-scratch rebuild).
+          {%- else -%}
+          Bootstrapping 1Password Connect via the existing old Connect at {{ lookup('env', 'OP_CONNECT_HOST') }} (PATH A — P4 cutover).
+          {%- endif %}
 
   roles:
     - opconnect
