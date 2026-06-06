@@ -60,6 +60,11 @@
   when: item.name == "intermediate-ca.pem"
   loop: "{{ intermediate_ca_files }}"
 
+# The server cert + key are attached as FILES to the "FusionCloudX Intermediate
+# CA Bundle" 1Password item (alongside the intermediate CA), set by bootstrap
+# phase 04. Looping intermediate_ca_files for server-cert.pem / server-key.pem is
+# therefore CORRECT — not a bug. (Verified: the item carries intermediate-ca.pem,
+# intermediate-ca-key.pem, server-cert.pem, server-key.pem, fullchain.pem.)
 - name: Download server certificate from 1Password Connect
   uri:
     url: "{{ lookup('env', 'OP_CONNECT_HOST') }}{{ item.content_path }}"
