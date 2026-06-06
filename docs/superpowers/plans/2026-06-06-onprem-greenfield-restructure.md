@@ -15,11 +15,12 @@
 1. `git checkout main && git pull --ff-only` → `git checkout -b <phase-branch>`.
 2. Move the phase's ClickUp story (board `901417076449`) `to do` → `in progress`.
 3. Implement the phase's tasks as **atomic commits** (no `Co-Authored-By: Claude` trailer — personal repo).
-4. **Test gate** (phase-specific; see each phase). Confirm with Branden before any destructive `apply`.
+4. **In-cycle test gate — read-only, BEFORE merge:** `tofu fmt -check -recursive` + `tofu validate` + `tofu plan` (against the live fleet, matching the deployed profile via `-var`). App phases also: `ansible-playbook --syntax-check` / `--check`. Post the results to the PR — **testing is part of every PR cycle.**
 5. `/requesting-code-review` (3-dimension Workflow: correctness/security/conventions) → fix Critical/Important.
 6. `git push -u origin <branch>` → `gh pr create` → comment `@claude` for the bot review → wait → `/receiving-code-review` (triage; fix or push back with reasoning).
-7. Re-test if changes were made → merge when green (`gh pr merge --merge --delete-branch`) → `git checkout main && git pull --ff-only`.
-8. Move the ClickUp story → `complete`. Mark the harness task done.
+7. Re-run the in-cycle gate if changes were made → merge when green (`gh pr merge --merge --delete-branch`) → `git checkout main && git pull --ff-only`.
+8. **Post-merge apply — mutating, from `main`, BEFORE the next phase:** `tofu apply` (matching the deployed profile via `-var`) + (app phases) `ansible-playbook site.yml` + Playwright verify (desktop+mobile). Applies MERGED code to the live fleet → live always equals `main`, and each phase branches off a freshly-applied baseline. **Confirm before any destructive apply (esp. P5).** ⚠️ `dev.auto.tfvars` may carry a stale `disabled_workloads` — always apply with an explicit profile that matches the live fleet.
+9. Move the ClickUp story → `complete`. Mark the harness task done.
 
 **Plan-expansion rule:** P0–P2 tasks below are complete + executable now. P3–P6 are task lists with files + actions + gates; expand each to bite-sized steps (full HCL/YAML) **at the start of that phase** via `superpowers:writing-plans`, because later-phase content depends on the modules + state shape produced earlier.
 
