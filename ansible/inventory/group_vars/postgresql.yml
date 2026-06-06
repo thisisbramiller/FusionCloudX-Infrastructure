@@ -103,7 +103,7 @@ postgresql_hba_path: "/etc/postgresql/{{ postgresql_version }}/main/pg_hba.conf"
 # Important Notes
 # ==============================================================================
 # - This configuration is for a SINGLE PostgreSQL instance
-# - The instance hosts MULTIPLE databases (semaphore, wazuh, etc.)
+# - The instance hosts MULTIPLE databases
 # - Tuning is balanced for multiple concurrent services
 # - Per-database configuration is in host_vars/postgresql.yml
 # - Credentials are managed via 1Password lookups
