@@ -1,0 +1,93 @@
+---
+# ==============================================================================
+# opconnect Role - Main Tasks
+# ==============================================================================
+# Deploys 1Password Connect (connect-api + connect-sync) via Docker Compose on
+# the opconnect VM. Docker CE + the Compose plugin are installed by the shared
+# `docker` role (pulled in via meta/main.yml).
+#
+# SECRETS-ROOT BOOTSTRAP PATH. Unlike the app roles (mealie/tandoor/immich),
+# this role does NOT read 1Password via Connect — it BUILDS Connect. The two
+# artifacts Connect needs are generated OUT-OF-BAND at P4 using the Service
+# Account token (NOT Connect):
+#     op connect server create opconnect     # -> 1password-credentials.json
+#     op connect token create  opconnect ... # -> the Connect access token
+# 1password-credentials.json is staged on the target at `opconnect_credentials_src`
+# by the operator before this role runs; the Connect access token is consumed by
+# DOWNSTREAM repointing (OP_CONNECT_TOKEN), not by Connect itself, so it is not
+# handled here. See the P4 cutover note in tofu/opconnect/opconnect.tf.
+# ==============================================================================
+
+- name: Create opconnect compose directory
+  ansible.builtin.file:
+    path: "{{ opconnect_compose_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0750'
+  tags: ['opconnect', 'deploy']
+
+# The 1password-credentials.json is generated out-of-band (`op connect server
+# create`, SA token) and staged on the target at opconnect_credentials_src. We
+# normalize it into the compose dir as `1password-credentials.json` (the path
+# the compose file's relative `./1password-credentials.json` mount expects).
+# remote_src copies a file already on the target. When opconnect_credentials_src
+# already IS the canonical compose-dir path, this is a harmless no-op (same src
+# and dest); change opconnect_credentials_src to an operator staging path (e.g.
+# /root/1password-credentials.json) to copy from elsewhere on the host.
+- name: Stage 1Password Connect credentials into the compose directory
+  ansible.builtin.copy:
+    src: "{{ opconnect_credentials_src }}"
+    dest: "{{ opconnect_compose_dir }}/1password-credentials.json"
+    remote_src: true
+    owner: root
+    group: root
+    mode: '0600'
+  no_log: true
+  notify: restart opconnect
+  tags: ['opconnect', 'deploy', 'secrets']
+
+- name: Template Docker Compose file
+  ansible.builtin.template:
+    src: docker-compose.yml.j2
+    dest: "{{ opconnect_compose_dir }}/docker-compose.yml"
+    owner: root
+    group: root
+    mode: '0640'
+  notify: restart opconnect
+  tags: ['opconnect', 'deploy']
+
+- name: Restart containers if configuration changed
+  ansible.builtin.meta: flush_handlers
+
+- name: Start 1Password Connect containers
+  community.docker.docker_compose_v2:
+    project_src: "{{ opconnect_compose_dir }}"
+    state: present
+    pull: always
+  tags: ['opconnect', 'deploy']
+
+# /heartbeat is the connect-api unauthenticated liveness endpoint — returns
+# HTTP 200 + a plain "." when the API server is up (vs /health, which returns a
+# fuller dependency object only once connect-sync has reached 1password.com).
+# Source: https://www.1password.dev/connect/api-reference/ (Health & Heartbeat).
+- name: Wait for 1Password Connect API to be ready
+  ansible.builtin.uri:
+    url: "http://localhost:{{ opconnect_api_port }}/heartbeat"
+    status_code: 200
+  register: opconnect_health
+  retries: 30
+  delay: 5
+  until: opconnect_health is succeeded
+  tags: ['opconnect', 'verify']
+
+- name: Display opconnect deployment status
+  ansible.builtin.debug:
+    msg:
+      - "========================================"
+      - "1Password Connect deployment complete!"
+      - "========================================"
+      - "API:  http://{{ ansible_host }}:{{ opconnect_api_port }}"
+      - "Repoint downstream OP_CONNECT_HOST -> http://opconnect.fusioncloudx.home:{{ opconnect_api_port }} (P4 cutover, after verifying a test secret)"
+      - "========================================"
+  tags: ['opconnect']

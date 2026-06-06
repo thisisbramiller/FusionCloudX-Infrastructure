@@ -1,0 +1,25 @@
+---
+# ==============================================================================
+# opconnect - Role Metadata
+# ==============================================================================
+# 1Password Connect runs on Docker, so this role depends on the shared `docker`
+# role (Docker CE + Compose plugin install) — pulled in here so it always runs
+# before the Connect compose stack is brought up. Tags mirror the app-role
+# convention (docker role ALSO carries this role's tag so `--tags opconnect`
+# still installs Docker).
+# ==============================================================================
+
+dependencies:
+  - role: docker
+    tags: ['docker', 'opconnect']
+
+galaxy_info:
+  author: FusionCloudX
+  description: Deploy 1Password Connect (connect-api + connect-sync) via Docker Compose
+  license: MIT
+  min_ansible_version: "2.14"
+  platforms:
+    - name: Ubuntu
+      versions:
+        - jammy
+        - noble

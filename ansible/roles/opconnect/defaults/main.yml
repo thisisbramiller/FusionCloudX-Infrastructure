@@ -1,0 +1,36 @@
+---
+# ==============================================================================
+# opconnect Role - Default Variables
+# ==============================================================================
+
+# 1Password Connect image versions (pinned for deliberate upgrades). connect-api
+# and connect-sync are released as a matched pair — keep both on the same tag.
+# Override in host_vars/group_vars when bumping. (Upstream's published example
+# uses :latest; we pin instead.)
+opconnect_connect_version: "1.7.3"
+opconnect_connect_api_image: "1password/connect-api"
+opconnect_connect_sync_image: "1password/connect-sync"
+
+# Docker Compose project directory (the compose dir holds docker-compose.yml +
+# the 1password-credentials.json the API/sync containers mount).
+opconnect_compose_dir: "/opt/opconnect"
+
+# Published connect-api port (the official Connect compose publishes the REST
+# API on 8080). connect-sync's :8080 is mapped to a different host port to avoid
+# a collision; it is an internal sync service and need not be reachable on 8080.
+opconnect_api_port: 8080
+opconnect_sync_port: 8081
+
+# Connect log level (passed through OP_LOG_LEVEL). info|debug|trace.
+opconnect_log_level: "info"
+
+# Source path of the 1password-credentials.json delivered to the compose dir.
+# This file + the Connect access token are GENERATED OUT-OF-BAND at P4 via the
+# SA token:
+#     op connect server create <name>     # emits 1password-credentials.json
+#     op connect token create <name> ...   # emits the access token (consumers)
+# The operator stages 1password-credentials.json at this path on the control
+# node before running the playbook. (Alternative considered: pull the file from
+# a 1Password item field via the SA token — deferred to P4; staged-file is the
+# simpler bootstrap and keeps the credentials file out of this repo.)
+opconnect_credentials_src: "/opt/opconnect/1password-credentials.json"

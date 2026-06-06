@@ -1,0 +1,41 @@
+---
+# 1Password Connect — connect-api + connect-sync (official two-service shape).
+# Source: https://i.1password.com/media/1password-connect/docker-compose.yaml
+#   - Both services mount the SAME 1password-credentials.json (read-only here;
+#     the official example mounts it read-write, but Connect only reads it).
+#   - Both services share the named `data` volume (connect-sync writes the
+#     synced vault cache; connect-api reads it). This is the documented shape.
+#   - connect-api publishes the REST API on host {{ opconnect_api_port }}:8080.
+#   - connect-sync's :8080 is mapped to host {{ opconnect_sync_port }} to avoid
+#     a port collision; it is an internal service, not consumed on 8080.
+# The compose `version:` key is intentionally omitted (obsolete in Compose v2 /
+# docker_compose_v2; it only emits a deprecation warning).
+services:
+  connect-api:
+    image: {{ opconnect_connect_api_image }}:{{ opconnect_connect_version }}
+    container_name: connect-api
+    restart: always
+    ports:
+      - "{{ opconnect_api_port }}:8080"
+    environment:
+      OP_HTTP_PORT: "8080"
+      OP_LOG_LEVEL: "{{ opconnect_log_level }}"
+    volumes:
+      - "./1password-credentials.json:/home/opuser/.op/1password-credentials.json:ro"
+      - "data:/home/opuser/.op/data"
+
+  connect-sync:
+    image: {{ opconnect_connect_sync_image }}:{{ opconnect_connect_version }}
+    container_name: connect-sync
+    restart: always
+    ports:
+      - "{{ opconnect_sync_port }}:8080"
+    environment:
+      OP_HTTP_PORT: "8080"
+      OP_LOG_LEVEL: "{{ opconnect_log_level }}"
+    volumes:
+      - "./1password-credentials.json:/home/opuser/.op/1password-credentials.json:ro"
+      - "data:/home/opuser/.op/data"
+
+volumes:
+  data:

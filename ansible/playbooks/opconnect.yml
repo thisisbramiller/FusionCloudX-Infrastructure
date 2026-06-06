@@ -1,0 +1,69 @@
+---
+# ==============================================================================
+# opconnect Deployment Playbook
+# ==============================================================================
+# Deploys 1Password Connect (connect-api + connect-sync) on the opconnect VM via
+# Docker Compose — the secrets-root bring-up.
+#
+# BOOTSTRAP AUTH PATH: this play asserts OP_SERVICE_ACCOUNT_TOKEN is set, NOT
+# OP_CONNECT_HOST/OP_CONNECT_TOKEN. opconnect BUILDS Connect, so it cannot
+# depend on Connect (you cannot make Connect with Connect). The SA token is the
+# credential the operator uses out-of-band to generate the Connect server
+# credentials + token:
+#     op connect server create opconnect      # -> 1password-credentials.json
+#     op connect token create  opconnect ...  # -> the Connect access token
+#
+# Usage:
+#   export OP_SERVICE_ACCOUNT_TOKEN=...        # SA token (op CLI)
+#   # stage 1password-credentials.json on the target at opconnect_credentials_src
+#   ansible-playbook playbooks/opconnect.yml
+#
+# Requirements:
+#   - OP_SERVICE_ACCOUNT_TOKEN env var (bootstrap auth, NOT Connect creds)
+#   - 1password-credentials.json staged on the opconnect VM (generated via the
+#     SA token with `op connect server create`)
+# ==============================================================================
+
+- name: Load SSH Key from 1Password Connect
+  hosts: localhost
+  gather_facts: false
+  connection: local
+
+  roles:
+    - role: ssh-key-loader
+      tags: ['ssh-key', 'always']
+
+- name: Deploy 1Password Connect
+  hosts: opconnect
+  become: yes
+  gather_facts: yes
+  vars:
+    ansible_ssh_private_key_file: "/tmp/.ansible_ssh_key"
+
+  pre_tasks:
+    - name: Ensure 1Password Service Account token is set (bootstrap auth, NOT Connect)
+      ansible.builtin.fail:
+        msg: >-
+          OP_SERVICE_ACCOUNT_TOKEN must be set. opconnect is the secrets root and
+          authenticates with the Service Account token, NOT 1Password Connect
+          (you cannot make Connect with Connect).
+      when: lookup('env', 'OP_SERVICE_ACCOUNT_TOKEN') == ''
+
+    - name: Display opconnect bootstrap auth status
+      ansible.builtin.debug:
+        msg: "Bootstrapping 1Password Connect via the Service Account token (SA-token auth path)."
+
+  roles:
+    - opconnect
+
+- name: Cleanup SSH Key
+  hosts: localhost
+  gather_facts: false
+  connection: local
+
+  tasks:
+    - name: Include ssh-key-loader cleanup tasks
+      ansible.builtin.include_role:
+        name: ssh-key-loader
+        tasks_from: cleanup.yml
+      tags: ['ssh-key', 'cleanup', 'always']
