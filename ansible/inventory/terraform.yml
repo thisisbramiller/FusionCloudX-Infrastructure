@@ -1,20 +1,22 @@
 # ==============================================================================
-# Terraform State Dynamic Inventory Configuration
+# OpenTofu State Dynamic Inventory Configuration
 # ==============================================================================
-# This inventory plugin reads Terraform state directly using bpg/proxmox provider
-# Works with your existing Terraform infrastructure - no API tokens needed
+# Reads OpenTofu state directly (no API tokens needed) and exposes the
+# proxmox VMs / LXC as Ansible hosts (ansible_host/ansible_group resources).
 # ==============================================================================
 
 plugin: cloud.terraform.terraform_provider
 
-# Path to Terraform project directory
+# Path to the OpenTofu project directory (the flat root for now; repoints to
+# ../tofu/compute at the P5 cutover).
 project_path: ../terraform
 
-# Optional: Specify state file explicitly (if not using default location)
-# state_file: ../../terraform/terraform.tfstate
-
-# Optional: Custom terraform binary path
-# binary_path: /usr/local/bin/terraform
+# Use the OpenTofu binary. The plugin defaults to `terraform`, which fails here:
+# the repo migrated to OpenTofu and the lockfile pins registry.opentofu.org
+# provider hashes, so a `terraform` run reports "unavailable provider
+# registry.terraform.io/bpg/proxmox" and returns an empty inventory.
+# (Dev-machine path, like .tofurc; a CI runner sets its own.)
+binary_path: /opt/homebrew/bin/tofu
 
 # Include resources from child modules (if any)
 search_child_modules: false
