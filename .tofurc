@@ -1,0 +1,16 @@
+# OpenTofu CLI configuration — repo-local (committed for CI portability).
+#
+# Routes the patched UniFi provider to the local filesystem mirror (built by
+# scripts/build-unifi-provider.sh) and everything else to the public registry.
+# This is the .tofurc twin of ~/.terraformrc (which OpenTofu also reads as a
+# fallback). Use it explicitly with:  TF_CLI_CONFIG_FILE="$PWD/.tofurc" tofu ...
+# Full rationale: terraform/PATCHED-PROVIDER.md
+provider_installation {
+  filesystem_mirror {
+    path    = "/Users/fcx/.terraform.d/plugins"
+    include = ["tf.fusioncloudx.home/ubiquiti-community/unifi"]
+  }
+  direct {
+    exclude = ["tf.fusioncloudx.home/ubiquiti-community/unifi"]
+  }
+}
