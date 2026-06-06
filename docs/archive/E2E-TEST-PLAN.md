@@ -1,3 +1,5 @@
+> **ARCHIVED (2026-06-06)** — Semaphore was removed; this control-plane doc is superseded by GitLab CI/CD. Kept for history only.
+
 # End-to-End Infrastructure Test Plan
 ## Full Disaster Recovery / Tabletop Exercise
 
