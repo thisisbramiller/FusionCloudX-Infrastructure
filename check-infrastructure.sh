@@ -52,21 +52,7 @@ echo -e "${BLUE}[2/4] Checking Ansible...${NC}"
 if [ -d "ansible" ]; then
     echo -e "${GREEN}✓ Ansible directory exists${NC}"
 
-    # Check vault password
-    if [ -f "ansible/.vault_pass" ]; then
-        echo -e "${GREEN}✓ Vault password file exists${NC}"
-    else
-        echo -e "${YELLOW}⚠ Vault password not set - run 'ansible/setup-vault.sh'${NC}"
-    fi
-
-    # Check vault encryption
-    if [ -f "ansible/inventory/group_vars/vault.yml" ]; then
-        if head -n 1 "ansible/inventory/group_vars/vault.yml" | grep -q '$ANSIBLE_VAULT'; then
-            echo -e "${GREEN}✓ Vault file is encrypted${NC}"
-        else
-            echo -e "${RED}✗ Vault file is NOT encrypted - run 'ansible-vault encrypt ansible/inventory/group_vars/vault.yml'${NC}"
-        fi
-    fi
+    # Secrets come from 1Password Connect (ansible-vault retired) — nothing to check here.
 
     # Check inventory
     if [ -f "ansible/inventory/hosts.ini" ]; then
@@ -103,8 +89,6 @@ if [ ! -d "terraform/.terraform" ]; then
     echo -e "${YELLOW}  → Run: cd terraform && terraform init${NC}"
 elif [ ! -f "terraform/terraform.tfstate" ]; then
     echo -e "${YELLOW}  → Run: cd terraform && terraform apply${NC}"
-elif [ ! -f "ansible/.vault_pass" ]; then
-    echo -e "${YELLOW}  → Run: cd ansible && ./setup-vault.sh${NC}"
 else
     echo -e "${GREEN}  ✓ Infrastructure looks good!${NC}"
     echo -e "${CYAN}  → Deploy PostgreSQL: cd ansible && ansible-playbook playbooks/postgresql.yml${NC}"
