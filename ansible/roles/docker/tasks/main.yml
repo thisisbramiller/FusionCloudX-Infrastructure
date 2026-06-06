@@ -6,17 +6,21 @@
 # Shared dependency of every app role that ships a Docker Compose stack
 # (mealie, tandoor, immich, runitup) — pulled in via each app role's
 # meta/main.yml so it always runs before the app's own tasks.
+#
+# Tags: tasks here carry ['docker']; each app role's meta dependency ALSO tags
+# this role with the app's own tag (e.g. { role: docker, tags: ['docker','mealie'] })
+# so a scoped run like `--tags mealie` still installs Docker for that app.
 # ==============================================================================
 
 - name: Ensure /etc/apt/keyrings exists
-  file:
+  ansible.builtin.file:
     path: /etc/apt/keyrings
     state: directory
     mode: '0755'
   tags: ['docker']
 
 - name: Install Docker prerequisites
-  apt:
+  ansible.builtin.apt:
     name:
       - ca-certificates
       - curl
@@ -40,7 +44,7 @@
   tags: ['docker']
 
 - name: Install Docker CE and Compose plugin
-  apt:
+  ansible.builtin.apt:
     name:
       - docker-ce
       - docker-ce-cli
@@ -51,7 +55,7 @@
   tags: ['docker']
 
 - name: Ensure Docker service is started and enabled
-  systemd:
+  ansible.builtin.systemd:
     name: docker
     state: started
     enabled: yes
