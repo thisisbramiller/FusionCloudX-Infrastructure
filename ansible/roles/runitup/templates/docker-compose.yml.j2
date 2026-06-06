@@ -1,18 +1,20 @@
 ---
 services:
   app:
-    build:
-      # App source is synced to {{ runitup_app_dir }} by the runitup role.
-      # The app's own multi-stage Dockerfile does the build.
-      context: ./app
+    # Pre-built image, loaded from the tarball shipped by the runitup role
+    # (built on the controller). pull_policy: never — the image is local, there
+    # is no registry to pull from yet.
+    image: "{{ runitup_image }}"
     container_name: runitup
     restart: always
+    pull_policy: never
     env_file:
       - .env
     volumes:
       # SQLite data on a named volume, bind-backed to the host data dir so the
-      # backup-client can export it under {{ runitup_compose_dir }}.
-      - runitup-data:/app/data
+      # backup-client can export it under {{ runitup_compose_dir }}. Mounted at
+      # /data to match the app's Dockerfile (VOLUME /data, RUNITUP_DB=/data/runitup.db).
+      - runitup-data:/data
 
   nginx:
     image: {{ runitup_nginx_image }}

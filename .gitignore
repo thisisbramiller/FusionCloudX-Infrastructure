@@ -37,3 +37,9 @@ Thumbs.db
 
 # macOS files
 .DS_Store
+
+# runitup pre-built image tarball (staged by scripts/build-runitup-image.sh, never committed)
+ansible/roles/runitup/files/*.tar
+
+# Playwright MCP run artifacts (test output)
+.playwright-mcp/

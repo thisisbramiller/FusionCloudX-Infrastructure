@@ -3,10 +3,12 @@
 # Run It Up Deployment Playbook
 # ==============================================================================
 # Deploys the "Run It Up" savings-tracker PWA on the runitup VM via Docker
-# Compose. SQLite-backed (no external DB). App builds from its synced source
-# repo via the app's own multi-stage Dockerfile.
+# Compose, from a PRE-BUILT image (built on the controller by
+# scripts/build-runitup-image.sh, shipped as a tarball + docker-loaded).
+# SQLite-backed (no external DB). No source clone / no on-VM build.
 #
 # Usage:
+#   scripts/build-runitup-image.sh        # build + stage the image (controller)
 #   ansible-playbook playbooks/runitup.yml
 #
 # Requirements:
@@ -15,7 +17,7 @@
 #     fetches no secrets)
 #   - FusionCloudX certificates must be deployed first
 #     (run playbooks/common.yml --limit runitup)
-#   - The app repo must be pushed to runitup_repo_url before first deploy
+#   - The image tarball must be staged first (run build-runitup-image.sh)
 # ==============================================================================
 
 - name: Load SSH Key from 1Password Connect
