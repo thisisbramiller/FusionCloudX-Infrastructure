@@ -83,12 +83,22 @@
   register: runitup_image_copy
   tags: ['runitup', 'deploy']
 
+- name: Check whether the Run It Up image is already present
+  ansible.builtin.command:
+    cmd: "docker image inspect {{ runitup_image }}"
+  register: runitup_image_present
+  changed_when: false
+  failed_when: false
+  tags: ['runitup', 'deploy']
+
 - name: Load the Run It Up image into the local Docker engine
   ansible.builtin.command:
     cmd: "docker load -i {{ runitup_compose_dir }}/{{ runitup_image_tarball }}"
   register: runitup_image_load
   changed_when: "'Loaded image' in runitup_image_load.stdout"
-  when: runitup_image_copy is changed
+  # Load when the tarball is newly shipped OR the image is missing from the
+  # engine (self-heal after a docker prune / rebuild without re-staging).
+  when: runitup_image_copy is changed or runitup_image_present.rc != 0
   notify: restart runitup
   tags: ['runitup', 'deploy']
 

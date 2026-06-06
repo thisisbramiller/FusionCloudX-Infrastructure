@@ -7,6 +7,9 @@
   community.docker.docker_compose_v2:
     project_src: "{{ runitup_compose_dir }}"
     state: present
-    build: always
+    # Image-deploy model: never build or pull (the image is loaded from the
+    # shipped tarball). Mirrors the "Start Run It Up containers" task contract.
+    build: never
+    pull: never
     recreate: always
   become: yes
