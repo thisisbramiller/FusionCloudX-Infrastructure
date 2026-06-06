@@ -63,3 +63,9 @@ variable "extra_disk_size_gb" {
   default     = null
   description = "When set, attach an extra OS disk (scsi1) of this size on var.datastore_id. Null = no extra disk."
 }
+
+variable "protected" {
+  type        = bool
+  default     = false
+  description = "When true, build the protected VM variant with lifecycle.prevent_destroy=true (gitlab/opconnect singletons). Default false = destroyable disposable variant (mealie/tandoor/immich/runitup)."
+}

@@ -64,4 +64,10 @@ resource "proxmox_virtual_environment_container" "this" {
   }
 
   tags = var.tags
+
+  # This module is only ever consumed by the protected postgresql singleton, so
+  # prevent_destroy is an UNCONDITIONAL literal here (literal-only by HCL rule).
+  lifecycle {
+    prevent_destroy = true
+  }
 }
