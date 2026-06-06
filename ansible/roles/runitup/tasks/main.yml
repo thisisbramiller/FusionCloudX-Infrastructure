@@ -6,8 +6,7 @@
 # (Mac) by scripts/build-runitup-image.sh and shipped here as a tarball
 # (docker save -> copy -> docker load). NO source clone, NO build on this VM,
 # NO GitHub credential on this VM. An nginx sidecar terminates TLS with the
-# FusionCloudX wildcard cert; SQLite data persists on a host bind mount for
-# Backrest.
+# FusionCloudX wildcard cert; SQLite data persists on a host bind mount.
 #
 # INTERIM until the GitLab container registry is ready, at which point the
 # copy+load below becomes a registry pull (+ a read_registry deploy token) and
