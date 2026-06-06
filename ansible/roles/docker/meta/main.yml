@@ -1,0 +1,19 @@
+---
+# ==============================================================================
+# Docker - Role Metadata
+# ==============================================================================
+
+dependencies: []
+
+galaxy_info:
+  author: FusionCloudX
+  description: Install Docker CE and the Compose plugin from Docker's apt repo
+  license: MIT
+  min_ansible_version: "2.14"
+  # Ubuntu only — the install tasks use Ubuntu apt repo URLs + ansible_distribution_release.
+  platforms:
+    - name: Ubuntu
+      versions:
+        - focal
+        - jammy
+        - noble

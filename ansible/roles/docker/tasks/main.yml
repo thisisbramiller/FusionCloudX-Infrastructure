@@ -1,0 +1,62 @@
+---
+# ==============================================================================
+# Docker Role - Main Tasks
+# ==============================================================================
+# Installs Docker CE + Compose plugin from Docker's official apt repository.
+# Shared dependency of every app role that ships a Docker Compose stack
+# (mealie, tandoor, immich, runitup) — pulled in via each app role's
+# meta/main.yml so it always runs before the app's own tasks.
+#
+# Tags: tasks here carry ['docker']; each app role's meta dependency ALSO tags
+# this role with the app's own tag (e.g. { role: docker, tags: ['docker','mealie'] })
+# so a scoped run like `--tags mealie` still installs Docker for that app.
+# ==============================================================================
+
+- name: Ensure /etc/apt/keyrings exists
+  ansible.builtin.file:
+    path: /etc/apt/keyrings
+    state: directory
+    mode: '0755'
+  tags: ['docker']
+
+- name: Install Docker prerequisites
+  ansible.builtin.apt:
+    name:
+      - ca-certificates
+      - curl
+      - gnupg
+    state: present
+    update_cache: yes
+  tags: ['docker']
+
+- name: Add Docker GPG key
+  ansible.builtin.get_url:
+    url: https://download.docker.com/linux/ubuntu/gpg
+    dest: /etc/apt/keyrings/docker.asc
+    mode: '0644'
+  tags: ['docker']
+
+- name: Add Docker repository
+  ansible.builtin.apt_repository:
+    repo: "deb [arch=amd64 signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable"
+    state: present
+    filename: docker
+  tags: ['docker']
+
+- name: Install Docker CE and Compose plugin
+  ansible.builtin.apt:
+    name:
+      - docker-ce
+      - docker-ce-cli
+      - containerd.io
+      - docker-compose-plugin
+    state: present
+    update_cache: yes
+  tags: ['docker']
+
+- name: Ensure Docker service is started and enabled
+  ansible.builtin.systemd:
+    name: docker
+    state: started
+    enabled: yes
+  tags: ['docker']
