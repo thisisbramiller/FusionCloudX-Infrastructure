@@ -1,0 +1,11 @@
+---
+# ==============================================================================
+# opconnect Role - Handlers
+# ==============================================================================
+
+- name: restart opconnect
+  community.docker.docker_compose_v2:
+    project_src: "{{ opconnect_compose_dir }}"
+    state: present
+    recreate: always
+  become: yes
