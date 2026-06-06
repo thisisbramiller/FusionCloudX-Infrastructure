@@ -11,12 +11,12 @@ plugin: cloud.terraform.terraform_provider
 # ../tofu/compute at the P5 cutover).
 project_path: ../terraform
 
-# Use the OpenTofu binary. The plugin defaults to `terraform`, which fails here:
-# the repo migrated to OpenTofu and the lockfile pins registry.opentofu.org
-# provider hashes, so a `terraform` run reports "unavailable provider
-# registry.terraform.io/bpg/proxmox" and returns an empty inventory.
-# (Dev-machine path, like .tofurc; a CI runner sets its own.)
-binary_path: /opt/homebrew/bin/tofu
+# Use the OpenTofu binary (resolved via PATH — portable across macOS/Linux/CI).
+# The plugin defaults to `terraform`, which fails here: the repo migrated to
+# OpenTofu and the lockfile pins registry.opentofu.org provider hashes, so a
+# `terraform` run reports "unavailable provider registry.terraform.io/bpg/proxmox"
+# and returns an empty inventory.
+binary_path: tofu
 
 # Include resources from child modules (if any)
 search_child_modules: false
