@@ -272,9 +272,18 @@ git checkout main && git pull --ff-only
 
 - [ ] **Step 1: [OP] Verify the pinned image pair exists** — confirm `1password/connect-api:1.7.3` AND `1password/connect-sync:1.7.3` exist on Docker Hub as a matched pair; capture both digests. Record them in a comment next to `opconnect_connect_version` in `ansible/roles/opconnect/defaults/main.yml` (a follow-up commit on a small branch). If 1.7.3 is not a valid matched pair, pick the latest matched pair and update the default.
 
-- [ ] **Step 2: DNS reconcile (apply-blocker)** — confirm the conflict:
+- [ ] **Step 2: DNS — temp subdomain (no pre-apply deletion needed)** — confirm current state:
   Run: `dig +short opconnect.fusioncloudx.home @192.168.40.1`
-  Expected: `192.168.40.44` (old). Identify the existing A record on the UDM (UniFi DNS UI or `unifi_dns_record` import). Plan to delete/adopt it so the P4.2 `tofu apply` (which creates `module.opconnect_dns`'s `unifi_dns_record` for the same name) does not 400/409. **[CONFIRM]** the reconcile approach (manual delete on UDM vs `tofu import`) before C2.
+  Expected: `192.168.40.44` (old). Leave this record alone — the P4.2 apply passes
+  `-var opconnect_dns_name=opconnect-new`, so `module.opconnect_dns` creates
+  `opconnect-new.fusioncloudx.home → 1101` with no collision. The old Connect remains reachable
+  by IP (`192.168.40.44`) throughout, so all consumers are unaffected. The canonical name is
+  reclaimed at the new Task C6 (P4.6) after VM 100 is retired. **No pre-apply deletion or import
+  required before C2.**
+  **Token-scope good news (verified):** the old token sees exactly ONE vault —
+  `ve6jgmyk77ssj7aqpeodt2uhyi` ("FusionCloudX"). The new 90d token scoped to that single vault
+  gives exact parity with no darkout. Device-cert items in `ansible/inventory/devices.yaml` target
+  LOCAL DESKTOP 1Password (not Connect) — out of scope.
 
 - [ ] **Step 3: Enumerate every `op://` consumer → confirm one vault**
   Run: `grep -rnoE 'op://[^ "'\'']+' "/Users/fcx/Developer/Personal/repos/FusionCloudX Infrastructure/ansible" "/Users/fcx/Developer/Personal/repos/FusionCloudX Infrastructure/tofu" 2>/dev/null | sort -u`
@@ -300,14 +309,16 @@ Record the token issuance date (compute T+90d). Keep the new token OUT of the bu
 
 ### Task C2 (P4.2): [BUILD] Build VM 1101 + bring up Connect
 
-- [ ] **Step 1: Apply the opconnect state** (after the C0 DNS reconcile)
+- [ ] **Step 1: Apply the opconnect state** (after the C0 pre-flight; no DNS pre-deletion needed)
 
 ```bash
 cd "/Users/fcx/Developer/Personal/repos/FusionCloudX Infrastructure"
-tofu -chdir=tofu/opconnect plan -input=false      # expect 7 add / 0 change / 0 destroy
-tofu -chdir=tofu/opconnect apply -input=false      # [CONFIRM] before apply
+tofu -chdir=tofu/opconnect plan -input=false -var opconnect_dns_name=opconnect-new   # expect 7 add / 0 change / 0 destroy
+tofu -chdir=tofu/opconnect apply -input=false -var opconnect_dns_name=opconnect-new  # [CONFIRM] before apply
 ```
-Expected: VM 1101 created; `opconnect_ip` output populated once the guest agent leases.
+Expected: VM 1101 created; `opconnect-new.fusioncloudx.home → 1101` DNS record created;
+`opconnect_ip` output populated once the guest agent leases. The canonical
+`opconnect.fusioncloudx.home → .44` record is untouched.
 
 - [ ] **Step 2: [OP] Stage the credentials on 1101**
 
@@ -339,16 +350,17 @@ Expected: (a) 200 with the infra vault present; (b) 200 listing the Ansible SSH 
 
 - [ ] **Step 2: [CONFIRM]** Gate passed (vault + items confirmed via the NEW token). Both Connects still running; nothing on VM 100 touched. Confirm before proceeding to the cutover.
 
-### Task C4 (P4.4): [CUT, reversible] DNS flip + repoint + broad verify
+### Task C4 (P4.4): [CUT, reversible] Repoint to temp subdomain + broad verify
 
-- [ ] **Step 1: Flip + verify DNS** — the P4.2 apply created the A record → 1101; confirm:
-  Run: `dig +short opconnect.fusioncloudx.home @192.168.40.1`
-  Expected: `<1101-IP>` (NOT `.44`). Do not trust the hostname until this passes.
+- [ ] **Step 1: Verify the temp DNS record** — the P4.2 apply created `opconnect-new → 1101`; confirm:
+  Run: `dig +short opconnect-new.fusioncloudx.home @192.168.40.1`
+  Expected: `<1101-IP>`. Do not trust the temp hostname until this passes. The canonical
+  `opconnect.fusioncloudx.home → .44` is NOT touched.
 
-- [ ] **Step 2: [OP] Repoint the fleet env** — update Keychain + profile together:
+- [ ] **Step 2: [OP] Repoint the fleet env to the temp subdomain** — update Keychain + profile together:
 ```bash
 security add-generic-password -U -a "$USER" -s opconnectfcxtoken -w '<new token>'
-# edit ~/.zprofile: OP_CONNECT_HOST -> http://opconnect.fusioncloudx.home:8080
+# edit ~/.zprofile: OP_CONNECT_HOST -> http://opconnect-new.fusioncloudx.home:8080
 ```
 Update the DR 1P-document note. Open a FRESH shell (re-sources `.zprofile` → new `OP_CONNECT_TOKEN`/`OP_CONNECT_HOST`/`TF_VAR_onepassword_connect_token`). Restart long-lived consumers (launchd/cron/CI).
 
@@ -360,7 +372,9 @@ cd "ansible" && ansible-playbook playbooks/site.yml  # 0 failed; non-empty asser
 ```
 Expected: compute plan clean (0 errors); `site.yml` 0 failed. Prove traffic hits 1101 (server-side log on 1101 / `/health` served-from), not `.44`.
 
-- [ ] **Step 4: Rollback window note** — until C5, rollback = revert Keychain/`.zprofile`/DNS to `.44`; old token + server + VM 100 still live.
+- [ ] **Step 4: Rollback window note** — until C5, rollback = revert Keychain/`.zprofile` env back to
+  the old `.44`; the canonical `opconnect.fusioncloudx.home → .44` record was never touched, old
+  token + server + VM 100 still live.
 
 ### Task C5 (P4.5): [CUT, irreversible] Hardened clean-cut retire
 
@@ -377,17 +391,68 @@ op connect server list                          # confirm old server absent; new
 
 - [ ] **Step 4: [OP][CUT] Decommission VM 100** — stop + delete the snowflake VM 100 in Proxmox.
 
-- [ ] **Step 5: Finalize** — update `docs/.../1Password-Connect.md` (host = 1101, correct `/health` expectation, out-of-band DR retrieval); record the T+90d rotation deadline + set the T-14d/T-3d alerts; `prevent_destroy` on 1101 stays on (escape hatch documented in the runbook).
+- [ ] **Step 5: [OP][CUT] Delete the old `opconnect → .44` UDM A record** (UniFi DNS UI). VM 100 is
+  gone; the canonical name is now free to be reclaimed at C6.
 
-- [ ] **Step 6: Verify done** — `op connect server list` lacks the old server; old token revoked; VM 100 absent in Proxmox; off-box `vzdump` exists; `tofu -chdir=tofu/compute plan` + `tofu -chdir=tofu/opconnect plan` clean via the new Connect.
+- [ ] **Step 6: Finalize** — update `docs/.../1Password-Connect.md` (host = 1101, correct `/health` expectation, out-of-band DR retrieval); record the T+90d rotation deadline + set the T-14d/T-3d alerts; `prevent_destroy` on 1101 stays on (escape hatch documented in the runbook).
+
+- [ ] **Step 7: Verify done** — `op connect server list` lacks the old server; old token revoked; VM 100 absent in Proxmox; off-box `vzdump` exists; `tofu -chdir=tofu/compute plan` + `tofu -chdir=tofu/opconnect plan` clean via the new Connect.
+
+### Task C6 (P4.6): [CUT] Finalize — reclaim the canonical name
+
+Only after C5 is fully complete (VM 100 gone, old token/server revoked, old `opconnect → .44`
+UDM record deleted).
+
+- [ ] **Step 1: Apply with the default var (canonical name)**
+
+```bash
+cd "/Users/fcx/Developer/Personal/repos/FusionCloudX Infrastructure"
+tofu -chdir=tofu/opconnect apply -input=false      # default opconnect_dns_name=opconnect
+```
+Expected: `opconnect.fusioncloudx.home → 1101` created; `opconnect-new.fusioncloudx.home` record
+destroyed in the same apply.
+
+- [ ] **Step 2: Verify canonical DNS**
+
+```bash
+dig +short opconnect.fusioncloudx.home @192.168.40.1    # must equal <1101-IP>
+dig +short opconnect-new.fusioncloudx.home @192.168.40.1 # must be empty (record gone)
+```
+
+- [ ] **Step 3: [OP] Repoint fleet env to canonical hostname**
+
+```bash
+# edit ~/.zprofile: OP_CONNECT_HOST -> http://opconnect.fusioncloudx.home:8080
+```
+Token is unchanged. Open a fresh shell; restart long-lived consumers (launchd/cron/CI).
+
+- [ ] **Step 4: Final broad verify**
+
+```bash
+cd "/Users/fcx/Developer/Personal/repos/FusionCloudX Infrastructure"
+tofu -chdir=tofu/compute plan -input=false          # clean via canonical hostname + new Connect
+cd "ansible" && ansible-playbook playbooks/site.yml  # 0 failed; non-empty asserts on each secret class
+```
+
+- [ ] **Step 5: Update docs** — update this plan, the runbook (`docs/runbooks/opconnect-cutover.md`),
+  and `docs/.../1Password-Connect.md` to reflect the canonical end state: `opconnect.fusioncloudx.home
+  → 1101`, temp subdomain gone. Record the T+90d rotation deadline.
 
 ---
 
 ## Rollback / abort (quick reference)
 - **Before C4:** old Connect untouched → abort = leave 1101 running; fix forward.
-- **C4 → C5:** revert Keychain/`.zprofile`/DNS to `.44` → instant rollback.
-- **After C5:** restore the `vzdump` or rebuild from the proven 1101.
+- **C4 → C5:** revert Keychain/`.zprofile` env back to the old `.44`; the canonical
+  `opconnect.fusioncloudx.home → .44` record was never touched → instant rollback.
+- **After C5 (C6 pending):** old VM gone; revert env to the old `.44` IP directly; rebuild is the
+  only full restore path.
+- **After C6:** restore the `vzdump` or rebuild from the proven 1101.
 - **`prevent_destroy` on 1101 (abort teardown):** comment out `protected = true` in `tofu/opconnect/opconnect.tf` → `tofu apply` → `tofu destroy`/recreate → re-add `protected = true` + apply. If `tofu plan` shows `-/+ replace` on 1101, STOP (the seatbelt is working) — never `qm destroy` manually.
 
 ## Definition of done
-Code/doc PR merged via the full review lifecycle; new Connect on 1101 passes the authenticated `/v1` gate; fleet repointed; broad verify clean; old snowflake fully retired (token revoked, server deleted, VM 100 gone, off-box `vzdump` kept); rotation runbook + alerts in place; DR creds document stored; ClickUp P4 marked complete.
+Code/doc PR merged via the full review lifecycle; new Connect on 1101 passes the authenticated `/v1`
+gate; fleet repointed first via temp subdomain (C4) then via canonical hostname (C6); broad verify
+clean; old snowflake fully retired (token revoked, server deleted, VM 100 gone, old
+`opconnect → .44` UDM record deleted, off-box `vzdump` kept); canonical
+`opconnect.fusioncloudx.home → 1101`; rotation runbook + alerts in place; DR creds document stored;
+ClickUp P4 marked complete.
