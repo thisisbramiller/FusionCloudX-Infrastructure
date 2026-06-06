@@ -4,7 +4,3 @@
 # ==============================================================================
 # Recipe management with Docker Compose + nginx SSL termination
 # ==============================================================================
-
-# Backup client configuration (for Backrest NFS exports)
-backup_client_nfs_exports:
-  - path: "/opt/mealie"

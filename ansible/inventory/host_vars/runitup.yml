@@ -7,7 +7,3 @@
 # clone, no on-VM build, no GitHub credential on this VM (so no ForwardAgent /
 # deploy key here; the connection uses the standard ansible key from ansible.cfg).
 # ==============================================================================
-
-# Backup client configuration (for Backrest NFS exports)
-backup_client_nfs_exports:
-  - path: "/opt/runitup"
