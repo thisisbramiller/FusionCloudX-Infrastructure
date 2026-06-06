@@ -63,11 +63,11 @@ provider "unifi" {
   # UNIFI_API_KEY environment variable, keeping the secret out of HCL/state.
 }
 
-# 1Password provider — SA-TOKEN auth ONLY for this secrets-root state.
-# The provider reads OP_SERVICE_ACCOUNT_TOKEN from the environment (the `op`
-# CLI / Service Account path). It does NOT use OP_CONNECT_HOST/OP_CONNECT_TOKEN
-# here: opconnect builds the host that WILL serve Connect, so Connect does not
-# yet exist for this state to depend on. No secrets in HCL/state.
+# 1Password provider — auto-detects auth from the environment.
+# P4 cutover: reads the single Ansible-SSH-key item via the OLD Connect
+# (OP_CONNECT_HOST + OP_CONNECT_TOKEN in env). A from-scratch rebuild would
+# instead supply OP_SERVICE_ACCOUNT_TOKEN or run `op signin` to restage
+# credentials. No secrets in HCL/state.
 provider "onepassword" {}
 
 provider "ansible" {}

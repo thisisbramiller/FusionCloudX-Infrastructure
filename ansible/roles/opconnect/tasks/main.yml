@@ -46,6 +46,23 @@
   notify: restart opconnect
   tags: ['opconnect', 'deploy', 'secrets']
 
+- name: Assert staged credentials file is present and non-empty
+  ansible.builtin.stat:
+    path: "{{ opconnect_compose_dir }}/1password-credentials.json"
+  register: _opconnect_creds_stat
+  tags: ['opconnect', 'deploy', 'secrets']
+
+- name: Fail fast if the credentials file is missing or empty
+  ansible.builtin.fail:
+    msg: >-
+      {{ opconnect_compose_dir }}/1password-credentials.json is missing or empty.
+      Stage the file emitted by `op connect server create` at
+      {{ opconnect_credentials_src }} BEFORE running this play — the relative ./
+      bind in docker-compose would otherwise create an empty mount and
+      connect-sync cannot authenticate.
+  when: not _opconnect_creds_stat.stat.exists or _opconnect_creds_stat.stat.size == 0
+  tags: ['opconnect', 'deploy', 'secrets']
+
 - name: Template Docker Compose file
   ansible.builtin.template:
     src: docker-compose.yml.j2
@@ -78,6 +95,36 @@
   retries: 30
   delay: 5
   until: opconnect_health is succeeded
+  tags: ['opconnect', 'verify']
+
+# /health (unauthenticated) returns {name, version, dependencies[]}. On a fresh
+# server BEFORE the first authenticated request, the `sync` dependency reports
+# TOKEN_NEEDED (expected — primed by the authenticated /v1 read in the runbook,
+# NOT here). The role gate asserts ONLY: api live (/heartbeat, above), the
+# pinned version deployed, and the local store (sqlite) is ACTIVE.
+- name: Fetch 1Password Connect /health
+  ansible.builtin.uri:
+    url: "http://localhost:{{ opconnect_api_port }}/health"
+    return_content: true
+    status_code: 200
+  register: _opconnect_healthz
+  retries: 12
+  delay: 5
+  until: _opconnect_healthz is succeeded
+  tags: ['opconnect', 'verify']
+
+- name: Assert deployed version matches the pinned tag and sqlite is ACTIVE
+  ansible.builtin.assert:
+    that:
+      - _opconnect_healthz.json.version == opconnect_connect_version
+      - >-
+        (_opconnect_healthz.json.dependencies
+         | selectattr('service', 'equalto', 'sqlite') | map(attribute='status') | first | default('')) == 'ACTIVE'
+    fail_msg: >-
+      /health did not confirm a clean deploy. version_seen={{ _opconnect_healthz.json.version | default('?') }}
+      expected={{ opconnect_connect_version }}; dependencies={{ _opconnect_healthz.json.dependencies | default([]) }}.
+      (sync=TOKEN_NEEDED here is EXPECTED — primed by the authenticated /v1 read in P4.3.)
+    success_msg: "Connect {{ _opconnect_healthz.json.version }} live; sqlite ACTIVE; sync primes on the P4.3 authenticated read."
   tags: ['opconnect', 'verify']
 
 - name: Display opconnect deployment status

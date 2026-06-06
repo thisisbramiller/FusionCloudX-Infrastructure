@@ -5,34 +5,39 @@
 # Deploys 1Password Connect (connect-api + connect-sync) on the opconnect VM via
 # Docker Compose — the secrets-root bring-up.
 #
-# BOOTSTRAP AUTH PATH: this play asserts OP_SERVICE_ACCOUNT_TOKEN is set, NOT
-# OP_CONNECT_HOST/OP_CONNECT_TOKEN. opconnect BUILDS Connect, so it cannot
-# depend on Connect (you cannot make Connect with Connect). The SA token is the
-# credential the operator uses out-of-band to generate the Connect server
-# credentials + token:
-#     op connect server create opconnect      # -> 1password-credentials.json
-#     op connect token create  opconnect ...  # -> the Connect access token
+# BOOTSTRAP AUTH PATHS (two valid paths, both design-approved):
 #
-# Usage:
-#   export OP_SERVICE_ACCOUNT_TOKEN=...        # SA token (op CLI)
-#   # stage 1password-credentials.json on the target at opconnect_credentials_src
-#   ansible-playbook playbooks/opconnect.yml
+#   PATH A — P4 cutover (the intended build path for this phase):
+#     The new Connect (VM 1101) is bootstrapped via the EXISTING old Connect
+#     (VM 100). OP_CONNECT_HOST + OP_CONNECT_TOKEN are set pointing to the old
+#     Connect. The one item read via Connect is the Ansible SSH private key
+#     (ssh-key-loader role). The 1password-credentials.json for the new server
+#     must be staged on the target separately (generated out-of-band from a prior
+#     `op connect server create` run). After P4.4 repoint, the new Connect takes
+#     over as the sole secrets endpoint.
+#       export OP_CONNECT_HOST=...
+#       export OP_CONNECT_TOKEN=...
+#       ansible-playbook playbooks/opconnect.yml
 #
-# Requirements:
-#   - OP_SERVICE_ACCOUNT_TOKEN env var (bootstrap auth, NOT Connect creds)
-#   - 1password-credentials.json staged on the opconnect VM (generated via the
-#     SA token with `op connect server create`)
+#   PATH B — from-scratch rebuild (no prior Connect available):
+#     Use OP_SERVICE_ACCOUNT_TOKEN so the SA token sources the SSH key instead.
+#     Requires the operator to restage 1password-credentials.json from the DR
+#     document via `op connect server create` or a manual DR procedure.
+#       export OP_SERVICE_ACCOUNT_TOKEN=...
+#       ansible-playbook playbooks/opconnect.yml
+#
+# Requirements (either path):
+#   - 1password-credentials.json staged on the opconnect VM
+#     (opconnect_credentials_src) — generated via `op connect server create`
 # ==============================================================================
 
-# OLD CONNECT VM 100 MUST STAY UP DURING P4. The ssh-key-loader role below reads
-# the Ansible SSH private key via 1Password CONNECT (OP_CONNECT_HOST /
-# OP_CONNECT_TOKEN), NOT via the SA token. So even though THIS play bootstraps
-# the NEW Connect server, it still depends on an EXISTING Connect endpoint to
-# fetch the SSH key it uses to reach the new opconnect VM. Keep the old Connect
-# (VM 100) serving OP_CONNECT_HOST until the new opconnect is verified and the
-# cutover repoint happens. A true from-scratch bring-up (no prior Connect) would
-# need a different key path here (e.g. an SA-token field_info read or an
-# operator-staged key file) — out of scope for the P4 cutover sequence.
+# OLD CONNECT VM 100 MUST STAY UP DURING P4. The ssh-key-loader role reads the
+# Ansible SSH private key via 1Password Connect (OP_CONNECT_HOST /
+# OP_CONNECT_TOKEN). This is the deliberate, design-approved P4 build path: the
+# new Connect (VM 1101) is bootstrapped via the existing old Connect — NOT a
+# temporary hack. Keep the old Connect (VM 100) serving OP_CONNECT_HOST until
+# the new opconnect is verified and the P4.4 repoint happens. After repoint the
+# new Connect serves all consumers and the old VM 100 can be decommissioned.
 - name: Load SSH Key from 1Password Connect
   hosts: localhost
   gather_facts: false
@@ -50,17 +55,27 @@
     ansible_ssh_private_key_file: "/tmp/.ansible_ssh_key"
 
   pre_tasks:
-    - name: Ensure 1Password Service Account token is set (bootstrap auth, NOT Connect)
+    - name: Ensure a 1Password auth path is available (SA token OR Connect)
       ansible.builtin.fail:
         msg: >-
-          OP_SERVICE_ACCOUNT_TOKEN must be set. opconnect is the secrets root and
-          authenticates with the Service Account token, NOT 1Password Connect
-          (you cannot make Connect with Connect).
-      when: lookup('env', 'OP_SERVICE_ACCOUNT_TOKEN') == ''
+          Provide a 1Password auth path: either OP_SERVICE_ACCOUNT_TOKEN (pure
+          secrets-root bootstrap) OR OP_CONNECT_HOST + OP_CONNECT_TOKEN (the P4
+          cutover bootstraps the NEW Connect via the EXISTING old Connect — the
+          one item read is the Ansible SSH key). A from-scratch rebuild (no prior
+          Connect) uses OP_SERVICE_ACCOUNT_TOKEN or an operator `op signin` to
+          restage 1password-credentials.json from the DR document.
+      when: >-
+        lookup('env', 'OP_SERVICE_ACCOUNT_TOKEN') == '' and
+        (lookup('env', 'OP_CONNECT_HOST') == '' or lookup('env', 'OP_CONNECT_TOKEN') == '')
 
     - name: Display opconnect bootstrap auth status
       ansible.builtin.debug:
-        msg: "Bootstrapping 1Password Connect via the Service Account token (SA-token auth path)."
+        msg: >-
+          {% if lookup('env', 'OP_SERVICE_ACCOUNT_TOKEN') != '' -%}
+          Bootstrapping 1Password Connect via the Service Account token (PATH B — from-scratch rebuild).
+          {%- else -%}
+          Bootstrapping 1Password Connect via the existing old Connect at {{ lookup('env', 'OP_CONNECT_HOST') }} (PATH A — P4 cutover).
+          {%- endif %}
 
   roles:
     - opconnect
