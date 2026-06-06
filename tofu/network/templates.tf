@@ -31,6 +31,14 @@ resource "proxmox_virtual_environment_download_file" "ubuntu_cloud_image" {
   url          = "https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img"
 
   file_name = "noble-server-cloudimg-amd64.qcow2"
+
+  # The cloud image already exists on nas-infrastructure (downloaded by the flat
+  # config). overwrite_unmanaged = true lets this state ADOPT the pre-existing
+  # file instead of erroring "refusing to override existing file"; overwrite =
+  # false skips size-based re-download once the file is managed (adopt-if-
+  # unmanaged, don't clobber-if-managed).
+  overwrite           = false
+  overwrite_unmanaged = true
 }
 
 resource "proxmox_virtual_environment_vm" "ubuntu_template" {
@@ -91,6 +99,11 @@ resource "proxmox_virtual_environment_download_file" "debian12_lxc_template" {
 
   url = "http://download.proxmox.com/images/system/debian-12-standard_12.12-1_amd64.tar.zst"
 
-  overwrite           = true
-  overwrite_unmanaged = false
+  # The vztmpl already exists on nas-infrastructure (downloaded by the flat
+  # config). overwrite_unmanaged = true lets this state ADOPT the pre-existing
+  # file instead of erroring "refusing to override existing file"; overwrite =
+  # false skips size-based re-download once the file is managed (adopt-if-
+  # unmanaged, don't clobber-if-managed).
+  overwrite           = false
+  overwrite_unmanaged = true
 }

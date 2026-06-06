@@ -22,5 +22,16 @@ terraform {
       method   = method.aes_gcm.default
       enforced = true
     }
+    # Decrypt the FOUNDATION network state read via data.terraform_remote_state.
+    # network/ is AES-GCM encrypted with this SAME CMK + key_provider name
+    # ("state") + method, so one default decryptor reads it. Without this block
+    # the cross-state read fails "Unsupported state file format" — encrypted
+    # remote state is opaque to a consumer with no remote-state decryptor.
+    # Pattern mirrors aws-foundation/{21-detective-controls,24-alerting}.
+    remote_state_data_sources {
+      default {
+        method = method.aes_gcm.default
+      }
+    }
   }
 }
