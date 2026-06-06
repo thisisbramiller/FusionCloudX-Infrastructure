@@ -36,8 +36,8 @@
 # ==============================================================================
 
 locals {
-  # The active QEMU VMs (gated by enable_backup_stack; see qemu-vm.tf).
-  # Full set: gitlab, mealie, tandoor, immich, duplicati, backrest.
+  # The active QEMU VMs (gated by var.disabled_workloads; see qemu-vm.tf).
+  # Full set: gitlab, mealie, tandoor, immich, runitup.
   fcx_vms = toset(keys(local.enabled_vm_configs))
 
   # Resolve each host's live DHCP IP ONCE so its reservation and its DNS record
