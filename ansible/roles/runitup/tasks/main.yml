@@ -1,0 +1,169 @@
+---
+# ==============================================================================
+# Run It Up Role - Main Tasks (IMAGE-DEPLOY model)
+# ==============================================================================
+# Runs "Run It Up" from a PRE-BUILT image. The image is built on the controller
+# (Mac) by scripts/build-runitup-image.sh and shipped here as a tarball
+# (docker save -> copy -> docker load). NO source clone, NO build on this VM,
+# NO GitHub credential on this VM. An nginx sidecar terminates TLS with the
+# FusionCloudX wildcard cert; SQLite data persists on a host bind mount for
+# Backrest.
+#
+# INTERIM until the GitLab container registry is ready, at which point the
+# copy+load below becomes a registry pull (+ a read_registry deploy token) and
+# the build moves to a native-amd64 GitLab CI runner. The "run a pre-built
+# image" shape does not change — only the image-delivery step.
+# ==============================================================================
+
+- name: Install Docker prerequisites
+  apt:
+    name: [ca-certificates, curl, gnupg]
+    state: present
+    update_cache: yes
+  tags: ['runitup', 'docker']
+
+- name: Add Docker GPG key
+  ansible.builtin.get_url:
+    url: https://download.docker.com/linux/ubuntu/gpg
+    dest: /etc/apt/keyrings/docker.asc
+    mode: '0644'
+  tags: ['runitup', 'docker']
+
+- name: Add Docker repository
+  ansible.builtin.apt_repository:
+    repo: "deb [arch=amd64 signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable"
+    state: present
+    filename: docker
+  tags: ['runitup', 'docker']
+
+- name: Install Docker CE and Compose plugin
+  apt:
+    name: [docker-ce, docker-ce-cli, containerd.io, docker-compose-plugin]
+    state: present
+    update_cache: yes
+  tags: ['runitup', 'docker']
+
+- name: Ensure Docker service is started and enabled
+  systemd:
+    name: docker
+    state: started
+    enabled: yes
+  tags: ['runitup', 'docker']
+
+- name: Create Run It Up compose directory
+  file:
+    path: "{{ runitup_compose_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0750'
+  tags: ['runitup', 'deploy']
+
+- name: Create Run It Up data directory (SQLite volume target)
+  file:
+    path: "{{ runitup_data_dir }}"
+    state: directory
+    # App container runs as the non-root `node` user (uid/gid 1000 in
+    # node:24-slim); the bind mount presents host ownership inside the
+    # container, so the host dir must be writable by uid 1000.
+    owner: '1000'
+    group: '1000'
+    mode: '0750'
+  tags: ['runitup', 'deploy']
+
+- name: Ship the pre-built Run It Up image tarball to the host
+  ansible.builtin.copy:
+    # Built on the controller by scripts/build-runitup-image.sh into the role's
+    # files/ dir (gitignored). copy is idempotent — re-transfers only on change.
+    src: "{{ runitup_image_tarball }}"
+    dest: "{{ runitup_compose_dir }}/{{ runitup_image_tarball }}"
+    owner: root
+    group: root
+    mode: '0640'
+  register: runitup_image_copy
+  tags: ['runitup', 'deploy']
+
+- name: Check whether the Run It Up image is already present
+  ansible.builtin.command:
+    cmd: "docker image inspect {{ runitup_image }}"
+  register: runitup_image_present
+  changed_when: false
+  failed_when: false
+  tags: ['runitup', 'deploy']
+
+- name: Load the Run It Up image into the local Docker engine
+  ansible.builtin.command:
+    cmd: "docker load -i {{ runitup_compose_dir }}/{{ runitup_image_tarball }}"
+  register: runitup_image_load
+  changed_when: "'Loaded image' in runitup_image_load.stdout"
+  # Load when the tarball is newly shipped OR the image is missing from the
+  # engine (self-heal after a docker prune / rebuild without re-staging).
+  when: runitup_image_copy is changed or runitup_image_present.rc != 0
+  notify: restart runitup
+  tags: ['runitup', 'deploy']
+
+- name: Template Docker Compose file
+  template:
+    src: docker-compose.yml.j2
+    dest: "{{ runitup_compose_dir }}/docker-compose.yml"
+    owner: root
+    group: root
+    mode: '0640'
+  notify: restart runitup
+  tags: ['runitup', 'deploy']
+
+- name: Template environment file
+  template:
+    src: .env.j2
+    dest: "{{ runitup_compose_dir }}/.env"
+    owner: root
+    group: root
+    mode: '0600'
+  notify: restart runitup
+  tags: ['runitup', 'deploy']
+
+- name: Template nginx configuration
+  template:
+    src: nginx.conf.j2
+    dest: "{{ runitup_compose_dir }}/nginx.conf"
+    owner: root
+    group: root
+    mode: '0644'
+  notify: restart runitup
+  tags: ['runitup', 'deploy']
+
+- name: Restart containers if configuration changed
+  meta: flush_handlers
+
+- name: Start Run It Up containers (pre-built image — no build, no pull)
+  community.docker.docker_compose_v2:
+    project_src: "{{ runitup_compose_dir }}"
+    state: present
+    build: never
+    pull: never
+  tags: ['runitup', 'deploy']
+
+- name: Wait for Run It Up to be ready
+  uri:
+    url: "https://localhost:{{ runitup_https_port }}/api/health"
+    validate_certs: no
+    status_code: [200, 204]
+  register: runitup_health
+  # 300s window: the app seeds SQLite on FIRST boot with an un-batched bulk
+  # insert, and the VM disk is on NFS (vm-data) so each insert fsyncs over the
+  # network — the initial seed takes several minutes before app.listen() fires.
+  # Re-deploys skip the seed (data persists) and pass fast. Real fixes: move the
+  # DB to local-zfs (storage-placement decision (e)), and/or wrap the app's seed
+  # in a transaction upstream.
+  retries: 60
+  delay: 5
+  until: runitup_health is succeeded
+  tags: ['runitup', 'verify']
+
+- name: Display Run It Up deployment status
+  debug:
+    msg:
+      - "Run It Up deployed (pre-built image: {{ runitup_image }})"
+      - "URL: https://{{ ansible_host }}:{{ runitup_https_port }}"
+      - "Data (SQLite): {{ runitup_data_dir }}"
+  tags: ['runitup']

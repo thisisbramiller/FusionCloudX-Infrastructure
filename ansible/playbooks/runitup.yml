@@ -1,0 +1,52 @@
+---
+# ==============================================================================
+# Run It Up Deployment Playbook
+# ==============================================================================
+# Deploys the "Run It Up" savings-tracker PWA on the runitup VM via Docker
+# Compose, from a PRE-BUILT image (built on the controller by
+# scripts/build-runitup-image.sh, shipped as a tarball + docker-loaded).
+# SQLite-backed (no external DB). No source clone / no on-VM build.
+#
+# Usage:
+#   scripts/build-runitup-image.sh        # build + stage the image (controller)
+#   ansible-playbook playbooks/runitup.yml
+#
+# Requirements:
+#   - OP_CONNECT_HOST, OP_CONNECT_TOKEN, TF_VAR_onepassword_vault_id env vars
+#     (used by ssh-key-loader for playbook auth — the runitup role itself
+#     fetches no secrets)
+#   - FusionCloudX certificates must be deployed first
+#     (run playbooks/common.yml --limit runitup)
+#   - The image tarball must be staged first (run build-runitup-image.sh)
+# ==============================================================================
+
+- name: Load SSH Key from 1Password Connect
+  hosts: localhost
+  gather_facts: false
+  connection: local
+
+  roles:
+    - role: ssh-key-loader
+      tags: ['ssh-key', 'always']
+
+- name: Deploy Run It Up Savings Tracker
+  hosts: runitup
+  become: yes
+  gather_facts: yes
+  vars:
+    ansible_ssh_private_key_file: "/tmp/.ansible_ssh_key"
+
+  roles:
+    - runitup
+
+- name: Cleanup SSH Key
+  hosts: localhost
+  gather_facts: false
+  connection: local
+
+  tasks:
+    - name: Include ssh-key-loader cleanup tasks
+      include_role:
+        name: ssh-key-loader
+        tasks_from: cleanup.yml
+      tags: ['ssh-key', 'cleanup', 'always']

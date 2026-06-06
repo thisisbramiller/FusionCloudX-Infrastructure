@@ -1,0 +1,40 @@
+---
+# ==============================================================================
+# Run It Up Role - Default Variables (image-deploy model)
+# ==============================================================================
+# Self-hosted "Run It Up" savings-tracker PWA. SQLite-backed (no external DB).
+# Runs a PRE-BUILT image built on the controller (scripts/build-runitup-image.sh)
+# and shipped here as a tarball; an nginx sidecar terminates TLS with the
+# FusionCloudX wildcard cert. No source clone / no on-VM build / no GitHub
+# credential on this VM. Becomes a registry pull when GitLab CR is ready.
+# ==============================================================================
+
+# nginx image used for SSL termination (pinned)
+runitup_nginx_image: "nginx:1.29.5-alpine"
+
+# HTTPS port (exposed on the host; next free after backrest 9928)
+runitup_https_port: 9929
+
+# Internal container port (not exposed to host) — the app listens here
+runitup_container_port: 3001
+
+# SSL certificate paths (deployed by certificates role — shared wildcard cert
+# *.fusioncloudx.home, identical to the mealie role)
+runitup_ssl_cert: "/etc/ssl/certs/server-chain.crt"
+runitup_ssl_key: "/etc/ssl/private/server.key"
+
+# Docker Compose project directory
+runitup_compose_dir: "/opt/runitup"
+
+# Host directory holding the SQLite data (bind-mount target, exported for backup)
+runitup_data_dir: "{{ runitup_compose_dir }}/data"
+
+# Application settings
+runitup_timezone: "America/Chicago"
+
+# Pre-built image: built on the controller by scripts/build-runitup-image.sh,
+# staged in this role's files/ as the tarball below, copied to the host and
+# `docker load`ed. The deploy tag the compose runs (the build script also tags
+# the git-sha for traceability/rollback).
+runitup_image: "runitup:local"
+runitup_image_tarball: "runitup-image.tar"

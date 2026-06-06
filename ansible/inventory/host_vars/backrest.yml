@@ -40,6 +40,9 @@ backrest_source_mounts:
   - name: immich
     src: "{{ hostvars['immich']['ansible_host'] }}:/opt/immich"
     path: "/mnt/sources/immich"
+  - name: runitup
+    src: "{{ hostvars['runitup']['ansible_host'] }}:/opt/runitup"
+    path: "/mnt/sources/runitup"
   # PostgreSQL: NFS cannot run in unprivileged LXC — uses SSH-piped dumps instead
   # Dumps are written to /opt/backrest/pg-dumps on the Backrest VM host
 
@@ -82,3 +85,8 @@ backrest_plans:
     paths:
       - "/sources/tandoor"
     cron: "30 2 * * *"
+
+  - id: runitup-appdata
+    paths:
+      - "/sources/runitup"
+    cron: "45 2 * * *"

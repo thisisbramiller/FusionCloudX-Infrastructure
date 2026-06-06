@@ -1,0 +1,38 @@
+---
+services:
+  app:
+    # Pre-built image, loaded from the tarball shipped by the runitup role
+    # (built on the controller). pull_policy: never — the image is local, there
+    # is no registry to pull from yet.
+    image: "{{ runitup_image }}"
+    container_name: runitup
+    restart: always
+    pull_policy: never
+    env_file:
+      - .env
+    volumes:
+      # SQLite data on a named volume, bind-backed to the host data dir so the
+      # backup-client can export it under {{ runitup_compose_dir }}. Mounted at
+      # /data to match the app's Dockerfile (VOLUME /data, RUNITUP_DB=/data/runitup.db).
+      - runitup-data:/data
+
+  nginx:
+    image: {{ runitup_nginx_image }}
+    container_name: runitup-nginx
+    restart: always
+    ports:
+      - "{{ runitup_https_port }}:443"
+    depends_on:
+      - app
+    volumes:
+      - {{ runitup_ssl_cert }}:/etc/nginx/ssl/server.crt:ro
+      - {{ runitup_ssl_key }}:/etc/nginx/ssl/server.key:ro
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+
+volumes:
+  runitup-data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: {{ runitup_data_dir }}

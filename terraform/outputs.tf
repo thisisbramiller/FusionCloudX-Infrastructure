@@ -73,6 +73,11 @@ output "backrest_url" {
   value       = "https://${try(proxmox_virtual_environment_vm.qemu-vm["backrest"].ipv4_addresses[1][0], "IP-not-available")}:9928"
 }
 
+output "runitup_url" {
+  description = "Run It Up web interface URL"
+  value       = "https://${try(proxmox_virtual_environment_vm.qemu-vm["runitup"].ipv4_addresses[1][0], "IP-not-available")}:9929"
+}
+
 output "postgresql_connection" {
   description = "PostgreSQL connection details"
   value = {

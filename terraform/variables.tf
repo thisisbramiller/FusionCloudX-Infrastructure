@@ -67,6 +67,13 @@ variable "vm_configs" {
       cpu_cores = 2
       started   = true
     }
+    "runitup" = {
+      vm_id     = 1111
+      name      = "runitup"
+      memory_mb = 4096 # runs a PRE-BUILT image (no on-VM build); 4GB = container runtime + NFS I/O headroom
+      cpu_cores = 4    # general headroom (host is 16-thread); the image is built on the controller, not here
+      started   = true
+    }
   }
 }
 
@@ -88,9 +95,9 @@ variable "vm_configs" {
 #     e.g. ["gitlab"] to skip GitLab's ~18min clone during non-SCM dev.
 #
 # CAVEAT: with backrest built, host_vars/backrest.yml dereferences hostvars[<vm>]
-# for its NFS source-mounts + backup hooks for gitlab, mealie, tandoor, immich
-# (NOT duplicati) -- so disabling any of those four while the backup stack is ON
-# breaks ansible template rendering. duplicati is safe to disable independently
+# for its NFS source-mounts + backup hooks for gitlab, mealie, tandoor, immich,
+# runitup (NOT duplicati) -- so disabling any of those five while the backup stack
+# is ON breaks ansible template rendering. duplicati is safe to disable independently
 # (backrest never references it). The robust fix (inventory-driven backrest
 # mounts/hooks) is deferred to the backup-strategy work.
 # ==============================================================================
@@ -107,7 +114,7 @@ variable "enable_backup_stack" {
 variable "disabled_workloads" {
   type        = list(string)
   default     = []
-  description = "Dev escape hatch: vm_configs keys to EXCLUDE from the build (e.g. [\"gitlab\",\"mealie\"]). Composes with enable_backup_stack. Only disable a backrest-referenced app (gitlab/mealie/tandoor/immich) while the backup stack is off (see Workload Toggles comment)."
+  description = "Dev escape hatch: vm_configs keys to EXCLUDE from the build (e.g. [\"gitlab\",\"mealie\"]). Composes with enable_backup_stack. Only disable a backrest-referenced app (gitlab/mealie/tandoor/immich/runitup) while the backup stack is off (see Workload Toggles comment)."
 
   validation {
     condition     = alltrue([for k in var.disabled_workloads : contains(keys(var.vm_configs), k)])

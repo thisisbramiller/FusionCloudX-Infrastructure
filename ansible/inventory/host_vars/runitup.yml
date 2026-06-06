@@ -1,0 +1,13 @@
+---
+# ==============================================================================
+# Run It Up Host Variables (image-deploy model)
+# ==============================================================================
+# "Run It Up" savings-tracker PWA. SQLite-backed (no external DB). Runs a
+# PRE-BUILT image shipped from the controller and docker-loaded — no source
+# clone, no on-VM build, no GitHub credential on this VM (so no ForwardAgent /
+# deploy key here; the connection uses the standard ansible key from ansible.cfg).
+# ==============================================================================
+
+# Backup client configuration (for Backrest NFS exports)
+backup_client_nfs_exports:
+  - path: "/opt/runitup"

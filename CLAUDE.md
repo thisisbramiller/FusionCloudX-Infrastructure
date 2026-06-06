@@ -49,6 +49,14 @@ FusionCloudX Infrastructure is an Infrastructure-as-Code repository for managing
 - Dedicated ED25519 SSH key for pre-backup hooks stored in 1Password
 - Access: https://backrest.fusioncloudx.home:9928 (admin / password in 1Password)
 
+**Run It Up VM** (ID 1111):
+- 2GB RAM, 2 CPU cores, 32GB disk on vm-data (NFS)
+- "Run It Up" self-hosted savings-tracker PWA — SQLite-backed (no external DB)
+- App builds from its synced source repo via the app's own multi-stage Dockerfile, fronted by an nginx sidecar for SSL termination (Docker Compose)
+- SQLite data on a named volume bound to `/opt/runitup/data` (exported for Backrest)
+- Access: https://runitup.fusioncloudx.home:9929
+- **DNS (manual step):** `runitup.fusioncloudx.home → <DHCP IP>` must be added as an A-record on the UDM. The wildcard cert (`*.fusioncloudx.home`) already covers this host — no new cert needed.
+
 **PostgreSQL LXC** (ID 2001):
 - Debian 12 unprivileged container, 4GB RAM, 2 CPU cores, 64GB disk
 - Hosts multiple databases (currently: wazuh)
@@ -122,6 +130,7 @@ Files in `ansible/`:
 | `inventory/host_vars/gitlab.yml` | GitLab domain, memory settings, HTTPS config |
 | `inventory/host_vars/immich.yml` | Immich domain, NFS config, feature flags |
 | `inventory/host_vars/mealie.yml` | Mealie backup client config |
+| `inventory/host_vars/runitup.yml` | Run It Up backup client config |
 | `inventory/host_vars/tandoor.yml` | Tandoor backup client config |
 | `inventory/host_vars/duplicati.yml` | Duplicati domain, firewall rules |
 | `inventory/host_vars/backrest.yml` | Backrest domain, source mounts, backup plans |
@@ -133,6 +142,7 @@ Files in `ansible/`:
 - `postgresql/`: Installs PostgreSQL 15, creates databases/users, configures pg_hba.conf
 - `gitlab/`: Installs GitLab CE Omnibus, configures gitlab.rb with memory-constrained settings
 - `mealie/`: Mealie recipe management with Docker Compose + nginx SSL
+- `runitup/`: "Run It Up" savings-tracker PWA — Docker (build from synced repo), nginx SSL, SQLite (no external DB)
 - `tandoor/`: Tandoor Recipes with Docker Compose + nginx SSL
 - `immich/`: Immich photo management — Docker, NFS mount, compose, nginx SSL, health checks
 - `duplicati/`: Duplicati backups — Docker, NFS destination, SSHFS prep, compose, nginx SSL
@@ -229,6 +239,7 @@ Tandoor VM (ID 1105) ─────────────┤         │
 Immich VM (ID 1106) ──────────────┤         │
 Duplicati VM (ID 1107) ───────────┤         │
 Backrest VM (ID 1108) ────────────┤         │
+Run It Up VM (ID 1111) ───────────┤         │
                                   ↓         │
                             Ansible playbooks
                             (bootstrap → common → apps)
