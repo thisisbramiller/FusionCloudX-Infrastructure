@@ -44,10 +44,10 @@ go build -trimpath -ldflags=-buildid= -o "${DEST}/terraform-provider-unifi_v${VE
 cat <<EOF
 
 >> DONE. Installed: ${DEST}/terraform-provider-unifi_v${VERSION}
-   Next (once, or after a version bump), from the terraform/ dir:
-     terraform providers lock \\
+   Next (once, or after a version bump), from each tofu state dir:
+     tofu providers lock \\
        -fs-mirror="${MIRROR}" \\
-       -platform=darwin_arm64 [-platform=linux_amd64]
+       -platform=darwin_arm64 -platform=linux_amd64
    That writes h1: checksums for tf.fusioncloudx.home/ubiquiti-community/unifi into .terraform.lock.hcl.
-   ~/.terraformrc must use filesystem_mirror (NOT dev_overrides) — see PATCHED-PROVIDER.md.
+   The repo-root .tofurc (or ~/.terraformrc) must use filesystem_mirror (NOT dev_overrides) — see PATCHED-PROVIDER.md.
 EOF

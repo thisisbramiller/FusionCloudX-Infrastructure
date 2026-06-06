@@ -1,3 +1,5 @@
+> **ARCHIVED (2026-06-06)** — Semaphore was removed; this control-plane doc is superseded by GitLab CI/CD. Kept for history only.
+
 # Semaphore Control Plane Architecture
 
 This document describes the Infrastructure Control Plane architecture using Semaphore UI as the central automation hub.

@@ -1,3 +1,5 @@
+> **ARCHIVED (2026-06-06)** — Semaphore was removed; this control-plane doc is superseded by GitLab CI/CD. Kept for history only.
+
 # Quick Start: Semaphore Control Plane
 
 5-minute guide to get your Infrastructure Control Plane running.

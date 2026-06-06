@@ -1,0 +1,22 @@
+# OpenTofu CLI configuration — committed so the patched UniFi provider resolves
+# from the local filesystem mirror (built by scripts/build-unifi-provider.sh);
+# everything else goes to the public registry.
+#
+# DEV-MACHINE-SPECIFIC: filesystem_mirror `path` cannot use env vars or `~`, so
+# it is hardcoded to this Mac's $HOME (/Users/fcx). A Linux/CI runner must
+# regenerate this file with its own mirror path (and a linux_amd64 build of the
+# fork); it is NOT portable as-is. The `direct` exclude means there is no
+# registry fallback for the fork, so a wrong path fails `tofu init`.
+#
+# Twin of ~/.terraformrc (OpenTofu reads it as a fallback). Use explicitly with:
+#   TF_CLI_CONFIG_FILE="$PWD/.tofurc" tofu ...
+# Full rationale: terraform/PATCHED-PROVIDER.md
+provider_installation {
+  filesystem_mirror {
+    path    = "/Users/fcx/.terraform.d/plugins"
+    include = ["tf.fusioncloudx.home/ubiquiti-community/unifi"]
+  }
+  direct {
+    exclude = ["tf.fusioncloudx.home/ubiquiti-community/unifi"]
+  }
+}
