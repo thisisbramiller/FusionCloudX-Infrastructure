@@ -15,6 +15,9 @@ output "hostname" {
 
 # LXCs have no guest agent — Proxmox reads the IP from the container netns, so the
 # eth0 map is populated only while the container is running + holds a DHCP lease.
+# NOTE: this output is `ipv4` (NOT `ipv4_address` like the proxmox-vm module) —
+# the LXC IP comes from the container netns eth0 map, a different attribute shape
+# than the VM's guest-agent ipv4_addresses; consumers (postgresql.tf) use .ipv4.
 output "ipv4" {
   value       = try(proxmox_virtual_environment_container.this.ipv4["eth0"], null)
   description = "IPv4 address on eth0, or null if unavailable."

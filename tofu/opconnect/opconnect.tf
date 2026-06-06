@@ -26,6 +26,9 @@ module "opconnect" {
   tags         = ["opentofu", "ubuntu", "opconnect"]
   protected    = true # secrets-root singleton — prevent_destroy seatbelt
 
+  # Foundation ubuntu template (9001) lives in the network/ state (P3, applied first).
+  template_vm_id = data.terraform_remote_state.network.outputs.ubuntu_template_vm_id
+
   user_data_file_id   = module.opconnect_cloud_init.user_data_file_id
   vendor_data_file_id = module.opconnect_cloud_init.vendor_data_file_id
 }
@@ -59,10 +62,13 @@ module "opconnect_dns" {
 # ------------------------------------------------------------------------------
 # Ansible targeting — group + host so the P4 opconnect role can reach this VM
 # ------------------------------------------------------------------------------
-# Footgun #3 (truthy-string failure path): the host is registered ONLY when the
-# guest-agent has reported a DHCP lease (ip != null). No lease => the count-gated
-# ansible_host is omitted entirely (NULL failure path), never a truthy
-# "IP not available" string that would defeat Jinja's default().
+# opconnect is ALWAYS built (protected singleton), so the ansible_host is
+# UNCONDITIONAL — no count over a computed IP (that would make `tofu plan` fail
+# on "count depends on computed values"). The IP is carried as a nullable
+# attribute VALUE: ansible_host is the live lease IP or null. Footgun #3 (NULL
+# failure path, never the truthy "IP not available" string) is satisfied by the
+# nullable value — null lets Jinja default() engage; the value is never a
+# truthy string.
 # ------------------------------------------------------------------------------
 
 resource "ansible_group" "opconnect" {
@@ -75,15 +81,11 @@ resource "ansible_group" "opconnect" {
 }
 
 resource "ansible_host" "opconnect" {
-  # Register only once the VM has a guest-agent lease (ip non-null). count-gated
-  # NULL failure path — no ansible_host when the lease has not landed yet.
-  count = module.opconnect.ipv4_address != null ? 1 : 0
-
   name   = "opconnect"
   groups = [ansible_group.opconnect.name]
 
   variables = {
-    ansible_host = module.opconnect.ipv4_address
+    ansible_host = module.opconnect.ipv4_address # null until guest-agent lease
     vm_id        = module.opconnect.vm_id
     type         = "qemu"
   }

@@ -49,17 +49,17 @@ output "infrastructure_summary" {
 
 output "gitlab_url" {
   description = "GitLab web interface URL (null until gitlab has a lease)."
-  value       = try("http://${module.gitlab.ipv4_address}", null)
+  value       = module.gitlab.ipv4_address != null ? "http://${module.gitlab.ipv4_address}" : null
 }
 
 output "immich_url" {
   description = "Immich web interface URL (null when immich is disabled or unleased)."
-  value       = try("https://${one(module.immich[*].ipv4_address)}:9926", null)
+  value       = one(module.immich[*].ipv4_address) != null ? "https://${one(module.immich[*].ipv4_address)}:9926" : null
 }
 
 output "runitup_url" {
   description = "Run It Up web interface URL (null when runitup is disabled or unleased)."
-  value       = try("https://${one(module.runitup[*].ipv4_address)}:9929", null)
+  value       = one(module.runitup[*].ipv4_address) != null ? "https://${one(module.runitup[*].ipv4_address)}:9929" : null
 }
 
 # ------------------------------------------------------------------------------
@@ -107,4 +107,7 @@ output "onepassword_items" {
 output "ansible_ssh_public_key" {
   description = "Ansible SSH public key (read from the bootstrap-seeded 1Password item; private key never in state)."
   value       = local.ansible_ssh_public_key
+  # The source 1Password field carries the sensitive flag; honor it here rather
+  # than nonsensitive()-wrapping a value the provider marked sensitive.
+  sensitive = true
 }

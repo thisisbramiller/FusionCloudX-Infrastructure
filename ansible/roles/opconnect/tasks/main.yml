@@ -28,13 +28,12 @@
   tags: ['opconnect', 'deploy']
 
 # The 1password-credentials.json is generated out-of-band (`op connect server
-# create`, SA token) and staged on the target at opconnect_credentials_src. We
+# create`, SA token) and staged on the target at opconnect_credentials_src (the
+# default is the operator staging path /root/1password-credentials.json). We
 # normalize it into the compose dir as `1password-credentials.json` (the path
 # the compose file's relative `./1password-credentials.json` mount expects).
-# remote_src copies a file already on the target. When opconnect_credentials_src
-# already IS the canonical compose-dir path, this is a harmless no-op (same src
-# and dest); change opconnect_credentials_src to an operator staging path (e.g.
-# /root/1password-credentials.json) to copy from elsewhere on the host.
+# remote_src copies a file already on the target — staging path (src) -> compose
+# dir (dest), a meaningful copy since the two paths are distinct.
 - name: Stage 1Password Connect credentials into the compose directory
   ansible.builtin.copy:
     src: "{{ opconnect_credentials_src }}"

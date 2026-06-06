@@ -24,13 +24,19 @@ opconnect_sync_port: 8081
 # Connect log level (passed through OP_LOG_LEVEL). info|debug|trace.
 opconnect_log_level: "info"
 
-# Source path of the 1password-credentials.json delivered to the compose dir.
+# Operator STAGING path of the 1password-credentials.json on the opconnect VM.
+# This is a SEPARATE path from the compose dir on purpose: the role's "Stage
+# 1Password Connect credentials into the compose directory" task copies FROM
+# this staging path TO {{ opconnect_compose_dir }}/1password-credentials.json,
+# so the copy is meaningful (distinct src and dest). If this defaulted to the
+# compose-dir path the copy would be a same-src/same-dest no-op.
+#
 # This file + the Connect access token are GENERATED OUT-OF-BAND at P4 via the
 # SA token:
 #     op connect server create <name>     # emits 1password-credentials.json
 #     op connect token create <name> ...   # emits the access token (consumers)
-# The operator stages 1password-credentials.json at this path on the control
-# node before running the playbook. (Alternative considered: pull the file from
-# a 1Password item field via the SA token — deferred to P4; staged-file is the
+# The operator stages 1password-credentials.json at this path on the target VM
+# before running the playbook. (Alternative considered: pull the file from a
+# 1Password item field via the SA token — deferred to P4; staged-file is the
 # simpler bootstrap and keeps the credentials file out of this repo.)
-opconnect_credentials_src: "/opt/opconnect/1password-credentials.json"
+opconnect_credentials_src: "/root/1password-credentials.json"

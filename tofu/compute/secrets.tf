@@ -9,12 +9,12 @@
 # Ansible references these by item TITLE (not resource name). note_value is a
 # STATIC provenance string (footgun #8: NO timestamp() — keep apply a no-op).
 #
-# The database-category items (postgresql_admin / mealie / tandoor) carry
-# category=database + type=postgresql + hostname/port/database/username, which
-# the op-secret module (password-only) cannot express — so they use
-# onepassword_item directly. The plain password/login items COULD ride the
-# op-secret module, but are kept as direct resources here for one consistent
-# secrets file.
+# All items are declared directly as onepassword_item resources (no wrapper
+# module): the database-category items (postgresql_admin / mealie / tandoor)
+# carry category=database + type=postgresql + hostname/port/database/username
+# that a password-only wrapper could not express, and the plain password/login
+# items are kept inline for one consistent secrets file. (The vestigial
+# modules/op-secret/ wrapper was DROPPED as unused.)
 # ==============================================================================
 
 locals {

@@ -28,10 +28,6 @@ terraform {
       source  = "ansible/ansible"
       version = "~> 1.3.0"
     }
-    tls = {
-      source  = "hashicorp/tls"
-      version = "~> 4.0"
-    }
   }
 }
 
@@ -65,5 +61,3 @@ provider "unifi" {
 provider "onepassword" {}
 
 provider "ansible" {}
-
-provider "tls" {}

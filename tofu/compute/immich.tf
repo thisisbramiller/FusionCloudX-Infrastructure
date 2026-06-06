@@ -19,6 +19,9 @@ module "immich" {
   datastore_id = "local-zfs"
   tags         = ["opentofu", "ubuntu", "immich"]
 
+  # Foundation ubuntu template (9001) lives in the network/ state (P3, applied first).
+  template_vm_id = data.terraform_remote_state.network.outputs.ubuntu_template_vm_id
+
   user_data_file_id   = module.immich_cloud_init[0].user_data_file_id
   vendor_data_file_id = module.immich_cloud_init[0].vendor_data_file_id
 }

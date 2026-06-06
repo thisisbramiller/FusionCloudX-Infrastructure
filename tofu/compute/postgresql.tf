@@ -21,7 +21,8 @@ module "postgresql" {
   disk_gb      = 64
   datastore_id = "local-zfs"
 
-  template_file_id = proxmox_virtual_environment_download_file.debian12_lxc_template.id
+  # Foundation LXC template lives in the network/ state (applied first at P3).
+  template_file_id = data.terraform_remote_state.network.outputs.debian_lxc_template_file_id
   ssh_pubkey       = local.ansible_ssh_public_key
 
   tags = ["database", "postgresql", "homelab"]

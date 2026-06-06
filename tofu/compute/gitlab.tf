@@ -21,6 +21,9 @@ module "gitlab" {
   tags         = ["opentofu", "ubuntu", "gitlab"]
   protected    = true # protected singleton — prevent_destroy seatbelt
 
+  # Foundation ubuntu template (9001) lives in the network/ state (P3, applied first).
+  template_vm_id = data.terraform_remote_state.network.outputs.ubuntu_template_vm_id
+
   user_data_file_id   = module.gitlab_cloud_init.user_data_file_id
   vendor_data_file_id = module.gitlab_cloud_init.vendor_data_file_id
 }

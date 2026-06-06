@@ -24,6 +24,15 @@
 #     SA token with `op connect server create`)
 # ==============================================================================
 
+# OLD CONNECT VM 100 MUST STAY UP DURING P4. The ssh-key-loader role below reads
+# the Ansible SSH private key via 1Password CONNECT (OP_CONNECT_HOST /
+# OP_CONNECT_TOKEN), NOT via the SA token. So even though THIS play bootstraps
+# the NEW Connect server, it still depends on an EXISTING Connect endpoint to
+# fetch the SSH key it uses to reach the new opconnect VM. Keep the old Connect
+# (VM 100) serving OP_CONNECT_HOST until the new opconnect is verified and the
+# cutover repoint happens. A true from-scratch bring-up (no prior Connect) would
+# need a different key path here (e.g. an SA-token field_info read or an
+# operator-staged key file) — out of scope for the P4 cutover sequence.
 - name: Load SSH Key from 1Password Connect
   hosts: localhost
   gather_facts: false

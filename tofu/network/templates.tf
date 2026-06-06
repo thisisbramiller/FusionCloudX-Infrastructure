@@ -1,11 +1,22 @@
 # ==============================================================================
 # Templates — clone sources for the compute fleet (Scheme B 9xxx)
 # ==============================================================================
+# FOUNDATION: templates live in network/ (the FIRST-applied state, P3) so they
+# physically exist on the pve node before opconnect (P4) and compute (P5) clone
+# from them. Moved here from tofu/compute/templates.tf precisely so the phase
+# order P3 (network) -> P4 (opconnect) -> P5 (compute) never tries to clone a
+# template that has not been created yet.
+#
 # - ubuntu-template (VM 9001): the full-clone source for every QEMU guest. The
 #   proxmox-vm module defaults template_vm_id = 9001, so service files clone
-#   from this without passing template_vm_id explicitly.
+#   from this; opconnect + compute pass it explicitly from this state's outputs.
 # - debian-12 LXC template: a download_file (no VMID); the proxmox-lxc module
-#   references it by .id (passed via template_file_id in postgresql.tf).
+#   references it by .id (passed via template_file_id in compute/postgresql.tf).
+#
+# CROSS-STATE CLONE SAFETY: opconnect/ and compute/ clone by vm_id (9001) — a
+# value, not a managed resource reference. That is safe ONLY because network/
+# applies first (P3) and physically creates 9001 on the pve node before P4/P5
+# run. The phase order is the contract; do not reorder.
 #
 # Renumbered from the flat config (ubuntu-template was VMID 1000) to the
 # greenfield Scheme B template band (9xxx). OS disk on local-zfs per the
@@ -72,7 +83,7 @@ resource "proxmox_virtual_environment_vm" "ubuntu_template" {
 }
 
 # Debian 12 standard LXC template. No VMID — the proxmox-lxc module consumes its
-# .id via template_file_id (see postgresql.tf).
+# .id via template_file_id (see compute/postgresql.tf).
 resource "proxmox_virtual_environment_download_file" "debian12_lxc_template" {
   node_name    = "pve"
   content_type = "vztmpl"
