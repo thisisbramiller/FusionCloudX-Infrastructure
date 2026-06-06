@@ -12,7 +12,7 @@
 # nginx image used for SSL termination (pinned)
 runitup_nginx_image: "nginx:1.29.5-alpine"
 
-# HTTPS port (exposed on the host; next free after backrest 9928)
+# HTTPS port (exposed on the host)
 runitup_https_port: 9929
 
 # Internal container port (not exposed to host) — the app listens here

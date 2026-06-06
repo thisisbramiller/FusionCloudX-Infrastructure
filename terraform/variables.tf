@@ -53,20 +53,6 @@ variable "vm_configs" {
       started      = true
       datastore_id = "local-zfs" # NVMe SSD for database + Docker I/O performance
     }
-    "duplicati" = {
-      vm_id     = 1107
-      name      = "duplicati"
-      memory_mb = 2048
-      cpu_cores = 2
-      started   = true
-    }
-    "backrest" = {
-      vm_id     = 1108
-      name      = "backrest"
-      memory_mb = 2048
-      cpu_cores = 2
-      started   = true
-    }
     "runitup" = {
       vm_id     = 1111
       name      = "runitup"
@@ -78,43 +64,18 @@ variable "vm_configs" {
 }
 
 # ==============================================================================
-# Workload Toggles (dev escape hatches)
+# Workload Toggles (dev escape hatch)
 # ==============================================================================
-# Build only the workloads a given dev cycle needs. Two composable knobs feed
+# Build only the workloads a given dev cycle needs. var.disabled_workloads feeds
 # local.enabled_vm_configs (the single source of truth: qemu-vm + cloud-init
 # for_each, dns.tf fcx_vms; ansible-inventory follows qemu-vm; outputs are
-# try()-guarded). Single-host app plays auto-skip when their host is absent, and
-# the "Configure Backup Clients" role self-skips when backrest is absent.
-#
-#   - enable_backup_stack=false : drop the redundant app-level backup stack
-#     (backrest + duplicati). Redundant in dev because the fleet is rebuilt
-#     constantly (ephemeral data) and the UNAS Pro is backed up + snapshotted.
-#     Saves ~19min of serial clone time; skips the known-incomplete backup-client
-#     wiring. Flip to true for backup-strategy work.
-#   - disabled_workloads=[...] : general escape hatch to drop any other VM(s),
-#     e.g. ["gitlab"] to skip GitLab's ~18min clone during non-SCM dev.
-#
-# CAVEAT: with backrest built, host_vars/backrest.yml dereferences hostvars[<vm>]
-# for its NFS source-mounts + backup hooks for gitlab, mealie, tandoor, immich,
-# runitup (NOT duplicati) -- so disabling any of those five while the backup stack
-# is ON breaks ansible template rendering. duplicati is safe to disable independently
-# (backrest never references it). The robust fix (inventory-driven backrest
-# mounts/hooks) is deferred to the backup-strategy work.
+# try()-guarded). Single-host app plays auto-skip when their host is absent.
 # ==============================================================================
-
-# Semantic convenience for the backup stack as a unit -- equivalent to
-# disabled_workloads = local.backup_stack_members. Kept as a first-class named
-# toggle (clearer intent + stable interface), not folded into the list.
-variable "enable_backup_stack" {
-  type        = bool
-  default     = true
-  description = "When false, exclude the app-level backup stack (local.backup_stack_members = backrest + duplicati) from the build. Use during dev; re-enable for backup-strategy work."
-}
 
 variable "disabled_workloads" {
   type        = list(string)
   default     = []
-  description = "Dev escape hatch: vm_configs keys to EXCLUDE from the build (e.g. [\"gitlab\",\"mealie\"]). Composes with enable_backup_stack. Only disable a backrest-referenced app (gitlab/mealie/tandoor/immich/runitup) while the backup stack is off (see Workload Toggles comment)."
+  description = "Dev escape hatch: vm_configs keys to EXCLUDE from the build (e.g. [\"gitlab\",\"mealie\"])."
 
   validation {
     condition     = alltrue([for k in var.disabled_workloads : contains(keys(var.vm_configs), k)])
@@ -146,7 +107,7 @@ variable "postgresql_lxc_config" {
   default = {
     vm_id       = 2001
     hostname    = "postgresql"
-    description = "Centralized PostgreSQL database server for homelab services (semaphore, wazuh, etc.)"
+    description = "Centralized PostgreSQL database server for homelab services"
     memory_mb   = 4096 # 4GB RAM for multiple databases
     cpu_cores   = 2
     disk_gb     = 64 # 64GB disk for multiple databases and growth
@@ -173,11 +134,6 @@ variable "postgresql_databases" {
   description = "List of databases to create on the PostgreSQL instance"
 
   default = [
-    {
-      name        = "wazuh"
-      description = "Database for Wazuh (SIEM)"
-      owner       = "wazuh"
-    },
     {
       name        = "mealie"
       description = "Database for Mealie (Recipe Management)"

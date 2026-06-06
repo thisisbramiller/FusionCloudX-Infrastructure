@@ -3,7 +3,7 @@
 # PostgreSQL Deployment Playbook
 # ==============================================================================
 # Deploys and configures SINGLE PostgreSQL database server
-# This server hosts MULTIPLE databases (semaphore, wazuh, etc.)
+# This server hosts MULTIPLE databases (mealie, tandoor)
 # ==============================================================================
 
 - name: Deploy PostgreSQL Database Server

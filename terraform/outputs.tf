@@ -63,16 +63,6 @@ output "immich_url" {
   value       = "https://${try(proxmox_virtual_environment_vm.qemu-vm["immich"].ipv4_addresses[1][0], "IP-not-available")}:9926"
 }
 
-output "duplicati_url" {
-  description = "Duplicati web interface URL"
-  value       = "https://${try(proxmox_virtual_environment_vm.qemu-vm["duplicati"].ipv4_addresses[1][0], "IP-not-available")}:9927"
-}
-
-output "backrest_url" {
-  description = "Backrest web interface URL"
-  value       = "https://${try(proxmox_virtual_environment_vm.qemu-vm["backrest"].ipv4_addresses[1][0], "IP-not-available")}:9928"
-}
-
 output "runitup_url" {
   description = "Run It Up web interface URL"
   value       = "https://${try(proxmox_virtual_environment_vm.qemu-vm["runitup"].ipv4_addresses[1][0], "IP-not-available")}:9929"
@@ -101,7 +91,6 @@ output "onepassword_items" {
     }
     postgresql = {
       admin_password   = onepassword_item.postgresql_admin.id
-      wazuh_password   = onepassword_item.wazuh_db_user.id
       mealie_password  = onepassword_item.mealie_db_user.id
       tandoor_password = onepassword_item.tandoor_db_user.id
     }
@@ -110,14 +99,6 @@ output "onepassword_items" {
     }
     immich = {
       db_password = onepassword_item.immich_db_password.id
-    }
-    duplicati = {
-      web_password = onepassword_item.duplicati_web_password.id
-    }
-    backrest = {
-      ssh_key         = onepassword_item.backrest_ssh_key.id
-      restic_password = onepassword_item.backrest_restic_password.id
-      web_password    = onepassword_item.backrest_web_password.id
     }
     ssh = {
       ansible_key = onepassword_item.ansible_ssh_key.id

@@ -2,7 +2,7 @@
 # PostgreSQL LXC Container Infrastructure
 # ==============================================================================
 # This file defines a SINGLE LXC container for PostgreSQL database server
-# This container will host MULTIPLE databases (wazuh, etc.)
+# This container will host MULTIPLE databases
 # Configuration and PostgreSQL installation is handled by Ansible
 #
 # Uses standard Debian 12 LXC template from Proxmox. Ansible prerequisites

@@ -12,7 +12,7 @@ services:
       - .env
     volumes:
       # SQLite data on a named volume, bind-backed to the host data dir so the
-      # backup-client can export it under {{ runitup_compose_dir }}. Mounted at
+      # SQLite file persists across container restarts. Mounted at
       # /data to match the app's Dockerfile (VOLUME /data, RUNITUP_DB=/data/runitup.db).
       - runitup-data:/data
 

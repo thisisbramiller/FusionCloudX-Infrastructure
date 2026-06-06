@@ -18,8 +18,3 @@
 resource "tls_private_key" "ansible" {
   algorithm = "ED25519"
 }
-
-# Generate ED25519 SSH key pair for Backrest pre-backup SSH hooks
-resource "tls_private_key" "backrest" {
-  algorithm = "ED25519"
-}
