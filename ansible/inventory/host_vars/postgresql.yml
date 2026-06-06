@@ -23,13 +23,6 @@ postgresql_instance_config:
 
 # Define all databases to create
 postgresql_databases:
-  - name: "wazuh"
-    owner: "wazuh"
-    encoding: "UTF-8"
-    lc_collate: "C.UTF-8"
-    lc_ctype: "C.UTF-8"
-    template: "template0"
-    description: "Database for Wazuh (SIEM)"
   - name: "mealie"
     owner: "mealie"
     encoding: "UTF-8"
@@ -83,7 +76,6 @@ postgresql_firewall_rules:
 postgresql_backup_enabled: true
 postgresql_backup_retention_days: 30  # 30 days for homelab
 postgresql_backup_databases:
-  - wazuh
   - mealie
   - tandoor
 
@@ -102,7 +94,7 @@ backup_client_nfs_exports: []
 # Additional Notes
 # ==============================================================================
 # - This is a SINGLE container hosting MULTIPLE databases
-# - Each service (Wazuh, etc.) gets its own database and user
+# - Each service gets its own database and user
 # - Credentials are managed via 1Password (not ansible-vault)
 # - To add a new database:
 #   1. Add entry to postgresql_databases list
