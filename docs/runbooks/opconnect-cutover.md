@@ -143,17 +143,13 @@ Expected: VM 1101 created; `opconnect-new.fusioncloudx.home → 1101` DNS record
 `opconnect_ip` output populated once the guest agent leases an IP. The canonical
 `opconnect.fusioncloudx.home → .44` record is untouched.
 
-### Step 2 — [OP] Stage the credentials on 1101
+### Step 2 — Place credentials on the Ansible controller
 
-```bash
-scp 1password-credentials.json ansible@<1101-IP>:/tmp/ && \
-ssh ansible@<1101-IP> 'sudo install -m600 -o root -g root /tmp/1password-credentials.json \
-    /root/1password-credentials.json && shred -u /tmp/1password-credentials.json'
-```
-
-`/root/1password-credentials.json` = `opconnect_credentials_src`. The role copies it to
-`/opt/opconnect/1password-credentials.json` (non-empty validation in the role will fail fast if
-the file is missing or zero-length).
+Place `1password-credentials.json` on the **Ansible controller** at
+`~/opconnect-cutover/1password-credentials.json` (or override with
+`-e opconnect_credentials_local=<path>`). The `opconnect.yml` run copies it to the VM
+automatically — no manual scp required. The file is also chowned to the container opuser
+UID (999) so connect-sync can read it.
 
 ### Step 3 — Run the opconnect play
 

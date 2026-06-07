@@ -152,8 +152,10 @@ document + an encrypted off-Connect backup (out-of-band retrieval documented).
   `onepassword` provider reads the one item (Ansible SSH key) via the **old Connect**; builds VM
   1101 + the DNS record `opconnect-new.fusioncloudx.home → 1101` (no collision with the canonical
   `.44` record, which is left untouched).
-- Stage `1password-credentials.json` onto 1101 at `opconnect_credentials_src` (`/root/…`); the role
-  copies it to the compose dir `/opt/opconnect/1password-credentials.json` (validated non-empty).
+- Place `1password-credentials.json` on the Ansible controller at `opconnect_credentials_local`
+  (default `~/opconnect-cutover/1password-credentials.json`); the role copies it to the compose dir
+  `/opt/opconnect/1password-credentials.json` on the VM (no manual scp; validated non-empty;
+  chowned to container opuser UID 999).
 - `ansible-playbook playbooks/opconnect.yml` — brings up `connect-api 8080` + `connect-sync 8081`
   (pinned, creds `:ro`, data `rw`, `restart: always`). Role waits for `/heartbeat` 200 = **container
   liveness only**.

@@ -27,8 +27,10 @@
 #       ansible-playbook playbooks/opconnect.yml
 #
 # Requirements (either path):
-#   - 1password-credentials.json staged on the opconnect VM
-#     (opconnect_credentials_src) — generated via `op connect server create`
+#   - 1password-credentials.json available on the ANSIBLE CONTROLLER at
+#     opconnect_credentials_local (default ~/opconnect-cutover/1password-credentials.json);
+#     ansible copies it to the VM automatically — no manual scp required.
+#     Generated via `op connect server create`
 # ==============================================================================
 
 # OLD CONNECT VM 100 MUST STAY UP DURING P4. The ssh-key-loader role reads the

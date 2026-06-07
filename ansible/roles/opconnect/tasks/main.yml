@@ -12,8 +12,9 @@
 # Account token (NOT Connect):
 #     op connect server create opconnect     # -> 1password-credentials.json
 #     op connect token create  opconnect ... # -> the Connect access token
-# 1password-credentials.json is staged on the target at `opconnect_credentials_src`
-# by the operator before this role runs; the Connect access token is consumed by
+# 1password-credentials.json is available on the ANSIBLE CONTROLLER at
+# `opconnect_credentials_local`; the role copies it to the VM (no manual scp).
+# The Connect access token is consumed by
 # DOWNSTREAM repointing (OP_CONNECT_TOKEN), not by Connect itself, so it is not
 # handled here. See the P4 cutover note in tofu/opconnect/opconnect.tf.
 # ==============================================================================
