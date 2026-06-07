@@ -3,13 +3,15 @@
 # ==============================================================================
 # Footgun #1 (private keys in state): this is a DATA SOURCE, not a resource.
 # We only READ the public key here; the private key never enters opconnect
-# state. Read via the SA token (OP_SERVICE_ACCOUNT_TOKEN) — the secrets-root
-# bootstrap auth path, NOT Connect (Connect does not exist yet at this layer).
+# state. The onepassword provider AUTO-DETECTS auth from the environment (see
+# providers.tf): the P4 cutover supplies the OLD Connect (OP_CONNECT_HOST +
+# OP_CONNECT_TOKEN) for this one read; a from-scratch rebuild instead supplies
+# OP_SERVICE_ACCOUNT_TOKEN or an operator `op signin`.
 #
-# The ansible opconnect role authenticates to 1Password out-of-band at P4 (the
-# SA token / op CLI is also what generates the Connect credentials + token). The
-# Ansible SSH key item is a BOOTSTRAP-SEEDED credential: it MUST already exist
-# in the vault before `opconnect` apply.
+# The Connect server credentials + token are generated out-of-band at P4.1 via
+# `op signin` + `op connect server/token create` (NOT by this state). The Ansible
+# SSH key item is a BOOTSTRAP-SEEDED credential: it MUST already exist in the
+# vault before `opconnect` apply.
 #
 # The item stores the public key in a section field labelled "public_key"
 # (secure_note category), so the top-level data-source `public_key` attribute

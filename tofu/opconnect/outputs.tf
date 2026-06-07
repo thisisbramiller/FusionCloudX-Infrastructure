@@ -19,8 +19,8 @@ output "opconnect_vm_id" {
 }
 
 output "opconnect_dns_name" {
-  description = "opconnect published A-record FQDN."
-  value       = "opconnect.fusioncloudx.home"
+  description = "opconnect published A-record FQDN (follows var.opconnect_dns_name — temp during the P4 cutover, canonical at finalize)."
+  value       = "${var.opconnect_dns_name}.fusioncloudx.home"
 }
 
 # ------------------------------------------------------------------------------
@@ -33,6 +33,6 @@ output "opconnect_dns_name" {
 # ------------------------------------------------------------------------------
 
 output "connect_host" {
-  description = "1Password Connect API base URL for downstream OP_CONNECT_HOST repointing (P4 cutover target). Stable/name-derived."
-  value       = "http://opconnect.fusioncloudx.home:8080"
+  description = "1Password Connect API base URL for downstream OP_CONNECT_HOST repointing (P4 cutover target). Follows var.opconnect_dns_name — temp subdomain during the cutover, canonical at finalize."
+  value       = "http://${var.opconnect_dns_name}.fusioncloudx.home:8080"
 }

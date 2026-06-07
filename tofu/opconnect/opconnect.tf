@@ -50,10 +50,14 @@ module "opconnect_cloud_init" {
 # Per-host UniFi DHCP reservation + A record. MAC/IP passed explicitly from the
 # VM module (footgun #4: no [1]-index single-NIC assumption leaks into the
 # unifi-host module). network_id = null — the proven dns path OMITS it.
+# name = var.opconnect_dns_name: default "opconnect" (canonical). During the P4
+# cutover, build under a temp value (-var opconnect_dns_name=opconnect-new) so
+# the A record does NOT collide with the old snowflake's opconnect->.44 record;
+# flip back to the default at finalize once the old record + VM 100 are retired.
 module "opconnect_dns" {
   source = "../../modules/unifi-host"
 
-  name       = "opconnect"
+  name       = var.opconnect_dns_name
   mac        = module.opconnect.mac_address
   ip         = module.opconnect.ipv4_address
   network_id = null
