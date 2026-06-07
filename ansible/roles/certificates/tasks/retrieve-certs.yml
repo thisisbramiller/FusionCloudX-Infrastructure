@@ -1,110 +1,207 @@
 ---
-# Retrieve certificates from 1Password Connect using official modules
-# Files are retrieved via the Connect API using the uri module
+# Retrieve certificates from 1Password.
+#
+# Two mutually-exclusive paths produce the SAME 4 facts:
+#   certificates_root_ca, certificates_intermediate_ca,
+#   certificates_server_cert, certificates_server_key
+#
+# PATH A (op_use_cli: false, default) — 1Password Connect API (fleet default)
+# PATH B (op_use_cli: true)           — `op` CLI / desktop / SA token
+#                                       (used by the opconnect bootstrap playbook
+#                                        where no live Connect is available)
 
-- name: Get Root CA Bundle item from 1Password
-  onepassword.connect.item_info:
-    hostname: "{{ lookup('env', 'OP_CONNECT_HOST') }}"
-    token: "{{ lookup('env', 'OP_CONNECT_TOKEN') }}"
-    item: "FusionCloudX Root CA Bundle"
-    vault: "FusionCloudX"
-    flatten_fields_by_label: false
-  no_log: true
-  register: root_ca_item
-  delegate_to: localhost
-  become: no
+# ------------------------------------------------------------------------------
+# PATH A — 1Password Connect API (op_use_cli: false)
+# ------------------------------------------------------------------------------
+- name: Retrieve certificates via 1Password Connect
+  when: not (op_use_cli | default(false) | bool)
+  block:
+    - name: Get Root CA Bundle item from 1Password
+      onepassword.connect.item_info:
+        hostname: "{{ lookup('env', 'OP_CONNECT_HOST') }}"
+        token: "{{ lookup('env', 'OP_CONNECT_TOKEN') }}"
+        item: "FusionCloudX Root CA Bundle"
+        vault: "FusionCloudX"
+        flatten_fields_by_label: false
+      no_log: true
+      register: root_ca_item
+      delegate_to: localhost
+      become: no
 
-- name: Get Intermediate CA Bundle item from 1Password
-  onepassword.connect.item_info:
-    hostname: "{{ lookup('env', 'OP_CONNECT_HOST') }}"
-    token: "{{ lookup('env', 'OP_CONNECT_TOKEN') }}"
-    item: "FusionCloudX Intermediate CA Bundle"
-    vault: "FusionCloudX"
-    flatten_fields_by_label: false
-  no_log: true
-  register: intermediate_ca_item
-  delegate_to: localhost
-  become: no
+    - name: Get Intermediate CA Bundle item from 1Password
+      onepassword.connect.item_info:
+        hostname: "{{ lookup('env', 'OP_CONNECT_HOST') }}"
+        token: "{{ lookup('env', 'OP_CONNECT_TOKEN') }}"
+        item: "FusionCloudX Intermediate CA Bundle"
+        vault: "FusionCloudX"
+        flatten_fields_by_label: false
+      no_log: true
+      register: intermediate_ca_item
+      delegate_to: localhost
+      become: no
 
-- name: Extract file information from items
-  set_fact:
-    root_ca_files: "{{ root_ca_item.op_item.files }}"
-    intermediate_ca_files: "{{ intermediate_ca_item.op_item.files }}"
-  no_log: true
+    - name: Extract file information from items
+      set_fact:
+        root_ca_files: "{{ root_ca_item.op_item.files }}"
+        intermediate_ca_files: "{{ intermediate_ca_item.op_item.files }}"
+      no_log: true
 
-- name: Download Root CA certificate from 1Password Connect
-  uri:
-    url: "{{ lookup('env', 'OP_CONNECT_HOST') }}{{ item.content_path }}"
-    method: GET
-    headers:
-      Authorization: "Bearer {{ lookup('env', 'OP_CONNECT_TOKEN') }}"
-    return_content: yes
-  no_log: true
-  register: root_ca_file
-  delegate_to: localhost
-  become: no
-  when: item.name == "root-ca.pem"
-  loop: "{{ root_ca_files }}"
+    - name: Download Root CA certificate from 1Password Connect
+      uri:
+        url: "{{ lookup('env', 'OP_CONNECT_HOST') }}{{ item.content_path }}"
+        method: GET
+        headers:
+          Authorization: "Bearer {{ lookup('env', 'OP_CONNECT_TOKEN') }}"
+        return_content: yes
+      no_log: true
+      register: root_ca_file
+      delegate_to: localhost
+      become: no
+      when: item.name == "root-ca.pem"
+      loop: "{{ root_ca_files }}"
 
-- name: Download Intermediate CA certificate from 1Password Connect
-  uri:
-    url: "{{ lookup('env', 'OP_CONNECT_HOST') }}{{ item.content_path }}"
-    method: GET
-    headers:
-      Authorization: "Bearer {{ lookup('env', 'OP_CONNECT_TOKEN') }}"
-    return_content: yes
-  no_log: true
-  register: intermediate_ca_file
-  delegate_to: localhost
-  become: no
-  when: item.name == "intermediate-ca.pem"
-  loop: "{{ intermediate_ca_files }}"
+    - name: Download Intermediate CA certificate from 1Password Connect
+      uri:
+        url: "{{ lookup('env', 'OP_CONNECT_HOST') }}{{ item.content_path }}"
+        method: GET
+        headers:
+          Authorization: "Bearer {{ lookup('env', 'OP_CONNECT_TOKEN') }}"
+        return_content: yes
+      no_log: true
+      register: intermediate_ca_file
+      delegate_to: localhost
+      become: no
+      when: item.name == "intermediate-ca.pem"
+      loop: "{{ intermediate_ca_files }}"
 
-# The server cert + key are attached as FILES to the "FusionCloudX Intermediate
-# CA Bundle" 1Password item (alongside the intermediate CA), set by bootstrap
-# phase 04. Looping intermediate_ca_files for server-cert.pem / server-key.pem is
-# therefore CORRECT — not a bug. (Verified: the item carries intermediate-ca.pem,
-# intermediate-ca-key.pem, server-cert.pem, server-key.pem, fullchain.pem.)
-- name: Download server certificate from 1Password Connect
-  uri:
-    url: "{{ lookup('env', 'OP_CONNECT_HOST') }}{{ item.content_path }}"
-    method: GET
-    headers:
-      Authorization: "Bearer {{ lookup('env', 'OP_CONNECT_TOKEN') }}"
-    return_content: yes
-  no_log: true
-  register: server_cert_file
-  delegate_to: localhost
-  become: no
-  when: item.name == "server-cert.pem"
-  loop: "{{ intermediate_ca_files }}"
+    # The server cert + key are attached as FILES to the "FusionCloudX Intermediate
+    # CA Bundle" 1Password item (alongside the intermediate CA), set by bootstrap
+    # phase 04. Looping intermediate_ca_files for server-cert.pem / server-key.pem is
+    # therefore CORRECT — not a bug. (Verified: the item carries intermediate-ca.pem,
+    # intermediate-ca-key.pem, server-cert.pem, server-key.pem, fullchain.pem.)
+    - name: Download server certificate from 1Password Connect
+      uri:
+        url: "{{ lookup('env', 'OP_CONNECT_HOST') }}{{ item.content_path }}"
+        method: GET
+        headers:
+          Authorization: "Bearer {{ lookup('env', 'OP_CONNECT_TOKEN') }}"
+        return_content: yes
+      no_log: true
+      register: server_cert_file
+      delegate_to: localhost
+      become: no
+      when: item.name == "server-cert.pem"
+      loop: "{{ intermediate_ca_files }}"
 
-- name: Download server key from 1Password Connect
-  uri:
-    url: "{{ lookup('env', 'OP_CONNECT_HOST') }}{{ item.content_path }}"
-    method: GET
-    headers:
-      Authorization: "Bearer {{ lookup('env', 'OP_CONNECT_TOKEN') }}"
-    return_content: yes
-  no_log: true
-  register: server_key_file
-  delegate_to: localhost
-  become: no
-  when: item.name == "server-key.pem"
-  loop: "{{ intermediate_ca_files }}"
+    - name: Download server key from 1Password Connect
+      uri:
+        url: "{{ lookup('env', 'OP_CONNECT_HOST') }}{{ item.content_path }}"
+        method: GET
+        headers:
+          Authorization: "Bearer {{ lookup('env', 'OP_CONNECT_TOKEN') }}"
+        return_content: yes
+      no_log: true
+      register: server_key_file
+      delegate_to: localhost
+      become: no
+      when: item.name == "server-key.pem"
+      loop: "{{ intermediate_ca_files }}"
 
-- name: Set certificate facts from downloaded files
-  set_fact:
-    certificates_root_ca: "{{ root_ca_file.results | selectattr('content', 'defined') | map(attribute='content') | first }}"
-    certificates_intermediate_ca: "{{ intermediate_ca_file.results | selectattr('content', 'defined') | map(attribute='content') | first }}"
-    certificates_server_cert: "{{ server_cert_file.results | selectattr('content', 'defined') | map(attribute='content') | first }}"
-    certificates_server_key: "{{ server_key_file.results | selectattr('content', 'defined') | map(attribute='content') | first }}"
-  no_log: true
+    - name: Set certificate facts from downloaded files
+      set_fact:
+        certificates_root_ca: "{{ root_ca_file.results | selectattr('content', 'defined') | map(attribute='content') | first }}"
+        certificates_intermediate_ca: "{{ intermediate_ca_file.results | selectattr('content', 'defined') | map(attribute='content') | first }}"
+        certificates_server_cert: "{{ server_cert_file.results | selectattr('content', 'defined') | map(attribute='content') | first }}"
+        certificates_server_key: "{{ server_key_file.results | selectattr('content', 'defined') | map(attribute='content') | first }}"
+      no_log: true
 
+# ------------------------------------------------------------------------------
+# PATH B — `op` CLI / 1Password desktop / SA token (op_use_cli: true)
+# OP_CONNECT_HOST and OP_CONNECT_TOKEN are explicitly unset so `op` uses
+# account / desktop auth, not Connect mode.
+# ------------------------------------------------------------------------------
+- name: Retrieve certificates via op CLI (1Password desktop / SA token)
+  when: op_use_cli | default(false) | bool
+  block:
+    - name: Read Root CA certificate via op CLI
+      ansible.builtin.command:
+        argv:
+          - op
+          - read
+          - "op://FusionCloudX/FusionCloudX Root CA Bundle/root-ca.pem"
+      environment:
+        OP_CONNECT_HOST: ""
+        OP_CONNECT_TOKEN: ""
+      register: _root_ca_op
+      changed_when: false
+      no_log: true
+      delegate_to: localhost
+      become: false
+      run_once: true
+
+    - name: Read Intermediate CA certificate via op CLI
+      ansible.builtin.command:
+        argv:
+          - op
+          - read
+          - "op://FusionCloudX/FusionCloudX Intermediate CA Bundle/intermediate-ca.pem"
+      environment:
+        OP_CONNECT_HOST: ""
+        OP_CONNECT_TOKEN: ""
+      register: _intermediate_ca_op
+      changed_when: false
+      no_log: true
+      delegate_to: localhost
+      become: false
+      run_once: true
+
+    - name: Read server certificate via op CLI
+      ansible.builtin.command:
+        argv:
+          - op
+          - read
+          - "op://FusionCloudX/FusionCloudX Intermediate CA Bundle/server-cert.pem"
+      environment:
+        OP_CONNECT_HOST: ""
+        OP_CONNECT_TOKEN: ""
+      register: _server_cert_op
+      changed_when: false
+      no_log: true
+      delegate_to: localhost
+      become: false
+      run_once: true
+
+    - name: Read server key via op CLI
+      ansible.builtin.command:
+        argv:
+          - op
+          - read
+          - "op://FusionCloudX/FusionCloudX Intermediate CA Bundle/server-key.pem"
+      environment:
+        OP_CONNECT_HOST: ""
+        OP_CONNECT_TOKEN: ""
+      register: _server_key_op
+      changed_when: false
+      no_log: true
+      delegate_to: localhost
+      become: false
+      run_once: true
+
+    - name: Set certificate facts from op CLI output
+      set_fact:
+        certificates_root_ca: "{{ _root_ca_op.stdout }}"
+        certificates_intermediate_ca: "{{ _intermediate_ca_op.stdout }}"
+        certificates_server_cert: "{{ _server_cert_op.stdout }}"
+        certificates_server_key: "{{ _server_key_op.stdout }}"
+      no_log: true
+
+# ------------------------------------------------------------------------------
+# Status display — reads the 4 facts, works for either path
+# ------------------------------------------------------------------------------
 - name: Display certificate retrieval status
   debug:
     msg:
-      - "Certificates retrieved from 1Password Connect"
+      - "Certificates retrieved via {{ (op_use_cli | default(false) | bool) | ternary('op CLI', '1Password Connect') }}"
       - "Root CA: {{ (certificates_root_ca | length > 0) | ternary('✓', '✗') }}"
       - "Intermediate CA: {{ (certificates_intermediate_ca | length > 0) | ternary('✓', '✗') }}"
       - "Server Certificate: {{ (certificates_server_cert | length > 0) | ternary('✓', '✗') }}"

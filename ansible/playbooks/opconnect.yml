@@ -44,6 +44,8 @@
   hosts: localhost
   gather_facts: false
   connection: local
+  vars:
+    op_use_cli: true
 
   roles:
     - role: ssh-key-loader
@@ -62,6 +64,7 @@
   gather_facts: yes
   vars:
     ansible_ssh_private_key_file: "/tmp/.ansible_ssh_key"
+    op_use_cli: true
   tags: ['common', 'certificates']
 
   pre_tasks:

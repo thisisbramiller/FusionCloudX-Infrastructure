@@ -58,11 +58,30 @@
   run_once: true
   no_log: true
   register: _ssh_key_result
+  when: not (op_use_cli | default(false) | bool)
+  tags: ['ssh-key', 'always']
+
+- name: Retrieve Ansible SSH private key via op (1Password CLI / desktop)
+  ansible.builtin.command:
+    argv:
+      - op
+      - read
+      - "op://{{ _op_vault_id }}/{{ ssh_key_loader_item_name }}/{{ ssh_key_loader_section_name }}/{{ ssh_key_loader_field_name }}"
+  environment:
+    OP_CONNECT_HOST: ""
+    OP_CONNECT_TOKEN: ""
+  register: _ssh_key_op
+  changed_when: false
+  no_log: true
+  delegate_to: localhost
+  become: false
+  run_once: true
+  when: op_use_cli | default(false) | bool
   tags: ['ssh-key', 'always']
 
 - name: Write SSH key to secure temp file
   copy:
-    content: "{{ _ssh_key_result.field.value }}"
+    content: "{{ _ssh_key_op.stdout if (op_use_cli | default(false) | bool) else _ssh_key_result.field.value }}"
     dest: "{{ ssh_key_loader_temp_path }}"
     mode: '0600'
   delegate_to: localhost
@@ -73,7 +92,7 @@
 
 - name: Display SSH key load status
   debug:
-    msg: "SSH key loaded from 1Password Connect to {{ ssh_key_loader_temp_path }}"
+    msg: "SSH key loaded via {{ (op_use_cli | default(false) | bool) | ternary('op CLI', '1Password Connect') }} to {{ ssh_key_loader_temp_path }}"
   run_once: true
   delegate_to: localhost
   tags: ['ssh-key', 'always']

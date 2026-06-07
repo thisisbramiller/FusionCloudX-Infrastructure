@@ -10,3 +10,9 @@ ssh_key_loader_temp_path: "/tmp/.ansible_ssh_key"
 ssh_key_loader_item_name: "Infrastructure Ansible SSH Key"
 ssh_key_loader_section_name: "Private Key"
 ssh_key_loader_field_name: "private_key"
+
+# When true, fetch the SSH key via the `op` CLI (1Password desktop / SA token)
+# instead of the Connect API. Set to true in playbooks that run without a live
+# Connect server (e.g. the opconnect bootstrap playbook). Default false = fleet
+# behaviour (Connect path, unchanged).
+op_use_cli: false

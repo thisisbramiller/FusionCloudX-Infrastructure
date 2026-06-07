@@ -20,3 +20,9 @@ certificates_server_key_filename: "server.key"
 
 # 1Password vault name
 certificates_vault_name: "FusionCloudX"
+
+# When true, fetch certificates via the `op` CLI (1Password desktop / SA token)
+# instead of the Connect API. Set to true in playbooks that run without a live
+# Connect server (e.g. the opconnect bootstrap playbook). Default false = fleet
+# behaviour (Connect path, unchanged).
+op_use_cli: false
