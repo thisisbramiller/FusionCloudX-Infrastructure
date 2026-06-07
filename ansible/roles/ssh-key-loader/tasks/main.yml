@@ -62,14 +62,21 @@
   tags: ['ssh-key', 'always']
 
 - name: Retrieve Ansible SSH private key via op (1Password CLI / desktop)
+  # `env -u` TRULY unsets OP_CONNECT_* for the op subprocess. Setting them to ""
+  # via `environment:` leaves them SET-but-empty, which keeps op in Connect mode
+  # (op then tries an empty-host Connect call: "unsupported protocol scheme").
+  # Unset => op uses account/desktop (or OP_SERVICE_ACCOUNT_TOKEN) auth, reading
+  # 1Password directly — the Connect-independent path.
   ansible.builtin.command:
     argv:
+      - env
+      - -u
+      - OP_CONNECT_HOST
+      - -u
+      - OP_CONNECT_TOKEN
       - op
       - read
       - "op://{{ _op_vault_id }}/{{ ssh_key_loader_item_name }}/{{ ssh_key_loader_section_name }}/{{ ssh_key_loader_field_name }}"
-  environment:
-    OP_CONNECT_HOST: ""
-    OP_CONNECT_TOKEN: ""
   register: _ssh_key_op
   changed_when: false
   no_log: true
@@ -81,7 +88,10 @@
 
 - name: Write SSH key to secure temp file
   copy:
-    content: "{{ _ssh_key_op.stdout if (op_use_cli | default(false) | bool) else _ssh_key_result.field.value }}"
+    # op path: `command.stdout` is right-stripped, but an OpenSSH private key MUST
+    # end with a trailing newline or ssh rejects it ("invalid format") — re-add it.
+    # Connect path: the field value already carries its trailing newline.
+    content: "{{ (_ssh_key_op.stdout + '\n') if (op_use_cli | default(false) | bool) else _ssh_key_result.field.value }}"
     dest: "{{ ssh_key_loader_temp_path }}"
     mode: '0600'
   delegate_to: localhost

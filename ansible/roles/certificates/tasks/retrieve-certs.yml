@@ -126,6 +126,11 @@
     - name: Read Root CA certificate via op CLI
       ansible.builtin.command:
         argv:
+          - env
+          - -u
+          - OP_CONNECT_HOST
+          - -u
+          - OP_CONNECT_TOKEN
           - op
           - read
           - "op://FusionCloudX/FusionCloudX Root CA Bundle/root-ca.pem"
@@ -142,6 +147,11 @@
     - name: Read Intermediate CA certificate via op CLI
       ansible.builtin.command:
         argv:
+          - env
+          - -u
+          - OP_CONNECT_HOST
+          - -u
+          - OP_CONNECT_TOKEN
           - op
           - read
           - "op://FusionCloudX/FusionCloudX Intermediate CA Bundle/intermediate-ca.pem"
@@ -158,6 +168,11 @@
     - name: Read server certificate via op CLI
       ansible.builtin.command:
         argv:
+          - env
+          - -u
+          - OP_CONNECT_HOST
+          - -u
+          - OP_CONNECT_TOKEN
           - op
           - read
           - "op://FusionCloudX/FusionCloudX Intermediate CA Bundle/server-cert.pem"
@@ -174,6 +189,11 @@
     - name: Read server key via op CLI
       ansible.builtin.command:
         argv:
+          - env
+          - -u
+          - OP_CONNECT_HOST
+          - -u
+          - OP_CONNECT_TOKEN
           - op
           - read
           - "op://FusionCloudX/FusionCloudX Intermediate CA Bundle/server-key.pem"
