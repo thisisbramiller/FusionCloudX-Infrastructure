@@ -82,7 +82,9 @@
   community.docker.docker_compose_v2:
     project_src: "{{ opconnect_compose_dir }}"
     state: present
-    pull: always
+    # pull: missing — images are pinned (opconnect_connect_version), so only pull
+    # when absent. `always` would re-pull the identical pinned tag every run.
+    pull: missing
   tags: ['opconnect', 'deploy']
 
 # /heartbeat is the connect-api unauthenticated liveness endpoint — returns
