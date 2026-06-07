@@ -47,6 +47,34 @@
     - role: ssh-key-loader
       tags: ['ssh-key', 'always']
 
+# Common bootstrap — same baseline every fleet VM gets via site.yml's
+# "Common Infrastructure Configuration" (apt cache + the certificates role:
+# FusionCloudX CA trust + server cert, retrieved from Connect). opconnect lives
+# in its own state/inventory, so site.yml does not reach it — this play wires
+# opconnect into the identical bootstrap so it is a fully-managed VM, not a
+# special case. Certs are read via Connect (OP_CONNECT_* env = the OLD Connect
+# during the P4 cutover), exactly like the fleet.
+- name: Common Infrastructure Configuration (opconnect)
+  hosts: opconnect
+  become: yes
+  gather_facts: yes
+  vars:
+    ansible_ssh_private_key_file: "/tmp/.ansible_ssh_key"
+  tags: ['common', 'certificates']
+
+  pre_tasks:
+    - name: Update apt cache
+      ansible.builtin.apt:
+        update_cache: yes
+        cache_valid_time: 3600
+      tags: ['always']
+
+  roles:
+    # Do NOT pass certificates_* role-params here (they would shadow the role's
+    # in-playbook Connect retrieval and require a manual /tmp/*.pem file).
+    - role: certificates
+      tags: ['certificates']
+
 - name: Deploy 1Password Connect
   hosts: opconnect
   become: yes

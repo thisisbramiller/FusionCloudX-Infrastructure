@@ -27,20 +27,21 @@
     mode: '0750'
   tags: ['opconnect', 'deploy']
 
-# The 1password-credentials.json is generated out-of-band (`op connect server
-# create`, SA token) and staged on the target at opconnect_credentials_src (the
-# default is the operator staging path /root/1password-credentials.json). We
-# normalize it into the compose dir as `1password-credentials.json` (the path
-# the compose file's relative `./1password-credentials.json` mount expects).
-# remote_src copies a file already on the target — staging path (src) -> compose
-# dir (dest), a meaningful copy since the two paths are distinct.
+# The 1password-credentials.json is generated out-of-band by the operator
+# (`op connect server create`, P4.1). Ansible COPIES it from the controller
+# (opconnect_credentials_local) into the compose dir on the VM — NO manual scp,
+# the same way every other role places files. (copy, NOT remote_src: src is on
+# the controller.) The compose file's relative `./1password-credentials.json`
+# mount expects it at this dest.
 - name: Stage 1Password Connect credentials into the compose directory
   ansible.builtin.copy:
-    src: "{{ opconnect_credentials_src }}"
+    src: "{{ opconnect_credentials_local }}"
     dest: "{{ opconnect_compose_dir }}/1password-credentials.json"
-    remote_src: true
-    owner: root
-    group: root
+    # Owned by the container's opuser (UID 999), NOT root: connect-sync runs as
+    # opuser and reads this :ro-mounted file. root:root 0600 -> "permission
+    # denied" -> sync never initializes. 0600 keeps it owner-only (not world).
+    owner: "{{ opconnect_container_uid }}"
+    group: "{{ opconnect_container_uid }}"
     mode: '0600'
   no_log: true
   notify: restart opconnect
@@ -56,9 +57,9 @@
   ansible.builtin.fail:
     msg: >-
       {{ opconnect_compose_dir }}/1password-credentials.json is missing or empty.
-      Stage the file emitted by `op connect server create` at
-      {{ opconnect_credentials_src }} BEFORE running this play — the relative ./
-      bind in docker-compose would otherwise create an empty mount and
+      The controller-side source ({{ opconnect_credentials_local }}) must be the
+      non-empty file emitted by `op connect server create` (P4.1) — the relative
+      ./ bind in docker-compose would otherwise create an empty mount and
       connect-sync cannot authenticate.
   when: not _opconnect_creds_stat.stat.exists or _opconnect_creds_stat.stat.size == 0
   tags: ['opconnect', 'deploy', 'secrets']
