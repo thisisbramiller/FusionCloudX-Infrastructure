@@ -21,7 +21,7 @@
 - Modify: `ansible/roles/opconnect/templates/docker-compose.yml.j2` — drop the redundant `OP_HTTP_PORT` env.
 - Modify: `ansible/roles/opconnect/tasks/main.yml` — non-empty creds validation + layered readiness gate (`/heartbeat` + `/health` `sqlite ACTIVE`); keep the authenticated `/v1` proof in the runbook (the role does not hold the new token).
 - Modify: `tofu/opconnect/providers.tf` — comment accuracy (old-Connect build auth).
-- Create: `docs/runbooks/opconnect-cutover.md` — the P4.0–P4.5 operator runbook.
+- Create: `docs/runbooks/opconnect-cutover.md` — the P4.0–P4.6 operator runbook.
 - Create: `docs/runbooks/opconnect-token-rotation.md` — the 90-day overlap rotation runbook.
 
 **Phase B — PR review + merge.**
@@ -202,7 +202,7 @@ git commit -m "docs(p4): correct opconnect onepassword provider auth comment"
 
 - [ ] **Step 1: Author the runbook**
 
-Create `docs/runbooks/opconnect-cutover.md` containing the full Phase C sequence below (P4.0–P4.5) verbatim — exact commands, expected outputs, the `[OP]`/`[BUILD]`/`[CUT]`/`[CONFIRM]` markers, the rollback/abort section, and the `prevent_destroy` escape hatch. This is the operator-facing copy of Phase C so the live run is followable without the plan.
+Create `docs/runbooks/opconnect-cutover.md` containing the full Phase C sequence below (P4.0–P4.6) verbatim — exact commands, expected outputs, the `[OP]`/`[BUILD]`/`[CUT]`/`[CONFIRM]` markers, the rollback/abort section, and the `prevent_destroy` escape hatch. This is the operator-facing copy of Phase C so the live run is followable without the plan.
 
 - [ ] **Step 2: Commit**
 
