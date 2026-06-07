@@ -1,0 +1,30 @@
+# ==============================================================================
+# opconnect dynamic inventory — sourced from the tofu/opconnect STATE
+# ==============================================================================
+# opconnect is the secrets root and lives in its own OpenTofu state
+# (tofu/opconnect), separate from the fleet (inventory/terraform.yml ->
+# ../terraform, -> ../tofu/compute at P5). This file resolves the opconnect host
+# (ansible_host/ansible_group authored by the opconnect state) the SAME IaC way
+# the fleet is resolved — no hardcoded IP.
+#
+# Pass it EXPLICITLY: `ansible-playbook -i opconnect.inventory.yml playbooks/opconnect.yml`.
+# It is intentionally NOT under ./inventory/ (the ansible.cfg dir-inventory) so
+# that ordinary fleet runs do NOT load this S3-backed source and thus do not
+# require AWS credentials. Reading this inventory DOES require AWS creds
+# (AWS_PROFILE=fcx-sso) since the opconnect state is the S3 + SSE-KMS backend.
+#
+# project_path is resolved relative to the CWD ansible is run from (ansible/),
+# matching inventory/terraform.yml's ../terraform convention.
+# ==============================================================================
+
+plugin: cloud.terraform.terraform_provider
+
+# The opconnect OpenTofu project (its state holds the ansible_host/group).
+project_path: ../tofu/opconnect
+
+# Use the OpenTofu binary (resolved via PATH) — the lockfile pins
+# registry.opentofu.org provider hashes, so `terraform` would report unavailable
+# providers and return an empty inventory.
+binary_path: tofu
+
+search_child_modules: false

@@ -116,10 +116,10 @@ In `ansible/roles/opconnect/tasks/main.yml`, immediately AFTER the `Stage 1Passw
   ansible.builtin.fail:
     msg: >-
       {{ opconnect_compose_dir }}/1password-credentials.json is missing or empty.
-      Stage the file emitted by `op connect server create` at
-      {{ opconnect_credentials_src }} BEFORE running this play — the relative ./
-      bind in docker-compose would otherwise create an empty mount and connect-sync
-      cannot authenticate.
+      The controller-side source ({{ opconnect_credentials_local }}) must be the
+      non-empty file emitted by `op connect server create` (P4.1) — the relative
+      ./ bind in docker-compose would otherwise create an empty mount and
+      connect-sync cannot authenticate.
   when: not _opconnect_creds_stat.stat.exists or _opconnect_creds_stat.stat.size == 0
   tags: ['opconnect', 'deploy', 'secrets']
 ```
@@ -320,13 +320,13 @@ Expected: VM 1101 created; `opconnect-new.fusioncloudx.home → 1101` DNS record
 `opconnect_ip` output populated once the guest agent leases. The canonical
 `opconnect.fusioncloudx.home → .44` record is untouched.
 
-- [ ] **Step 2: [OP] Stage the credentials on 1101**
+- [ ] **Step 2: Place credentials on the Ansible controller**
 
-```bash
-scp 1password-credentials.json ansible@<1101-IP>:/tmp/ && \
-ssh ansible@<1101-IP> 'sudo install -m600 -o root -g root /tmp/1password-credentials.json /root/1password-credentials.json && shred -u /tmp/1password-credentials.json'
-```
-(`/root/1password-credentials.json` = `opconnect_credentials_src`; the role copies it to `/opt/opconnect/`.)
+Place `1password-credentials.json` on the **Ansible controller** at
+`~/opconnect-cutover/1password-credentials.json` (or override with
+`-e opconnect_credentials_local=<path>`). The `opconnect.yml` run copies it to the VM
+automatically — no manual scp required. The file is chowned to the container opuser
+UID (999) so connect-sync can read it.
 
 - [ ] **Step 3: Run the opconnect play** (build auth = old Connect, already in env)
 

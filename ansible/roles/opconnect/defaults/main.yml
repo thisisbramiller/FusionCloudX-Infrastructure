@@ -24,19 +24,30 @@ opconnect_sync_port: 8081
 # Connect log level (passed through OP_LOG_LEVEL). info|debug|trace.
 opconnect_log_level: "info"
 
-# Operator STAGING path of the 1password-credentials.json on the opconnect VM.
-# This is a SEPARATE path from the compose dir on purpose: the role's "Stage
-# 1Password Connect credentials into the compose directory" task copies FROM
-# this staging path TO {{ opconnect_compose_dir }}/1password-credentials.json,
-# so the copy is meaningful (distinct src and dest). If this defaulted to the
-# compose-dir path the copy would be a same-src/same-dest no-op.
+# Path ON THE ANSIBLE CONTROLLER to the 1password-credentials.json emitted by
+# `op connect server create` (the operator-run bootstrap, P4.1). Ansible COPIES
+# it from the controller to the compose dir on the VM (copy, NOT remote_src) —
+# no manual scp. This is the IaC consumption path, identical to how the fleet
+# roles place files.
 #
-# This file + the Connect access token are GENERATED OUT-OF-BAND at P4 via the
-# SA token:
-#     op connect server create <name>     # emits 1password-credentials.json
-#     op connect token create <name> ...   # emits the access token (consumers)
-# The operator stages 1password-credentials.json at this path on the target VM
-# before running the playbook. (Alternative considered: pull the file from a
-# 1Password item field via the SA token — deferred to P4; staged-file is the
-# simpler bootstrap and keeps the credentials file out of this repo.)
-opconnect_credentials_src: "/root/1password-credentials.json"
+# Division of responsibility (deliberate): the Connect SERVER + TOKEN creation
+# (`op signin` -> `op connect server/token create`) stays a MANUAL operator step
+# — it is account-privileged and a Service Account cannot manage Connect, so
+# neither ansible-on-this-Mac (no interactive biometric) nor a future GitLab CI
+# runner (Service-Account auth) can automate it. Ansible owns DEPLOYING the
+# resulting creds + reading secrets via Connect.
+#
+# Lift-and-shift note: when IaC moves to GitLab CI, only THIS source path
+# changes (a CI secret/file instead of a local path); the copy mechanics are
+# identical. Override with -e opconnect_credentials_local=<path>.
+opconnect_credentials_local: "{{ lookup('env', 'HOME') }}/opconnect-cutover/1password-credentials.json"
+
+# UID/GID of `opuser` inside the official 1password/connect-api|sync images. The
+# credentials file is bind-mounted read-only and read by this non-root user — so
+# it MUST be owned by (or readable by) this UID, NOT root:root. Confirmed
+# empirically: the connect-sync data volume's sqlite is owned by 999:999. A
+# root:root 0600 creds file yields connect-sync "permission denied ... open
+# /home/opuser/.op/1password-credentials.json" and sync never initializes. We
+# chown the staged file to this UID + keep 0600 (owner-readable by opuser, NOT
+# world-readable). Override if a future image changes the UID.
+opconnect_container_uid: 999
