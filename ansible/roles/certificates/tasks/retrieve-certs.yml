@@ -117,8 +117,11 @@
 
 # ------------------------------------------------------------------------------
 # PATH B — `op` CLI / 1Password desktop / SA token (op_use_cli: true)
-# OP_CONNECT_HOST and OP_CONNECT_TOKEN are explicitly unset so `op` uses
-# account / desktop auth, not Connect mode.
+# OP_CONNECT_HOST / OP_CONNECT_TOKEN are unset for the op subprocess via `env -u`
+# in argv (NOT an `environment:` stanza — setting them to "" leaves them set-but-
+# empty, which keeps op in Connect mode: "unsupported protocol scheme"; see the
+# ssh-key-loader role for the full rationale). Unset => op uses account / desktop
+# (or OP_SERVICE_ACCOUNT_TOKEN) auth, reading 1Password directly, not Connect.
 # ------------------------------------------------------------------------------
 - name: Retrieve certificates via op CLI (1Password desktop / SA token)
   when: op_use_cli | default(false) | bool
@@ -134,9 +137,6 @@
           - op
           - read
           - "op://FusionCloudX/FusionCloudX Root CA Bundle/root-ca.pem"
-      environment:
-        OP_CONNECT_HOST: ""
-        OP_CONNECT_TOKEN: ""
       register: _root_ca_op
       changed_when: false
       no_log: true
@@ -155,9 +155,6 @@
           - op
           - read
           - "op://FusionCloudX/FusionCloudX Intermediate CA Bundle/intermediate-ca.pem"
-      environment:
-        OP_CONNECT_HOST: ""
-        OP_CONNECT_TOKEN: ""
       register: _intermediate_ca_op
       changed_when: false
       no_log: true
@@ -176,9 +173,6 @@
           - op
           - read
           - "op://FusionCloudX/FusionCloudX Intermediate CA Bundle/server-cert.pem"
-      environment:
-        OP_CONNECT_HOST: ""
-        OP_CONNECT_TOKEN: ""
       register: _server_cert_op
       changed_when: false
       no_log: true
@@ -197,9 +191,6 @@
           - op
           - read
           - "op://FusionCloudX/FusionCloudX Intermediate CA Bundle/server-key.pem"
-      environment:
-        OP_CONNECT_HOST: ""
-        OP_CONNECT_TOKEN: ""
       register: _server_key_op
       changed_when: false
       no_log: true
@@ -208,11 +199,16 @@
       run_once: true
 
     - name: Set certificate facts from op CLI output
+      # `command.stdout` is right-stripped by Ansible; PATH A (Connect `uri`) keeps
+      # the file's natural trailing newline. Re-add it so PATH B produces byte-
+      # identical PEM facts — a private key written without a trailing newline can
+      # be rejected by the TLS stack (same failure mode as the OpenSSH key in
+      # ssh-key-loader).
       set_fact:
-        certificates_root_ca: "{{ _root_ca_op.stdout }}"
-        certificates_intermediate_ca: "{{ _intermediate_ca_op.stdout }}"
-        certificates_server_cert: "{{ _server_cert_op.stdout }}"
-        certificates_server_key: "{{ _server_key_op.stdout }}"
+        certificates_root_ca: "{{ _root_ca_op.stdout + '\n' }}"
+        certificates_intermediate_ca: "{{ _intermediate_ca_op.stdout + '\n' }}"
+        certificates_server_cert: "{{ _server_cert_op.stdout + '\n' }}"
+        certificates_server_key: "{{ _server_key_op.stdout + '\n' }}"
       no_log: true
 
 # ------------------------------------------------------------------------------

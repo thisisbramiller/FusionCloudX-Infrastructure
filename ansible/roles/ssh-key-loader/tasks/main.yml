@@ -12,10 +12,13 @@
 # removed before loading a fresh key (similar to 'mvn clean install').
 #
 # Requirements:
-#   - OP_CONNECT_HOST environment variable set
-#   - OP_CONNECT_TOKEN environment variable set
-#   - TF_VAR_onepassword_vault_id environment variable set
-#   - onepassword.connect collection installed
+#   - TF_VAR_onepassword_vault_id environment variable set (BOTH paths)
+#   PATH A — Connect (op_use_cli: false, fleet default):
+#     - OP_CONNECT_HOST + OP_CONNECT_TOKEN environment variables set
+#     - onepassword.connect collection installed
+#   PATH B — op CLI (op_use_cli: true, Connect-less opconnect rebuild):
+#     - `op` CLI on the controller, authed via `op signin` / 1Password desktop
+#       (or OP_SERVICE_ACCOUNT_TOKEN). Connect vars NOT required.
 # ==============================================================================
 
 # --- Clean workspace before loading (removes any leftover from failed runs) ---
