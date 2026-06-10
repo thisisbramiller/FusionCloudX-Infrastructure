@@ -20,6 +20,7 @@
 # ==============================================================================
 
 data "onepassword_item" "ansible_ssh_key" {
+  count = var.ansible_pubkey == "" ? 1 : 0
   vault = var.onepassword_vault_id
   title = var.ansible_ssh_key_item_title
 }
@@ -28,13 +29,15 @@ locals {
   # Flatten every section's fields and select the "public_key" STRING field.
   # The item is a secure_note (the top-level data-source `public_key` attribute
   # only populates for ssh_key-category items), so read it from the section.
-  _ansible_ssh_key_fields = flatten([
-    for s in data.onepassword_item.ansible_ssh_key.section : [
+  # When ansible_pubkey is supplied directly (Connect-less rebuild), count=0 so
+  # the data source is skipped entirely and we use the var value instead.
+  _ansible_ssh_key_fields = var.ansible_pubkey == "" ? flatten([
+    for s in data.onepassword_item.ansible_ssh_key[0].section : [
       for f in s.field : f
     ]
-  ])
+  ]) : []
 
-  ansible_ssh_public_key = trimspace(one([
+  ansible_ssh_public_key = var.ansible_pubkey != "" ? trimspace(var.ansible_pubkey) : trimspace(one([
     for f in local._ansible_ssh_key_fields : f.value if f.label == "public_key"
   ]))
 }

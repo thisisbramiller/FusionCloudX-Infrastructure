@@ -12,10 +12,13 @@
 # removed before loading a fresh key (similar to 'mvn clean install').
 #
 # Requirements:
-#   - OP_CONNECT_HOST environment variable set
-#   - OP_CONNECT_TOKEN environment variable set
-#   - TF_VAR_onepassword_vault_id environment variable set
-#   - onepassword.connect collection installed
+#   - TF_VAR_onepassword_vault_id environment variable set (BOTH paths)
+#   PATH A — Connect (op_use_cli: false, fleet default):
+#     - OP_CONNECT_HOST + OP_CONNECT_TOKEN environment variables set
+#     - onepassword.connect collection installed
+#   PATH B — op CLI (op_use_cli: true, Connect-less opconnect rebuild):
+#     - `op` CLI on the controller, authed via `op signin` / 1Password desktop
+#       (or OP_SERVICE_ACCOUNT_TOKEN). Connect vars NOT required.
 # ==============================================================================
 
 # --- Clean workspace before loading (removes any leftover from failed runs) ---
@@ -58,11 +61,40 @@
   run_once: true
   no_log: true
   register: _ssh_key_result
+  when: not (op_use_cli | default(false) | bool)
+  tags: ['ssh-key', 'always']
+
+- name: Retrieve Ansible SSH private key via op (1Password CLI / desktop)
+  # `env -u` TRULY unsets OP_CONNECT_* for the op subprocess. Setting them to ""
+  # via `environment:` leaves them SET-but-empty, which keeps op in Connect mode
+  # (op then tries an empty-host Connect call: "unsupported protocol scheme").
+  # Unset => op uses account/desktop (or OP_SERVICE_ACCOUNT_TOKEN) auth, reading
+  # 1Password directly — the Connect-independent path.
+  ansible.builtin.command:
+    argv:
+      - env
+      - -u
+      - OP_CONNECT_HOST
+      - -u
+      - OP_CONNECT_TOKEN
+      - op
+      - read
+      - "op://{{ _op_vault_id }}/{{ ssh_key_loader_item_name }}/{{ ssh_key_loader_section_name }}/{{ ssh_key_loader_field_name }}"
+  register: _ssh_key_op
+  changed_when: false
+  no_log: true
+  delegate_to: localhost
+  become: false
+  run_once: true
+  when: op_use_cli | default(false) | bool
   tags: ['ssh-key', 'always']
 
 - name: Write SSH key to secure temp file
   copy:
-    content: "{{ _ssh_key_result.field.value }}"
+    # op path: `command.stdout` is right-stripped, but an OpenSSH private key MUST
+    # end with a trailing newline or ssh rejects it ("invalid format") — re-add it.
+    # Connect path: the field value already carries its trailing newline.
+    content: "{{ (_ssh_key_op.stdout + '\n') if (op_use_cli | default(false) | bool) else _ssh_key_result.field.value }}"
     dest: "{{ ssh_key_loader_temp_path }}"
     mode: '0600'
   delegate_to: localhost
@@ -73,7 +105,7 @@
 
 - name: Display SSH key load status
   debug:
-    msg: "SSH key loaded from 1Password Connect to {{ ssh_key_loader_temp_path }}"
+    msg: "SSH key loaded via {{ (op_use_cli | default(false) | bool) | ternary('op CLI', '1Password Connect') }} to {{ ssh_key_loader_temp_path }}"
   run_once: true
   delegate_to: localhost
   tags: ['ssh-key', 'always']
