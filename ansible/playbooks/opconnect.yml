@@ -96,28 +96,43 @@
   gather_facts: yes
   vars:
     ansible_ssh_private_key_file: "/tmp/.ansible_ssh_key"
+    # The whole opconnect bootstrap is the op-CLI path (matches plays 1 & 2). Set
+    # here too so the auth-gate `not op_use_cli` guard + the status debug evaluate
+    # correctly in this play — the opconnect role itself does not branch on it.
+    op_use_cli: true
 
   pre_tasks:
-    - name: Ensure a 1Password auth path is available (SA token OR Connect)
+    # Under op_use_cli: true (the opconnect default) the SSH key + certs were ALREADY
+    # read via `op` in the ssh-key-loader + certificates plays above, so op auth
+    # (1Password desktop / `op signin` / SA token) is proven by the time we reach
+    # this play — no further gate. The check below therefore applies ONLY to the
+    # legacy Connect read path (op_use_cli: false), which needs OP_CONNECT_*. Without
+    # the `not op_use_cli` guard this gate would falsely reject the documented
+    # desktop / `op signin` happy path (no OP_CONNECT_*, no SA token).
+    - name: Ensure a 1Password auth path is available (Connect read path)
       ansible.builtin.fail:
         msg: >-
-          Provide a 1Password auth path: either OP_SERVICE_ACCOUNT_TOKEN (pure
-          secrets-root bootstrap) OR OP_CONNECT_HOST + OP_CONNECT_TOKEN (the P4
-          cutover bootstraps the NEW Connect via the EXISTING old Connect — the
-          one item read is the Ansible SSH key). A from-scratch rebuild (no prior
-          Connect) uses OP_SERVICE_ACCOUNT_TOKEN or an operator `op signin` to
-          restage 1password-credentials.json from the DR document.
+          No 1Password auth path for the Connect read path (op_use_cli: false): set
+          OP_CONNECT_HOST + OP_CONNECT_TOKEN (or OP_SERVICE_ACCOUNT_TOKEN). The op-CLI
+          bootstrap (op_use_cli: true, opconnect default) instead uses an authenticated
+          `op` session — 1Password desktop / `op signin` / SA token — already validated
+          by the SSH-key + certificate plays above.
       when: >-
+        not (op_use_cli | default(false) | bool) and
         lookup('env', 'OP_SERVICE_ACCOUNT_TOKEN') == '' and
         (lookup('env', 'OP_CONNECT_HOST') == '' or lookup('env', 'OP_CONNECT_TOKEN') == '')
 
     - name: Display opconnect bootstrap auth status
       ansible.builtin.debug:
         msg: >-
-          {% if lookup('env', 'OP_SERVICE_ACCOUNT_TOKEN') != '' -%}
-          Bootstrapping 1Password Connect via the Service Account token (PATH B — from-scratch rebuild).
+          {% if op_use_cli | default(false) | bool -%}
+          Bootstrapping 1Password Connect via the `op` CLI (op_use_cli: true) — secrets read
+          straight from 1Password (desktop / `op signin` / SA token); OP_CONNECT_* unset for
+          the op subprocess. Connect-independent rebuild.
+          {%- elif lookup('env', 'OP_SERVICE_ACCOUNT_TOKEN') != '' -%}
+          Bootstrapping 1Password Connect via the Service Account token (Connect read path).
           {%- else -%}
-          Bootstrapping 1Password Connect via the existing old Connect at {{ lookup('env', 'OP_CONNECT_HOST') }} (PATH A — P4 cutover).
+          Bootstrapping 1Password Connect via 1Password Connect at {{ lookup('env', 'OP_CONNECT_HOST') }} (Connect read path).
           {%- endif %}
 
   roles:
