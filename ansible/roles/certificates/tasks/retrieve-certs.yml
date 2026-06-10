@@ -209,6 +209,12 @@
         certificates_intermediate_ca: "{{ _intermediate_ca_op.stdout + '\n' }}"
         certificates_server_cert: "{{ _server_cert_op.stdout + '\n' }}"
         certificates_server_key: "{{ _server_key_op.stdout + '\n' }}"
+      # Symmetric with the four run_once `op read` commands above (read once on the
+      # controller). PATH B is opconnect-only/single-host today, so this is a no-op
+      # now; it removes the latent multi-host scoping trap if op_use_cli is ever set
+      # on a multi-host play. (PATH A's set_fact stays per-host — it is genuinely
+      # per-host, fetching each host's certs independently.)
+      run_once: true
       no_log: true
 
 # ------------------------------------------------------------------------------

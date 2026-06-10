@@ -5,47 +5,57 @@
 # Deploys 1Password Connect (connect-api + connect-sync) on the opconnect VM via
 # Docker Compose — the secrets-root bring-up.
 #
-# BOOTSTRAP AUTH PATHS (two valid paths, both design-approved):
+# BOOTSTRAP SECRET READS — 1Password DIRECT via the `op` CLI (Connect-independent):
 #
-#   PATH A — P4 cutover (the intended build path for this phase):
-#     The new Connect (VM 1101) is bootstrapped via the EXISTING old Connect
-#     (VM 100). OP_CONNECT_HOST + OP_CONNECT_TOKEN are set pointing to the old
-#     Connect. The one item read via Connect is the Ansible SSH private key
-#     (ssh-key-loader role). The 1password-credentials.json for the new server
-#     must be staged on the target separately (generated out-of-band from a prior
-#     `op connect server create` run). After P4.4 repoint, the new Connect takes
-#     over as the sole secrets endpoint.
-#       export OP_CONNECT_HOST=...
-#       export OP_CONNECT_TOKEN=...
+#   Both bring-up plays set `op_use_cli: true`, so the ssh-key-loader and
+#   certificates roles read their bootstrap secrets (the Ansible SSH key + the 4
+#   TLS cert files) straight from 1Password via the `op` CLI — NOT from any Connect
+#   server. OP_CONNECT_* are explicitly unset for those `op` calls (`env -u`), so
+#   the read path never depends on the very Connect this play is (re)building. THIS
+#   is the resolution to the chicken-and-egg: opconnect can be destroyed and rebuilt
+#   from bare metal with no live Connect anywhere on the network.
+#
+#   `op` auth for those reads is sourced (in order) from: an OP_SERVICE_ACCOUNT_TOKEN
+#   in the environment, or an operator 1Password desktop / `op signin` session.
+#       export OP_SERVICE_ACCOUNT_TOKEN=...   # or: op signin / 1Password desktop
 #       ansible-playbook playbooks/opconnect.yml
 #
-#   PATH B — from-scratch rebuild (no prior Connect available):
-#     Use OP_SERVICE_ACCOUNT_TOKEN so the SA token sources the SSH key instead.
-#     Requires the operator to restage 1password-credentials.json from the DR
-#     document via `op connect server create` or a manual DR procedure.
-#       export OP_SERVICE_ACCOUNT_TOKEN=...
-#       ansible-playbook playbooks/opconnect.yml
+# Requirements:
+#   - `op` CLI on the ANSIBLE CONTROLLER, authed (SA token OR desktop / `op signin`)
+#   - TF_VAR_onepassword_vault_id set (ssh-key-loader op:// path; asserted below)
+#   - 1password-credentials.json on the CONTROLLER at opconnect_credentials_local
+#     (default ~/opconnect-cutover/1password-credentials.json); ansible copies it to
+#     the VM automatically — no manual scp. Generated via `op connect server create`.
 #
-# Requirements (either path):
-#   - 1password-credentials.json available on the ANSIBLE CONTROLLER at
-#     opconnect_credentials_local (default ~/opconnect-cutover/1password-credentials.json);
-#     ansible copies it to the VM automatically — no manual scp required.
-#     Generated via `op connect server create`
+# The Deploy play's pre-flight assertion accepts OP_SERVICE_ACCOUNT_TOKEN OR
+# OP_CONNECT_* purely as a coarse "a 1Password auth path is present" gate — the
+# actual reads use `op` (desktop/SA). The new Connect serves all consumers once up.
 # ==============================================================================
 
-# OLD CONNECT VM 100 MUST STAY UP DURING P4. The ssh-key-loader role reads the
-# Ansible SSH private key via 1Password Connect (OP_CONNECT_HOST /
-# OP_CONNECT_TOKEN). This is the deliberate, design-approved P4 build path: the
-# new Connect (VM 1101) is bootstrapped via the existing old Connect — NOT a
-# temporary hack. Keep the old Connect (VM 100) serving OP_CONNECT_HOST until
-# the new opconnect is verified and the P4.4 repoint happens. After repoint the
-# new Connect serves all consumers and the old VM 100 can be decommissioned.
-- name: Load SSH Key from 1Password Connect
+# Reads the Ansible SSH private key from 1Password via the `op` CLI (op_use_cli:
+# true), authed by the controller's SA token / desktop session — NOT via a Connect
+# server (OP_CONNECT_* are unset for the `op` call). Connect-independent by design:
+# the rebuild needs no live Connect, old or new.
+- name: Load SSH Key from 1Password (op CLI)
   hosts: localhost
   gather_facts: false
   connection: local
   vars:
     op_use_cli: true
+
+  pre_tasks:
+    # G4 guard: an unset vault id makes the op:// path "op:///Item/..." and `op`
+    # fails with a cryptic parse error rather than a clear "vault id missing".
+    - name: Assert TF_VAR_onepassword_vault_id is set
+      ansible.builtin.assert:
+        that:
+          - "lookup('env', 'TF_VAR_onepassword_vault_id') | length > 0"
+        fail_msg: >-
+          TF_VAR_onepassword_vault_id is empty. Export it (the FusionCloudX vault
+          UUID) before running the opconnect bootstrap — the ssh-key-loader op://
+          read needs it.
+        quiet: true
+      tags: ['ssh-key', 'always']
 
   roles:
     - role: ssh-key-loader
@@ -53,11 +63,11 @@
 
 # Common bootstrap — same baseline every fleet VM gets via site.yml's
 # "Common Infrastructure Configuration" (apt cache + the certificates role:
-# FusionCloudX CA trust + server cert, retrieved from Connect). opconnect lives
-# in its own state/inventory, so site.yml does not reach it — this play wires
-# opconnect into the identical bootstrap so it is a fully-managed VM, not a
-# special case. Certs are read via Connect (OP_CONNECT_* env = the OLD Connect
-# during the P4 cutover), exactly like the fleet.
+# FusionCloudX CA trust + server cert). opconnect lives in its own state/inventory,
+# so site.yml does not reach it — this play wires opconnect into the identical
+# bootstrap so it is a fully-managed VM, not a special case. Unlike the fleet
+# (which reads certs via Connect), this play sets op_use_cli: true so the certs are
+# read from 1Password via the `op` CLI — keeping the bring-up Connect-independent.
 - name: Common Infrastructure Configuration (opconnect)
   hosts: opconnect
   become: yes
