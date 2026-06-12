@@ -99,14 +99,25 @@
   notify: restart runitup
   tags: ['runitup', 'deploy']
 
+- name: Pull the nginx sidecar image (public; the app image is loaded from the tarball above and never pulled)
+  # MUST precede flush_handlers: the "restart runitup" handler runs
+  # `docker compose up` with pull: never, which fails "No such image:
+  # nginx:..." on a FRESH host if the public sidecar isn't already present.
+  community.docker.docker_image:
+    name: "{{ runitup_nginx_image }}"
+    source: pull
+  tags: ['runitup', 'deploy']
+
 - name: Restart containers if configuration changed
   meta: flush_handlers
 
-- name: Start Run It Up containers (pre-built image — no build, no pull)
+- name: Start Run It Up containers (app image load-only; nginx sidecar pre-pulled above)
   community.docker.docker_compose_v2:
     project_src: "{{ runitup_compose_dir }}"
     state: present
     build: never
+    # pull: never keeps the app image (runitup:local, loaded from the tarball)
+    # from being pull-attempted; the public nginx sidecar is pre-pulled above.
     pull: never
   tags: ['runitup', 'deploy']
 

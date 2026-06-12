@@ -20,22 +20,17 @@ variable "ansible_ssh_key_item_title" {
 }
 
 # ------------------------------------------------------------------------------
-# DNS subdomain — temp-during-cutover, canonical-at-finalize (P4)
+# DNS subdomain
 # ------------------------------------------------------------------------------
-# The canonical name "opconnect" (opconnect.fusioncloudx.home) currently resolves
-# to the OLD snowflake Connect (VM 100, 192.168.40.44). Creating the canonical
-# A record for VM 1101 while the old one exists collides (the UDM rejects an
-# overlapping record). The P4 cutover therefore BUILDS 1101 under a temp
-# subdomain (apply with -var opconnect_dns_name=opconnect-new) — no collision —
-# and reclaims the canonical name at FINALIZE (apply with the default, after the
-# old record + VM 100 are retired). The old Connect stays reachable BY IP
-# (192.168.40.44) the whole time, so consumers (OP_CONNECT_HOST) are unaffected.
-# Only the unifi_dns_record name + the connect_host output follow this var; the
-# VM's own hostname (cloud-init fqdn) stays canonical "opconnect".
+# The old snowflake Connect (VM 100, opconnect->192.168.40.44) is destroyed, so the
+# "opconnect" namespace is open and VM 1101 owns it. The temp-subdomain dance used
+# during the P4 cutover (to avoid colliding with the old record) is obsolete. This
+# var drives the unifi_dns_record name + the connect_host output; the VM's own
+# hostname (cloud-init fqdn) is always canonical "opconnect".
 variable "opconnect_dns_name" {
   type        = string
   default     = "opconnect"
-  description = "Short DNS/UniFi-client name for the opconnect host (A record = <this>.fusioncloudx.home). Default 'opconnect' (canonical). During the P4 cutover, override to a temp value (e.g. 'opconnect-new') to avoid colliding with the old snowflake's opconnect->.44 record; flip back to the default at finalize."
+  description = "Short DNS/UniFi-client name for the opconnect host (A record = <this>.fusioncloudx.home). Default 'opconnect' (canonical); the namespace is open (old snowflake destroyed)."
 }
 
 # ------------------------------------------------------------------------------
@@ -54,8 +49,5 @@ variable "opconnect_memory_mb" {
   description = "Dedicated memory (MB) for the opconnect VM."
 }
 
-variable "ansible_pubkey" {
-  type        = string
-  default     = ""
-  description = "Optional Ansible SSH PUBLIC key supplied directly (e.g. via `op read` at apply) for a Connect-less rebuild. When set, the onepassword data-source read is skipped (count=0) so apply needs no live Connect. Default empty = read from 1Password via the provider (normal path)."
-}
+# (ansible_pubkey var removed — opconnect now OWNS the keypair via ssh-keys.tf;
+#  the Connect-less-rebuild pubkey-injection escape hatch is obsolete.)

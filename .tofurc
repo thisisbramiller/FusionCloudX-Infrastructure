@@ -8,7 +8,9 @@
 # fork); it is NOT portable as-is. The `direct` exclude means there is no
 # registry fallback for the fork, so a wrong path fails `tofu init`.
 #
-# Twin of ~/.terraformrc (OpenTofu reads it as a fallback). Use explicitly with:
+# LOCAL: OpenTofu auto-discovers ~/.terraformrc (which carries this same mirror),
+# so a bare `tofu` resolves the fork with NO flag. This repo-root .tofurc is NOT
+# auto-discovered — it exists only for CI / fresh machines that lack ~/.terraformrc:
 #   TF_CLI_CONFIG_FILE="$PWD/.tofurc" tofu ...
 # Full rationale: terraform/PATCHED-PROVIDER.md
 provider_installation {

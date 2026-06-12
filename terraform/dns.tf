@@ -64,9 +64,10 @@ resource "unifi_client" "vm" {
   # lower-case and allow_existing adoption matches case-sensitively (the
   # provider returns "not found" otherwise). Normalize so the existing
   # controller client is adopted instead of erroring.
-  # Index [1] = the first real NIC ([0] is the bpg placeholder 00:00:.../127).
-  # Assumes a SINGLE-NIC guest; a multi-NIC VM would need a per-host override.
-  mac      = lower(proxmox_virtual_environment_vm.qemu-vm[each.key].mac_addresses[1])
+  # mac_addresses[0] = the NIC. Legacy used [1] under an older bpg layout where
+  # [0] was a placeholder; provider 0.107 returns a single-element list, so [1] is
+  # out of range — corrected to [0] to unblock teardown. This tree is retired at P6.
+  mac      = lower(proxmox_virtual_environment_vm.qemu-vm[each.key].mac_addresses[0])
   fixed_ip = local.vm_ip[each.key]
   name     = each.key
 
