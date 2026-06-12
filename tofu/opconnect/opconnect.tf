@@ -25,6 +25,11 @@ module "opconnect" {
   datastore_id = "local-zfs"
   tags         = ["opentofu", "ubuntu", "opconnect"]
   protected    = true # secrets-root singleton — prevent_destroy seatbelt
+  # on_boot: 1101 MUST auto-start after a Proxmox node reboot (it is the secrets
+  # root — the fleet reads 1Password through Connect here). DR backups of this VM
+  # must be snapshot-mode (vzdump default) — NEVER --mode stop, which would stop
+  # the guest and dark-out Connect for every downstream apply/playbook.
+  on_boot      = true
 
   # Foundation ubuntu template (9001) lives in the network/ state (P3, applied first).
   template_vm_id = data.terraform_remote_state.network.outputs.ubuntu_template_vm_id
@@ -50,10 +55,10 @@ module "opconnect_cloud_init" {
 # Per-host UniFi DHCP reservation + A record. MAC/IP passed explicitly from the
 # VM module (footgun #4: no [1]-index single-NIC assumption leaks into the
 # unifi-host module). network_id = null — the proven dns path OMITS it.
-# name = var.opconnect_dns_name: default "opconnect" (canonical). During the P4
-# cutover, build under a temp value (-var opconnect_dns_name=opconnect-new) so
-# the A record does NOT collide with the old snowflake's opconnect->.44 record;
-# flip back to the default at finalize once the old record + VM 100 are retired.
+# name = var.opconnect_dns_name: default "opconnect" (canonical, now live). The P4
+# cutover briefly built under a temporary name to avoid colliding with the old
+# snowflake's opconnect->.44 A record; that temp name is retired and the canonical
+# name was reclaimed at finalize. Override only for a future re-cutover.
 module "opconnect_dns" {
   source = "../../modules/unifi-host"
 
