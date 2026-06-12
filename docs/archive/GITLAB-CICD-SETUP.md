@@ -1,3 +1,5 @@
+> **ARCHIVED (2026-06-12)** — superseded by the terraform->OpenTofu greenfield restructure; the files/workflow it describes no longer exist. Kept for history only.
+
 # GitLab CI/CD Setup Guide
 
 This guide explains how to configure and use GitLab CI/CD for manual infrastructure operations, replacing Semaphore UI with native GitLab features.

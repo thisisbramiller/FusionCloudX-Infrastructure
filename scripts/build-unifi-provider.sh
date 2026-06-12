@@ -5,8 +5,8 @@
 #
 # Source of truth: thisisbramiller/terraform-provider-unifi @ branch `patches`
 # (clean rebase-able series on upstream base f5d6a42f; see its PATCHES.md).
-# Consumed by terraform/provider.tf as tf.fusioncloudx.home/ubiquiti-community/unifi.
-# Full rationale: terraform/PATCHED-PROVIDER.md
+# Consumed by tofu/{network,compute}/providers.tf as tf.fusioncloudx.home/ubiquiti-community/unifi.
+# Full rationale: tofu/PATCHED-PROVIDER.md
 # =============================================================================
 set -euo pipefail
 

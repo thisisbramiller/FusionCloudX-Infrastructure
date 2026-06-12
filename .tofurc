@@ -12,7 +12,7 @@
 # so a bare `tofu` resolves the fork with NO flag. This repo-root .tofurc is NOT
 # auto-discovered — it exists only for CI / fresh machines that lack ~/.terraformrc:
 #   TF_CLI_CONFIG_FILE="$PWD/.tofurc" tofu ...
-# Full rationale: terraform/PATCHED-PROVIDER.md
+# Full rationale: tofu/PATCHED-PROVIDER.md
 provider_installation {
   filesystem_mirror {
     path    = "/Users/fcx/.terraform.d/plugins"

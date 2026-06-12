@@ -4,7 +4,7 @@
 DHCP reservations on this controller (UDM-Pro, UniFi OS 5.x / Network App 10.x), and
 its logger races under parallel reads. We carry a small patch series on a **maintained
 fork** (`thisisbramiller/terraform-provider-unifi`, branch `patches`), build it into a
-Terraform **filesystem mirror**, and pin it with `h1:` checksums in
+OpenTofu **filesystem mirror**, and pin it with `h1:` checksums in
 `.terraform.lock.hcl`. This **replaces `dev_overrides`** — `plan`/`apply` now consume
 the provider as a fully version-pinned, checksum-verified dependency.
 
@@ -57,11 +57,13 @@ unifi = {
 ```
 
 The synthetic version `0.42.0-fcx1` sorts above the real `0.41.25` and below a future
-real `0.42.0`, so when upstream catches up, `terraform init -upgrade` retires the fork
+real `0.42.0`, so when upstream catches up, `tofu init -upgrade` retires the fork
 cleanly. Bump the suffix (`fcx2`, `fcx3`, …) on each rebuild.
 
-`~/.terraformrc` routes only this provider to the mirror (everything else to the
-registry):
+This `provider_installation` block routes only this provider to the mirror (everything
+else to the registry). OpenTofu auto-discovers `~/.terraformrc`, and the repo also
+commits a `.tofurc` carrying the same block — point CI at it with
+`TF_CLI_CONFIG_FILE=$PWD/.tofurc`:
 
 ```hcl
 provider_installation {
@@ -84,15 +86,15 @@ provider_installation {
 brew install go                                   # one-time prereq
 export UNIFI_FORK_SHA=<patches-branch tip SHA>    # the pinned fork commit
 scripts/build-unifi-provider.sh                   # clone fork @ SHA -> gate -> go build -> mirror
-cd terraform
-terraform providers lock \
+cd tofu/network   # any state dir; repeat for compute
+tofu providers lock \
   -fs-mirror="$HOME/.terraform.d/plugins" \
   -platform=darwin_arm64                          # add -platform=linux_amd64 if a linux runner consumes it
 ```
 
-`terraform providers lock` writes the `h1:` checksums for
+`tofu providers lock` writes the `h1:` checksums for
 `tf.fusioncloudx.home/ubiquiti-community/unifi` into `.terraform.lock.hcl`. After that,
-`terraform init` installs the provider from the mirror and **verifies it against the
+`tofu init` installs the provider from the mirror and **verifies it against the
 lockfile** — no override warning, no network fetch for `unifi`.
 
 ## Supply-chain gate
@@ -115,7 +117,7 @@ artifact himself): SLSA provenance, cosign/Sigstore signing, a private registry.
 - One focused upstream PR per carried patch; for the ported #168 patch, contribute to
   the existing PR rather than compete.
 - `PATCHES.md` drives retirement: when a patch's PR **merges and releases**, drop the
-  commit on the next rebase (it falls out empty) and `terraform init -upgrade`.
+  commit on the next rebase (it falls out empty) and `tofu init -upgrade`.
 - Eventual exit: migrate to `filipowm/terraform-provider-unifi` (actively maintained,
   registry-published, framework rewrite) once `PATCHES.md` is near-empty **and** a
   v1.0.0 **state migration** is budgeted — it is *not* a drop-in.

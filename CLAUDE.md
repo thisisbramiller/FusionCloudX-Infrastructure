@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-FusionCloudX Infrastructure is an Infrastructure-as-Code repository for managing **homelab/development** infrastructure on Proxmox Virtual Environment (PVE) using Terraform and Ansible.
+FusionCloudX Infrastructure is an Infrastructure-as-Code repository for managing **homelab/development** infrastructure on Proxmox Virtual Environment (PVE) using OpenTofu and Ansible.
 
 ## Infrastructure Components
 
@@ -47,7 +47,7 @@ FusionCloudX Infrastructure is an Infrastructure-as-Code repository for managing
 ## Architecture
 
 ```
-Terraform (Provisioning)                    Ansible (Configuration)
+OpenTofu (Provisioning)                     Ansible (Configuration)
 ├── Create VM template (ID 1000)            ├── bootstrap playbook (raw: python3, sudo)
 ├── Clone VMs from template                 ├── certificates role (CA + server certs)
 ├── Create LXC from standard template       ├── postgresql role (install, configure)
@@ -55,34 +55,49 @@ Terraform (Provisioning)                    Ansible (Configuration)
 ├── Per-VM datastore support                ├── mealie role (Docker, nginx, compose)
 │   (local-zfs for Immich)                  ├── tandoor role (Docker, nginx, compose)
 └── Generate Ansible inventory              ├── immich role (Docker, NFS, compose)
-                                            └── Dynamic inventory via Terraform state
+                                            └── Dynamic inventory via OpenTofu state
 ```
 
 **Key Design Decisions**:
 - Single PostgreSQL instance hosts all databases (not one container per database)
 - Standard Proxmox templates with Ansible `raw` module bootstrap (no custom template building needed)
 - 1Password is primary secrets store; Ansible Vault is fallback
-- Dynamic inventory reads directly from Terraform state
+- Dynamic inventory reads directly from OpenTofu state
 
-## Terraform Structure
+## OpenTofu Structure
 
-Files in `terraform/`:
+Config lives in `tofu/`, split into three independently-applied root states plus a shared module library. Each state has its own S3 + SSE-KMS remote backend.
 
-| File | Purpose |
-|------|---------|
-| `provider.tf` | Proxmox (bpg/proxmox v0.93.0), 1Password (~3.0), Ansible (~1.3.0) providers |
-| `backend.tf` | Local state backend |
-| `variables.tf` | `vm_configs`, `postgresql_lxc_config`, `postgresql_databases`, `onepassword_vault_id` |
-| `ubuntu-template.tf` | VM template (ID 1000) from Ubuntu Noble cloud image |
-| `cloud-init.tf` | Standard cloud-init (user_data + vendor_data) |
-| `cloud-init-gitlab.tf` | Enhanced cloud-init for GitLab (postfix, ufw, etc.) |
-| `qemu-vm.tf` | VMs via `for_each` from `vm_configs`; 10 clone retries; per-VM datastore support |
-| `lxc-debian-template.tf` | Downloads Debian 12 LXC template |
-| `lxc-postgresql.tf` | PostgreSQL LXC container definition |
-| `ssh-keys.tf` | Ansible SSH key generation (`tls_private_key`) |
-| `onepassword.tf` | All 1Password items (SSH key, PostgreSQL, GitLab, Tandoor, Immich credentials) |
-| `ansible-inventory.tf` | Dynamic inventory via Terraform Ansible provider |
-| `outputs.tf` | Infrastructure summary, URLs, 1Password item IDs |
+```
+tofu/
+├── network/      # State 1: networking primitives consumed by everything downstream
+├── opconnect/    # State 2: 1Password Connect items + secrets surface
+├── compute/      # State 3: VMs, LXC, cloud-init, SSH keys, Ansible inventory, outputs
+└── modules/      # Shared reusable modules consumed by the states above
+```
+
+**`tofu/network/`** — networking primitives (read by `opconnect` and `compute` via remote state).
+
+**`tofu/opconnect/`** — all 1Password items (SSH key, PostgreSQL, GitLab, Tandoor, Immich credentials) and the secrets surface.
+
+**`tofu/compute/`** — the bulk of the infrastructure, composed from `modules/`:
+
+| Concern | Purpose |
+|---------|---------|
+| providers | Proxmox (bpg/proxmox v0.93.0), 1Password (~3.0), Ansible (~1.3.0) providers |
+| backend | S3 + SSE-KMS remote state backend |
+| variables | `vm_configs`, `postgresql_lxc_config`, `postgresql_databases`, `disabled_workloads`, `onepassword_vault_id` |
+| ubuntu template | VM template (ID 1000) from Ubuntu Noble cloud image |
+| cloud-init | Standard cloud-init (user_data + vendor_data) |
+| cloud-init (gitlab) | Enhanced cloud-init for GitLab (postfix, ufw, etc.) |
+| qemu VMs | VMs via `for_each` from `vm_configs`; 10 clone retries; per-VM datastore support |
+| lxc debian template | Downloads Debian 12 LXC template |
+| lxc postgresql | PostgreSQL LXC container definition |
+| ssh keys | Ansible SSH key generation (`tls_private_key`) |
+| ansible inventory | Dynamic inventory via OpenTofu Ansible provider |
+| outputs | Infrastructure summary, URLs, 1Password item IDs |
+
+> The patched UniFi provider rationale is documented separately in `tofu/PATCHED-PROVIDER.md`.
 
 **Proxmox Connection**:
 - API: https://192.168.40.206:8006 (primary for most operations)
@@ -102,7 +117,7 @@ Files in `ansible/`:
 |------|---------|
 | `ansible.cfg` | Dynamic inventory, SSH config, fact caching |
 | `requirements.yml` | `onepassword.connect >=2.3.0`, `community.general` |
-| `inventory/terraform.yml` | Dynamic inventory plugin (reads Terraform state) |
+| `inventory/terraform.yml` | Dynamic inventory plugin (reads OpenTofu state from `../tofu/compute`; filename retained for the inventory plugin) |
 | `inventory/group_vars/all.yml` | Global: timezone, DNS, NTP, firewall |
 | `inventory/group_vars/postgresql.yml` | PostgreSQL tuning, HBA rules |
 | `inventory/host_vars/postgresql.yml` | Database definitions, firewall rules |
@@ -138,17 +153,31 @@ Files in `ansible/`:
 
 ## Common Commands
 
-### Terraform (from `terraform/` directory)
+### OpenTofu (three states, applied in dependency order)
+
+Apply the states in order: `network` → `opconnect` → `compute`. Each is its own root with an S3 + SSE-KMS backend, so `init`/`plan`/`apply` run from inside each state directory.
 
 ```bash
-terraform init                    # Download providers
-terraform plan                    # Preview changes
-terraform apply                   # Provision infrastructure
-terraform output infrastructure_summary  # View all resources
-terraform output gitlab_url       # Get GitLab URL
-terraform output postgresql_connection   # Get PostgreSQL connection info
-terraform destroy -target=proxmox_virtual_environment_vm.qemu-vm[\"gitlab\"]  # Destroy specific resource
+# State 1: network (foundation)
+(cd tofu/network   && tofu init && tofu plan && tofu apply)
+# State 2: opconnect (1Password items / secrets)
+(cd tofu/opconnect && tofu init && tofu plan && tofu apply)
+# State 3: compute (VMs, LXC, inventory, outputs)
+(cd tofu/compute   && tofu init && tofu plan && tofu apply)
+
+# Read outputs (compute state owns the infra summary, URLs, connection info)
+(cd tofu/compute && tofu output infrastructure_summary)   # View all resources
+(cd tofu/compute && tofu output gitlab_url)                # Get GitLab URL
+(cd tofu/compute && tofu output postgresql_connection)     # Get PostgreSQL connection info
+
+# Tear down a single DISPOSABLE app workload (mealie shown — gitlab CANNOT be targeted, see below)
+(cd tofu/compute && tofu destroy -target='module.mealie[0].proxmox_virtual_environment_vm.disposable')
+# Preferred escape hatch: disable a workload declaratively, then apply
+#   set disabled_workloads = ["mealie"] in compute vars, then:
+(cd tofu/compute && tofu apply)
 ```
+
+> **`gitlab` is a `prevent_destroy` protected singleton** — it cannot be the destroy/`-target` example and is intentionally excluded from `disabled_workloads`. Use a disposable app workload (e.g. `mealie`) for any teardown demonstration.
 
 ### Ansible (from `ansible/` directory)
 
@@ -191,10 +220,10 @@ op item get "GitLab Root User" --vault homelab --fields password  # Get password
 |----------|---------|-------------|
 | `OP_CONNECT_HOST` | 1Password Connect server URL | Ansible (ssh-key-loader, secrets) |
 | `OP_CONNECT_TOKEN` | 1Password Connect authentication | Ansible (ssh-key-loader, secrets) |
-| `OP_SERVICE_ACCOUNT_TOKEN` | 1Password authentication | Terraform |
-| `TF_VAR_onepassword_vault_id` | 1Password vault UUID | Terraform, Ansible |
-| `PROXMOX_VE_API_TOKEN` | Proxmox API authentication | Terraform |
-| `SSH_AUTH_SOCK` | SSH agent socket (auto-set) | Terraform SSH operations |
+| `OP_SERVICE_ACCOUNT_TOKEN` | 1Password authentication | OpenTofu |
+| `TF_VAR_onepassword_vault_id` | 1Password vault UUID | OpenTofu, Ansible |
+| `PROXMOX_VE_API_TOKEN` | Proxmox API authentication | OpenTofu |
+| `SSH_AUTH_SOCK` | SSH agent socket (auto-set) | OpenTofu SSH operations |
 
 ## Resource Dependencies
 
@@ -213,13 +242,13 @@ Run It Up VM (ID 1111) ───────────┤         │
 
 ## Adding New Infrastructure
 
-**Add VM**: Update `vm_configs` in `variables.tf` → `terraform apply` → `ansible-playbook playbooks/site.yml`
+**Add VM**: Update `vm_configs` → `(cd tofu/compute && tofu apply)` → `ansible-playbook playbooks/site.yml` _(content accuracy for IDs/authorship tracked separately)_
 
-**Add Database**: Update `postgresql_databases` in `variables.tf` → Update `host_vars/postgresql.yml` → `terraform apply` → `ansible-playbook playbooks/postgresql.yml`
+**Add Database**: Update `postgresql_databases` → Update `host_vars/postgresql.yml` → `(cd tofu/compute && tofu apply)` → `ansible-playbook playbooks/postgresql.yml` _(content accuracy for IDs/authorship tracked separately)_
 
 **Add Ansible Role**: Create `roles/<name>/` with tasks, handlers, templates → Include in playbook → Run playbook
 
-## 1Password Items Created by Terraform
+## 1Password Items Created by OpenTofu
 
 | Item | Type | Contents |
 |------|------|----------|
@@ -249,7 +278,7 @@ Certificates integrate with the `fusioncloudx-bootstrap` repository:
 LXC containers use standard Proxmox Debian 12 templates. Since these templates don't include Python, the Ansible `bootstrap.yml` playbook uses the `raw` module to install prerequisites before other playbooks run.
 
 **Bootstrap Process**:
-1. Terraform creates LXC from standard Debian 12 template
+1. OpenTofu creates LXC from standard Debian 12 template
 2. Bootstrap playbook runs `raw` module (works without Python)
 3. Installs `python3` and `sudo` via apt
 4. Subsequent playbooks can use standard Ansible modules
@@ -276,9 +305,9 @@ Main branch: `main`
 
 Ansible SSH keys are managed through 1Password Connect for automated, secure access:
 
-**Architecture**:
-1. **Terraform** generates ED25519 SSH key pair via `tls_private_key`
-2. **Terraform** stores key in 1Password as "Infrastructure Ansible SSH Key" (secure_note)
+**Architecture** _(content accuracy for IDs/authorship tracked separately)_:
+1. **OpenTofu** generates ED25519 SSH key pair via `tls_private_key`
+2. **OpenTofu** stores key in 1Password as "Infrastructure Ansible SSH Key" (secure_note)
 3. **Ansible** cleans any leftover temp key from previous runs (clean-before-load)
 4. **Ansible** retrieves fresh key from 1Password Connect via `ssh-key-loader` role
 5. **Ansible** writes key to temp file (`/tmp/.ansible_ssh_key`) with 0600 permissions
@@ -288,7 +317,7 @@ Ansible SSH keys are managed through 1Password Connect for automated, secure acc
 Similar to Jenkins `deleteDir()` at pipeline start, the `ssh-key-loader` role removes any existing temp key before loading a fresh one. This ensures failed runs don't leave stale keys and the next run always starts with a clean workspace.
 
 **Why 1Password Connect (not SSH agent)**:
-- 1Password Terraform provider only supports `secure_note` category (not `SSH_KEY`)
+- 1Password OpenTofu provider only supports `secure_note` category (not `SSH_KEY`)
 - 1Password SSH agent can only serve keys stored as SSH_KEY items
 - Connect API allows retrieval of any field type, enabling full automation
 
@@ -305,5 +334,5 @@ Similar to Jenkins `deleteDir()` at pipeline start, the `ssh-key-loader` role re
 
 - **Homelab appropriate**: NOPASSWD sudo, `insecure = false` for SSL
 - **Secrets in 1Password**: Never commit secrets; use `no_log: true` in Ansible tasks
-- **State file gitignored**: `terraform.tfstate` contains sensitive data
+- **State remote and encrypted**: per-state files live in the S3 backend with SSE-KMS encryption at rest (not committed to git)
 - **SSH keys from GitHub**: Imported from user `thisisbramiller`

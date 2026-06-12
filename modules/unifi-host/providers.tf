@@ -2,7 +2,7 @@
 # consumes this module supplies the configured `unifi` provider.
 #
 # Patched fork consumed via a Terraform/OpenTofu filesystem mirror — see
-# terraform/PATCHED-PROVIDER.md and the repo-root .tofurc. Synthetic host +
+# tofu/PATCHED-PROVIDER.md and the repo-root .tofurc. Synthetic host +
 # pinned version; binary installed by scripts/build-unifi-provider.sh.
 terraform {
   required_version = ">= 1.8"
