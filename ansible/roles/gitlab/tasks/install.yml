@@ -39,9 +39,12 @@
 - name: Create initial gitlab.rb with Let's Encrypt disabled
   copy:
     content: |
-      # Initial GitLab configuration - prevents Let's Encrypt during install
-      # Full configuration will be deployed after installation
-      external_url '{{ gitlab_external_url }}'
+      # Initial GitLab configuration — install over plain HTTP so the FIRST omnibus
+      # reconfigure does NOT require an SSL cert at /etc/gitlab/ssl/<fqdn>.crt (the
+      # omnibus default path when external_url is https but no nginx ssl_certificate
+      # is set). configure.yml then deploys the full HTTPS gitlab.rb pointing nginx
+      # at the cert the certificates role already placed (/etc/ssl/certs/server-chain.crt).
+      external_url 'http://{{ gitlab_hostname }}.{{ gitlab_domain }}'
       letsencrypt['enable'] = false
     dest: /etc/gitlab/gitlab.rb
     owner: root
@@ -77,7 +80,9 @@
     update_cache: yes
   environment:
     DEBIAN_FRONTEND: noninteractive
-    EXTERNAL_URL: "{{ gitlab_external_url }}"
+    # HTTP for the first install (omnibus EXTERNAL_URL overrides gitlab.rb) so the
+    # initial reconfigure needs no SSL cert; configure.yml applies HTTPS afterward.
+    EXTERNAL_URL: "http://{{ gitlab_hostname }}.{{ gitlab_domain }}"
     # GITLAB_ROOT_PASSWORD is consumed by the post-install `gitlab-ctl reconfigure`
     # to seed the root user's password on first init (fresh installs only).
     GITLAB_ROOT_PASSWORD: "{{ gitlab_password_result.field.value }}"
