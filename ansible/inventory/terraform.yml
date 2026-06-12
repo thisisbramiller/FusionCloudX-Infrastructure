@@ -7,9 +7,9 @@
 
 plugin: cloud.terraform.terraform_provider
 
-# Path to the OpenTofu project directory (the flat root for now; repoints to
-# ../tofu/compute at the P5 cutover).
-project_path: ../terraform
+# Path to the OpenTofu project directory (P5 cutover: the three-state compute
+# tree; the legacy flat ../terraform tree is retired at P6).
+project_path: ../tofu/compute
 
 # Use the OpenTofu binary (resolved via PATH — portable across macOS/Linux/CI).
 # The plugin defaults to `terraform`, which fails here: the repo migrated to
