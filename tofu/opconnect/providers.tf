@@ -1,13 +1,13 @@
 # ==============================================================================
 # opconnect state — provider requirements + configs
 # ==============================================================================
-# SECRETS-ROOT STATE. opconnect is the secrets root of the on-prem estate: it
-# creates the VM that RUNS 1Password Connect. Therefore it CANNOT authenticate
-# to 1Password via Connect (you cannot make Connect with Connect) — the
-# onepassword provider here authenticates with the **Service Account token**
-# (OP_SERVICE_ACCOUNT_TOKEN + the `op` CLI), the bootstrap auth path. The actual
-# Connect server/token bring-up + cutover is P4; this state only AUTHORS the
-# VM + DNS + ansible targeting that the P4 role then provisions.
+# SECRETS-ROOT STATE. opconnect provisions the VM that RUNS 1Password Connect,
+# so it must apply WITHOUT depending on Connect (you cannot make Connect with
+# Connect) and no SA token exists. There is therefore intentionally NO
+# onepassword provider here: the Ansible SSH keypair is generated locally
+# (tls_private_key) and written to 1Password via the desktop `op` CLI in account
+# mode (ssh-keys.tf), which needs neither Connect nor an SA token. Day-2 secret
+# consumption happens later in tofu/compute + ansible, via Connect.
 #
 # As with tofu/compute, AWS is ONLY the state backend + state-encryption key
 # provider (see backend.tf / encryption.tf) — there is intentionally NO aws
@@ -27,10 +27,6 @@ terraform {
       # pinned version; binary installed by scripts/build-unifi-provider.sh.
       source  = "tf.fusioncloudx.home/ubiquiti-community/unifi"
       version = "0.42.0-fcx1"
-    }
-    onepassword = {
-      source  = "1Password/onepassword"
-      version = "~> 3.0"
     }
     tls = {
       # Re-added: opconnect OWNS the Ansible SSH keypair (ssh-keys.tf generates it
@@ -70,11 +66,8 @@ provider "unifi" {
   # UNIFI_API_KEY environment variable, keeping the secret out of HCL/state.
 }
 
-# 1Password provider — auto-detects auth from the environment.
-# P4 cutover: reads the single Ansible-SSH-key item via the OLD Connect
-# (OP_CONNECT_HOST + OP_CONNECT_TOKEN in env). A from-scratch rebuild would
-# instead supply OP_SERVICE_ACCOUNT_TOKEN or run `op signin` to restage
-# credentials. No secrets in HCL/state.
-provider "onepassword" {}
+# NOTE: no `provider "onepassword"` here by design — opconnect must apply
+# Connect-free. The Ansible SSH keypair is written to 1Password out-of-band via
+# the desktop `op` CLI (see ssh-keys.tf + scripts/op-write-ssh-key.sh).
 
 provider "ansible" {}

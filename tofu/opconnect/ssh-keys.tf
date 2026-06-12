@@ -1,79 +1,65 @@
 # ==============================================================================
-# Ansible SSH key — GENERATED + OWNED here (opconnect = secrets root)
+# Ansible SSH key — GENERATED here; written to 1Password via the DESKTOP op CLI
+# (Connect-INDEPENDENT), NOT via the onepassword Terraform provider.
 # ==============================================================================
-# opconnect applies BEFORE compute, so it is the right place to own the Ansible
-# SSH keypair: it generates the key and writes both halves to the
-# "Infrastructure Ansible SSH Key" 1Password secure_note. tofu/compute and the
-# ansible ssh-key-loader role READ it (data source / op); this state OWNS it.
+# opconnect is the secrets ROOT: it provisions the VM that runs 1Password
+# Connect, so it must apply WITHOUT depending on Connect (and no SA token
+# exists). The onepassword TF provider authenticates ONLY via Connect or an SA
+# token — so owning the key as an `onepassword_item` RESOURCE forced a live-
+# Connect dependency on every opconnect apply. That was the regression this file
+# now fixes (option D, minimal blast radius).
 #
-# WHY a resource (not a data source): the greenfield redesign briefly moved this
-# to a read-only data source on the assumption that the bootstrap FusionCloudX
-# repo seeds it — but bootstrap phase 05-ssh-key-bootstrap is an unimplemented
-# 0-byte stub (commented out in bootstrap.sh), so NOTHING seeded it. The legacy
-# terraform tree was the sole creator. We restore IaC ownership here.
+# FIX: generate the keypair here, use the public half for the opconnect VM's own
+# cloud-init, and WRITE both halves to the "Infrastructure Ansible SSH Key"
+# 1Password secure_note via the desktop `op` CLI in ACCOUNT mode — which works
+# WITHOUT Connect (the same out-of-band trust path that seeds Connect's OWN
+# credentials). No onepassword provider in this state's graph → opconnect
+# applies Connect-free. tofu/compute (its Connect data source) and the ansible
+# ssh-key-loader role READ the item UNCHANGED; Connect, once up, serves it.
 #
-# WHY private-key-in-state is acceptable: this state is S3 + SSE-KMS + OpenTofu
-# native aes_gcm encryption (enforced) — the same posture under which the
-# generated DB passwords in tofu/compute/secrets.tf already live. Write-only /
-# ephemeral was deliberately NOT used (YAGNI: it dodges a risk already accepted
-# one file over, at the cost of ephemeral regeneration fragility).
+# Durable best-practice options (AWS SSM anchor / IAM Roles Anywhere / ephemeral
+# write-only #8) are deferred — see docs/enhance-harden-later.md + task #68.
+#
+# Private-key-in-state: tls_private_key keeps the private key in this state,
+# which is S3 + SSE-KMS + enforced OpenTofu aes_gcm — the same posture as the DB
+# passwords in tofu/compute/secrets.tf (#8 ephemeral/write-only deferred).
 # ==============================================================================
 
 resource "tls_private_key" "ansible" {
   algorithm = "ED25519"
 }
 
-resource "onepassword_item" "ansible_ssh_key" {
-  vault    = var.onepassword_vault_id
-  category = "secure_note"
-  title    = var.ansible_ssh_key_item_title
-  tags     = ["opentofu", "ansible", "ssh", "infrastructure"]
-
-  # STATIC provenance (footgun #8: NO timestamp() — keep apply a no-op).
-  note_value = <<-EOT
-    Ansible SSH keypair — generated + owned by OpenTofu (tofu/opconnect/ssh-keys.tf).
-    Public key is auto-deployed to VMs/LXC via cloud-init; the private key is read
-    at runtime by the ansible ssh-key-loader role. Do not edit by hand.
-  EOT
-
-  # Read by the ssh-key-loader role:
-  #   op://<vault>/Infrastructure Ansible SSH Key/Private Key/private_key
-  section {
-    label = "Private Key"
-
-    field {
-      label = "private_key"
-      type  = "CONCEALED"
-      value = tls_private_key.ansible.private_key_openssh
-    }
-
-    field {
-      label = "key_type"
-      type  = "STRING"
-      value = "ED25519"
-    }
+# Write-back to 1Password via the desktop op CLI (Connect-independent). The
+# private key is passed by ENV (never argv) into scripts/op-write-ssh-key.sh,
+# which builds a 0600 template and `op item create`s it, then shreds it. STATIC
+# trigger keyed on the public-key fingerprint (NO timestamp() — footgun #8) so
+# the key is stable and re-applies are no-ops; the script itself also no-ops
+# when the stored fingerprint already matches.
+resource "null_resource" "ansible_ssh_key_writeback" {
+  triggers = {
+    fingerprint = tls_private_key.ansible.public_key_fingerprint_sha256
+    item_title  = var.ansible_ssh_key_item_title
+    vault       = var.onepassword_vault_id
   }
 
-  # Read by tofu/compute + tofu/opconnect (field label "public_key") for cloud-init.
-  section {
-    label = "Public Key"
-
-    field {
-      label = "public_key"
-      type  = "STRING"
-      value = tls_private_key.ansible.public_key_openssh
-    }
-
-    field {
-      label = "public_key_fingerprint_sha256"
-      type  = "STRING"
-      value = tls_private_key.ansible.public_key_fingerprint_sha256
+  provisioner "local-exec" {
+    # Single-quoted: the repo path contains a space ("FusionCloudX
+    # Infrastructure") and local-exec runs the command via `sh -c`.
+    command = "'${abspath("${path.module}/scripts/op-write-ssh-key.sh")}'"
+    environment = {
+      OP_VAULT          = var.onepassword_vault_id
+      OP_ITEM_TITLE     = var.ansible_ssh_key_item_title
+      SSH_PUBLIC_KEY    = tls_private_key.ansible.public_key_openssh
+      SSH_PRIVATE_KEY   = tls_private_key.ansible.private_key_openssh
+      KEY_TYPE          = "ED25519"
+      SSH_PUBLIC_KEY_FP = tls_private_key.ansible.public_key_fingerprint_sha256
+      OP_NOTE           = "Ansible SSH keypair generated by OpenTofu (tofu/opconnect/ssh-keys.tf) and written to 1Password via the desktop op CLI (Connect-independent). Public key auto-deployed via cloud-init; private key read by the ansible ssh-key-loader role. Do not edit by hand."
     }
   }
 }
 
 locals {
-  # This state OWNS the key, so use the generated public key directly (reading a
-  # data source for an item we create in the same apply would be a dependency cycle).
+  # opconnect generates the key, so use the generated public key directly for
+  # the opconnect VM's own cloud-init (no 1Password read — Connect-independent).
   ansible_ssh_public_key = trimspace(tls_private_key.ansible.public_key_openssh)
 }
