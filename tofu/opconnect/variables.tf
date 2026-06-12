@@ -49,8 +49,5 @@ variable "opconnect_memory_mb" {
   description = "Dedicated memory (MB) for the opconnect VM."
 }
 
-variable "ansible_pubkey" {
-  type        = string
-  default     = ""
-  description = "Optional Ansible SSH PUBLIC key supplied directly (e.g. via `op read` at apply) for a Connect-less rebuild. When set, the onepassword data-source read is skipped (count=0) so apply needs no live Connect. Default empty = read from 1Password via the provider (normal path)."
-}
+# (ansible_pubkey var removed — opconnect now OWNS the keypair via ssh-keys.tf;
+#  the Connect-less-rebuild pubkey-injection escape hatch is obsolete.)

@@ -32,6 +32,13 @@ terraform {
       source  = "1Password/onepassword"
       version = "~> 3.0"
     }
+    tls = {
+      # Re-added: opconnect OWNS the Ansible SSH keypair (ssh-keys.tf generates it
+      # via tls_private_key and writes both halves to 1Password). The redesign had
+      # dropped hashicorp/tls assuming a bootstrap seeder that was never built.
+      source  = "hashicorp/tls"
+      version = "~> 4.0"
+    }
     ansible = {
       source  = "ansible/ansible"
       version = "~> 1.3.0"
