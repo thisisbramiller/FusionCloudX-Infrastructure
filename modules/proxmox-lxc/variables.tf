@@ -68,3 +68,9 @@ variable "swap_mb" {
   default     = 512
   description = "Swap in MB."
 }
+
+variable "description" {
+  type        = string
+  default     = ""
+  description = "Free-text note shown in the Proxmox web console (container Notes field). Carried from the flat terraform/lxc-postgresql.tf."
+}

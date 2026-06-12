@@ -16,6 +16,7 @@ module "postgresql" {
 
   vm_id        = 2101
   hostname     = "postgresql"
+  description  = "Centralized PostgreSQL database server for homelab services"
   cores        = 2
   memory_mb    = 4096
   disk_gb      = 64

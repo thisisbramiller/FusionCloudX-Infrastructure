@@ -63,6 +63,11 @@ resource "proxmox_virtual_environment_container" "this" {
     nesting = var.nesting
   }
 
+  # Free-text Proxmox "Notes" field (carried from the flat terraform/lxc-postgresql.tf).
+  # Null when empty so the bpg provider does not perpetually diff (provider #611/#762)
+  # for any future consumer that omits a description.
+  description = var.description != "" ? var.description : null
+
   tags = var.tags
 
   # This module is only ever consumed by the protected postgresql singleton, so
