@@ -1,17 +1,17 @@
 # GitHub Copilot Instructions for FusionCloudX Infrastructure
 
-This is an Infrastructure as Code (IaC) repository for managing Proxmox Virtual Environment using Terraform and Ansible.
+This is an Infrastructure as Code (IaC) repository for managing Proxmox Virtual Environment using OpenTofu and Ansible.
 
 ## Project Context
 
 - **Company**: TyDell Miller Projects, LLC DBA FusionCloud Innovations (FusionCloudX)
 - **Purpose**: Production infrastructure provisioning and configuration management
-- **Tech Stack**: Terraform (bpg/proxmox provider), Ansible, Cloud-init
+- **Tech Stack**: OpenTofu (bpg/proxmox provider), Ansible, Cloud-init
 - **Target Platform**: Proxmox VE on node "192.168.40.206"
 
 ## Code Style & Conventions
 
-### Terraform
+### OpenTofu
 - Use consistent indentation (2 spaces)
 - Organize configurations into logical files (provider, backend, resources)
 - Use descriptive resource names
@@ -43,14 +43,14 @@ This is an Infrastructure as Code (IaC) repository for managing Proxmox Virtual 
 ## Common Tasks
 
 Suggest these when relevant:
-- `terraform init` - Initialize Terraform
-- `terraform plan` - Preview changes
-- `terraform apply` - Apply infrastructure changes
+- `tofu init` - Initialize OpenTofu
+- `tofu plan` - Preview changes
+- `tofu apply` - Apply infrastructure changes
 - `ansible-playbook playbooks/site.yml` - Run Ansible configuration
 
 ## File Organization
 
-- `terraform/` - All Terraform configuration files
+- `tofu/{network,opconnect,compute}/` - OpenTofu configuration, split into three states (network, opconnect, compute)
 - `ansible/` - Ansible playbooks, roles, and inventory
 - `CLAUDE.md` - AI code assistant context and architecture details
 - `README.md` - User-facing documentation

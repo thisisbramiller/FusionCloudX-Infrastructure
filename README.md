@@ -1,16 +1,16 @@
 # FusionCloudX Infrastructure
 
-Infrastructure as Code (IaC) for managing virtual machines on Proxmox Virtual Environment using Terraform and Ansible.
+Infrastructure as Code (IaC) for managing virtual machines on Proxmox Virtual Environment using OpenTofu and Ansible.
 
 ## Overview
 
-This repository automates the provisioning and configuration of Ubuntu VMs on Proxmox VE. It uses Terraform to create VM templates from Ubuntu cloud images and provision VMs, then uses Ansible for post-deployment configuration management.
+This repository automates the provisioning and configuration of Ubuntu VMs on Proxmox VE. It uses OpenTofu to create VM templates from Ubuntu cloud images and provision VMs, then uses Ansible for post-deployment configuration management.
 
 ## Prerequisites
 
 ### Required Software
 
-- [Terraform](https://www.terraform.io/downloads) >= 1.0
+- [OpenTofu](https://opentofu.org/docs/intro/install/) >= 1.6
 - [Ansible](https://docs.ansible.com/ansible/latest/installation_guide/intro_installation.html) >= 2.9
 - SSH client with agent support
 - Access to a Proxmox VE cluster
@@ -49,9 +49,9 @@ git clone <repository-url>
 cd "FusionCloudX Infrastructure"
 ```
 
-### 2. Configure Terraform
+### 2. Configure OpenTofu
 
-Update `terraform/provider.tf` if your Proxmox API URL differs:
+Update `tofu/network/provider.tf` if your Proxmox API URL differs:
 
 ```hcl
 variable proxmox_api_url {
@@ -59,54 +59,71 @@ variable proxmox_api_url {
 }
 ```
 
-### 3. Initialize and Apply Terraform
+### 3. Initialize and Apply OpenTofu
+
+The infrastructure is split into three independent state directories. Apply them
+**in order** — `compute` reads outputs from `network`, so `network` must exist first:
 
 ```bash
-cd terraform
-terraform init
-terraform plan
-terraform apply
+for s in network opconnect compute; do
+  tofu -chdir=tofu/$s init
+  tofu -chdir=tofu/$s apply
+done
 ```
 
 This will:
 1. Download the Ubuntu Noble cloud image
-2. Create a VM template (ID 1000)
-3. Clone the template to create a VM named `test-vm`
-4. Configure the VM with cloud-init
+2. Create a VM template (ID 9001)
+3. Stand up the 1Password Connect singleton (opconnect)
+4. Provision the per-service VMs and configure them with cloud-init
 
 ### 4. Get VM IP Address
 
 ```bash
-terraform output vm_ipv4_address
+(cd tofu/compute && tofu output infrastructure_summary)
 ```
 
 ### 5. Configure with Ansible
 
-Update the Ansible inventory with your VM's IP address:
+The Ansible inventory is dynamic (the `cloud.terraform` plugin reads `tofu/compute` state), so there are no host files to edit:
 
 ```bash
-cd ../ansible
-# Edit inventory/hosts.ini to add your VM
-ansible-playbook playbooks/site.yml
+cd ansible
+ansible-playbook -i inventory/terraform.yml playbooks/site.yml
 ```
 
 ## Project Structure
 
 ```
 .
-├── terraform/              # Terraform configurations
-│   ├── provider.tf        # Proxmox provider setup
-│   ├── backend.tf         # State backend configuration
-│   ├── variables.tf       # Variable definitions
-│   ├── ubuntu-template.tf # VM template creation
-│   ├── cloud-init.tf      # Cloud-init configuration
-│   ├── main.tf            # VM resource definitions
-│   └── outputs.tf         # Output values
+├── tofu/                   # OpenTofu configurations (3 independent states)
+│   ├── network/           # State 1: template, bridges, DNS, network outputs
+│   │   ├── provider.tf    # Proxmox provider setup
+│   │   ├── backend.tf     # S3 + SSE-KMS remote state backend
+│   │   ├── variables.tf   # Variable definitions
+│   │   ├── templates.tf   # VM template creation (ID 9001)
+│   │   └── outputs.tf     # Network outputs consumed by compute
+│   ├── opconnect/         # State 2: 1Password Connect singleton
+│   │   ├── backend.tf     # S3 + SSE-KMS remote state backend
+│   │   └── opconnect.tf   # prevent_destroy Connect resources
+│   ├── compute/           # State 3: per-service VMs (reads network outputs)
+│   │   ├── backend.tf     # S3 + SSE-KMS remote state backend
+│   │   ├── gitlab.tf      # GitLab VM (prevent_destroy singleton)
+│   │   ├── postgresql.tf  # PostgreSQL VM (prevent_destroy singleton)
+│   │   ├── <svc>.tf       # One file per service VM
+│   │   └── outputs.tf     # infrastructure_summary output
+│   └── PATCHED-PROVIDER.md # Why the UniFi provider is vendored/patched
+│
+├── modules/                # Thin reusable OpenTofu modules
+│   ├── proxmox-vm/        # VM (protected + disposable variants)
+│   ├── proxmox-lxc/       # Unprivileged LXC (PostgreSQL)
+│   ├── cloud-init/        # Cloud-init snippet
+│   └── unifi-host/        # UniFi client reservation + DNS record
 │
 ├── ansible/               # Ansible configurations
 │   ├── ansible.cfg        # Ansible configuration
-│   ├── inventory/         # Inventory files
-│   │   └── hosts.ini      # Host definitions
+│   ├── inventory/         # Dynamic inventory (cloud.terraform plugin)
+│   │   └── terraform.yml  # Reads ../tofu/compute state for hosts
 │   ├── group_vars/        # Group variables
 │   │   └── all.yml        # Global variables
 │   ├── playbooks/         # Playbook definitions
@@ -121,7 +138,7 @@ ansible-playbook playbooks/site.yml
 
 ### Cloud-Init
 
-The default cloud-init configuration (`terraform/cloud-init.tf`):
+The default cloud-init configuration (`modules/cloud-init/main.tf`):
 
 - **Hostname:** test
 - **Timezone:** America/Chicago
@@ -129,11 +146,11 @@ The default cloud-init configuration (`terraform/cloud-init.tf`):
 - **SSH Keys:** Imported from GitHub user `thisisbramiller`
 - **Packages:** qemu-guest-agent, net-tools, curl
 
-To customize, edit `terraform/cloud-init.tf` and modify the cloud-config data.
+To customize, edit `modules/cloud-init/main.tf` and modify the cloud-config data.
 
 ### VM Specifications
 
-Default VM configuration (`terraform/main.tf`):
+Default VM configuration (per-service `tofu/compute/<svc>.tf`):
 
 - **CPU:** 4 cores (x86-64-v2-AES)
 - **Memory:** 2048 MB
@@ -154,24 +171,23 @@ The `common` role (`ansible/roles/common/tasks/main.yml`):
 
 ### Creating Additional VMs
 
-1. Duplicate the VM resource block in `terraform/main.tf`
-2. Change the VM name and adjust specifications as needed
-3. Run `terraform apply`
+1. Add a new `tofu/compute/<svc>.tf` file that calls the `vm` module
+2. Set the service name and override any specs as needed
+3. Run `tofu -chdir=tofu/compute apply`
 
 Example:
 
 ```hcl
-resource "proxmox_virtual_environment_vm" "web_server" {
+module "web_server" {
+  source = "../../modules/proxmox-vm"
+
   name      = "web-server-01"
   node_name = "pve"
-  started   = true
 
-  clone {
-    vm_id = 1000
-    full  = true
-  }
+  template_vm_id = 9001
+  network        = data.terraform_remote_state.network.outputs
 
-  # ... rest of configuration
+  # ... per-service overrides (cpu, memory, disk)
 }
 ```
 
@@ -179,28 +195,31 @@ resource "proxmox_virtual_environment_vm" "web_server" {
 
 To update the template with a newer Ubuntu image:
 
-1. The template will be recreated with the latest image URL specified in `ubuntu-template.tf`
-2. Run `terraform apply` to update
+1. The template will be recreated with the latest image URL specified in `tofu/network/templates.tf`
+2. Run `tofu -chdir=tofu/network apply` to update
 
 ### Destroying Resources
 
+Tear down in **reverse** apply order (`compute` first, `network` last) so that
+`compute` is gone before the `network` outputs it depends on:
+
 ```bash
-cd terraform
-
-# Destroy specific resource
-terraform destroy -target=proxmox_virtual_environment_vm.test_vm
-
-# Destroy all resources
-terraform destroy
+for s in compute opconnect network; do
+  tofu -chdir=tofu/$s destroy
+done
 ```
 
-**Warning:** Destroying the template will affect all cloned VMs.
+**Warning:** The `gitlab`, `postgresql`, and `opconnect` resources are
+`prevent_destroy` singletons — `tofu destroy` will error on them by design.
+Remove the `prevent_destroy` lifecycle block (or `-target` around them)
+deliberately before tearing those down. Destroying the template will affect
+all cloned VMs.
 
 ## Troubleshooting
 
-### Terraform Authentication Issues
+### OpenTofu Authentication Issues
 
-If Terraform cannot connect to Proxmox:
+If OpenTofu cannot connect to Proxmox:
 
 - Verify SSH agent is running: `ssh-add -l`
 - Test SSH connection: `ssh terraform@192.168.40.206`
@@ -221,16 +240,16 @@ If Terraform cannot connect to Proxmox:
 
 ## Security Notes
 
-- The Proxmox provider uses `insecure = true` for TLS verification. For production, configure proper certificates.
+- The Proxmox provider uses `insecure = false` for TLS verification. The Day-0 PKI flow delivers the node certificate, so the provider validates against the FusionCloudX CA.
 - SSH keys are imported from a public GitHub profile. Ensure this is appropriate for your security requirements.
 - The `fcx` user has passwordless sudo access. Review this for production environments.
-- Terraform state contains sensitive information. Do not commit `terraform.tfstate` to version control.
+- State lives in a remote S3 backend with SSE-KMS encryption at rest, not on disk. There is no `terraform.tfstate` to commit — never commit local state or `.tfstate` files if one is ever generated.
 
 ## Contributing
 
 1. Create a feature branch from `main`
 2. Make your changes
-3. Test thoroughly with `terraform plan`
+3. Test thoroughly with `tofu plan`
 4. Submit a pull request to `main`
 
 ## License
@@ -305,6 +324,6 @@ See `ansible/roles/certificates/README.md` for detailed configuration options.
 
 ---
 
-**Last Updated:** 2026-02-02
+**Last Updated:** 2026-06-12
 **Bootstrap Integration:** This repository integrates with fusioncloudx-bootstrap for PKI and certificate management
 **Architecture:** Control Plane-based infrastructure using GitLab CI/CD for automation orchestration

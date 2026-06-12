@@ -147,7 +147,7 @@ When user count grows beyond 10 users or memory usage exceeds 70%:
 
 ### 1. Increase VM Resources
 
-Update `terraform/variables.tf`:
+Update `tofu/compute/variables.tf`:
 ```hcl
 "gitlab" = {
   vm_id      = 1103
@@ -161,8 +161,7 @@ Update `terraform/variables.tf`:
 
 Apply changes:
 ```bash
-cd terraform
-terraform apply
+tofu -chdir=tofu/compute apply
 ```
 
 ### 2. Update GitLab Configuration
@@ -248,7 +247,7 @@ sudo gitlab-ctl restart postgresql
 
 ### 1. Install GitLab Runner
 
-For infrastructure automation with Terraform/Ansible:
+For infrastructure automation with OpenTofu/Ansible:
 
 ```bash
 # On a dedicated runner VM or GitLab VM itself
@@ -279,27 +278,21 @@ stages:
   - plan
   - apply
 
-terraform-validate:
+tofu-validate:
   stage: validate
   script:
-    - cd terraform
-    - terraform init
-    - terraform validate
+    - for s in network opconnect compute; do tofu -chdir=tofu/$s init -backend=false && tofu -chdir=tofu/$s validate; done
 
-terraform-plan:
+tofu-plan:
   stage: plan
   script:
-    - cd terraform
-    - terraform plan -out=tfplan
-  artifacts:
-    paths:
-      - terraform/tfplan
+    - for s in network opconnect compute; do tofu -chdir=tofu/$s init && tofu -chdir=tofu/$s plan; done
 
-terraform-apply:
+tofu-apply:
+  # compute reads network via remote-state, so apply the states in dependency order
   stage: apply
   script:
-    - cd terraform
-    - terraform apply -auto-approve tfplan
+    - for s in network opconnect compute; do tofu -chdir=tofu/$s init && tofu -chdir=tofu/$s apply -auto-approve; done
   when: manual
   only:
     - main

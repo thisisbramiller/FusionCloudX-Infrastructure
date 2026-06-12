@@ -6,10 +6,10 @@ This directory contains Ansible automation for configuring and managing FusionCl
 
 ### PostgreSQL Database Server - Single Container, Multiple Databases
 
-The infrastructure uses a **SINGLE PostgreSQL LXC container** (VM ID 2001, hostname: `postgresql`) that hosts **MULTIPLE databases** for different services:
+The infrastructure uses a **SINGLE PostgreSQL LXC container** (VM ID 2101, hostname: `postgresql`) that hosts **MULTIPLE databases** for different services:
 
-- **semaphore** - Database for Semaphore (Ansible UI)
-- **wazuh** - Database for Wazuh (SIEM)
+- **mealie** - Database for Mealie (recipe manager)
+- **tandoor** - Database for Tandoor (recipe manager)
 - Additional databases can be easily added
 
 **Container Specifications:**
@@ -31,7 +31,7 @@ This approach provides:
 ansible/
 ├── ansible.cfg                 # Ansible configuration
 ├── inventory/
-│   ├── hosts.ini              # Inventory file (auto-updated from Terraform)
+│   ├── terraform.yml          # Dynamic inventory (cloud.terraform, reads ../tofu/compute)
 │   ├── group_vars/
 │   │   ├── all.yml           # Global variables for all hosts
 │   │   └── postgresql.yml    # PostgreSQL group variables
@@ -46,8 +46,6 @@ ansible/
 ├── playbooks/
 │   ├── site.yml              # Main orchestration playbook
 │   └── postgresql.yml        # PostgreSQL deployment playbook
-├── update-inventory.sh        # Bash script to update inventory from Terraform
-├── update-inventory.ps1       # PowerShell script to update inventory from Terraform
 └── README.md                  # This file
 ```
 
@@ -127,21 +125,16 @@ On Windows (PowerShell):
 $env:OP_SERVICE_ACCOUNT_TOKEN = "ops_your_service_account_token"
 ```
 
-### 4. Update Inventory from Terraform
+### 4. Verify the Dynamic Inventory
 
-After deploying the LXC container with Terraform, update the Ansible inventory:
+There is **no manual inventory update step**. The inventory is a dynamic `cloud.terraform` plugin (`inventory/terraform.yml`) that resolves hosts directly from the `tofu/compute` state automatically. After provisioning the LXC container with OpenTofu, the host appears in the inventory on the next run.
+
+Verify the resolved inventory:
 
 ```bash
-# On Linux/Mac/WSL
 cd ansible
-./update-inventory.sh
-
-# On Windows PowerShell
-cd ansible
-.\update-inventory.ps1
+ansible-inventory -i inventory/terraform.yml --list
 ```
-
-This script extracts the PostgreSQL container IP from Terraform outputs and updates `inventory/hosts.ini`.
 
 ### 5. Test Connectivity
 
@@ -192,13 +185,13 @@ Create these items in the **"FusionCloudX Infrastructure"** vault:
 1. **PostgreSQL Admin (postgres)**
    - Field: `password` - Superuser password
 
-2. **PostgreSQL - Semaphore DB User**
-   - Field: `username` = `semaphore`
-   - Field: `password` - Semaphore database user password
+2. **PostgreSQL - Mealie DB User**
+   - Field: `username` = `mealie`
+   - Field: `password` - Mealie database user password
 
-3. **PostgreSQL - Wazuh DB User**
-   - Field: `username` = `wazuh`
-   - Field: `password` - Wazuh database user password
+3. **PostgreSQL - Tandoor DB User**
+   - Field: `username` = `tandoor`
+   - Field: `password` - Tandoor database user password
 
 ### Credential Lookup in Ansible
 
@@ -256,21 +249,21 @@ The `inventory/host_vars/postgresql.yml` file defines:
 **Databases:**
 ```yaml
 postgresql_databases:
-  - name: "semaphore"
-    owner: "semaphore"
+  - name: "mealie"
+    owner: "mealie"
     # ...
-  - name: "wazuh"
-    owner: "wazuh"
+  - name: "tandoor"
+    owner: "tandoor"
     # ...
 ```
 
 **Users with 1Password:**
 ```yaml
 postgresql_users:
-  - name: "semaphore"
+  - name: "mealie"
     password: "{{ lookup('onepassword.connect.generic_item', '...') }}"
     # ...
-  - name: "wazuh"
+  - name: "tandoor"
     password: "{{ lookup('onepassword.connect.generic_item', '...') }}"
     # ...
 ```
@@ -311,28 +304,28 @@ ansible postgresql -m systemd -a "name=postgresql state=restarted" --become
 ### View Container Details
 
 ```bash
-# Check Terraform outputs
-cd terraform
-terraform output postgresql_deployment_summary
+# PostgreSQL connection details
+tofu -chdir=tofu/compute output postgresql_connection
 
-# Or just the IP
-terraform output postgresql_container_ipv4
+# Or the whole-fleet summary (hostnames + IPs)
+tofu -chdir=tofu/compute output infrastructure_summary
 ```
 
-## 🔄 Workflow: Terraform → Ansible
+## 🔄 Workflow: OpenTofu → Ansible
 
-This is the recommended workflow for infrastructure deployment:
+This is the recommended workflow for infrastructure deployment.
+
+The `compute` state reads `network` (and `opconnect`) via remote-state, so apply the on-prem states in order: **network → opconnect → compute**.
 
 ```bash
-# 1. Provision PostgreSQL LXC container with Terraform
-cd terraform
-terraform init
-terraform plan
-terraform apply
+# 1. Provision the estate with OpenTofu, in dependency order
+#    (compute reads network via remote-state; opconnect is the secrets root)
+for s in network opconnect compute; do
+  tofu -chdir=tofu/$s init && tofu -chdir=tofu/$s apply
+done
 
-# 2. Update Ansible inventory from Terraform outputs
-cd ../ansible
-./update-inventory.sh  # or update-inventory.ps1 on Windows
+# 2. (No inventory update needed — the cloud.terraform dynamic inventory
+#    resolves the new host from tofu/compute state automatically)
 
 # 3. Configure 1Password authentication
 export OP_SERVICE_ACCOUNT_TOKEN="ops_your_token"
@@ -357,11 +350,12 @@ ansible-playbook playbooks/postgresql.yml --tags verify
 
 To add a new database to the existing PostgreSQL container:
 
-### 1. Update Terraform (Optional)
+### 1. Define the Database
 
-If you want to track the database in Terraform configuration:
+Database definitions live in the Ansible `host_vars` (`inventory/host_vars/postgresql.yml`, see step 3 below) and/or in `tofu/compute` if you want to track them in OpenTofu configuration.
 
-`terraform/variables.tf`:
+If you track them in OpenTofu, add the database to the `postgresql_databases` variable:
+
 ```hcl
 variable "postgresql_databases" {
   default = [
@@ -377,8 +371,7 @@ variable "postgresql_databases" {
 
 Then apply:
 ```bash
-cd terraform
-terraform apply
+tofu -chdir=tofu/compute apply
 ```
 
 ### 2. Create 1Password Item
@@ -469,7 +462,7 @@ ansible-playbook playbooks/postgresql.yml --tags databases,users
 ### SSH Access
 
 - Root SSH access for Ansible (standard for LXC containers)
-- SSH key authentication only (configured by Terraform cloud-init)
+- SSH key authentication only (configured by OpenTofu cloud-init)
 - Host key checking disabled (acceptable for homelab environment)
 
 ## 🐛 Troubleshooting
@@ -505,8 +498,8 @@ ansible postgresql -m ping -vvv
 # Check inventory
 ansible-inventory --list
 
-# Verify inventory file
-cat inventory/hosts.ini
+# Verify the resolved dynamic inventory
+ansible-inventory -i inventory/terraform.yml --list
 ```
 
 ### PostgreSQL Role Failures
@@ -525,19 +518,19 @@ ansible postgresql -m shell -a "systemctl status postgresql" --become
 ansible postgresql -m shell -a "sudo -u postgres psql -c 'SELECT version();'" --become
 ```
 
-### Inventory Not Updating
+### Inventory Not Resolving
+
+The `cloud.terraform` plugin reads hosts directly from `tofu/compute` state — there is no script to run.
 
 ```bash
-# Manually check Terraform outputs
-cd terraform
-terraform output ansible_inventory_postgresql
+# Verify the resolved dynamic inventory
+ansible-inventory -i inventory/terraform.yml --list
 
-# Check if jq is installed (required for update-inventory.sh)
-which jq  # Linux/macOS
-where.exe jq  # Windows
+# Confirm the host exists in compute state
+tofu -chdir=tofu/compute state list | grep postgresql
 
-# Manually parse output
-terraform output -json ansible_inventory_postgresql | jq '.'
+# Inspect the resolved dynamic inventory as JSON
+ansible-inventory -i inventory/terraform.yml --list | jq '.'
 ```
 
 ## 🚨 Migration Notes

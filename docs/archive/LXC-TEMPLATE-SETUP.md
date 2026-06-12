@@ -1,3 +1,5 @@
+> **ARCHIVED (2026-06-12)** — superseded by the terraform->OpenTofu greenfield restructure; the files/workflow it describes no longer exist. Kept for history only.
+
 # LXC Template Setup Guide
 
 ## Overview

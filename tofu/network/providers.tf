@@ -8,7 +8,7 @@ terraform {
     }
     unifi = {
       # Patched fork consumed via an OpenTofu filesystem mirror — see the
-      # repo-root .tofurc and terraform/PATCHED-PROVIDER.md. Synthetic host +
+      # repo-root .tofurc and tofu/PATCHED-PROVIDER.md. Synthetic host +
       # pinned version; binary installed by scripts/build-unifi-provider.sh.
       source  = "tf.fusioncloudx.home/ubiquiti-community/unifi"
       version = "0.42.0-fcx1"
