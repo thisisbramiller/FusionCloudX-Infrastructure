@@ -43,9 +43,11 @@ resource "null_resource" "ansible_ssh_key_writeback" {
   }
 
   provisioner "local-exec" {
-    # Single-quoted: the repo path contains a space ("FusionCloudX
-    # Infrastructure") and local-exec runs the command via `sh -c`.
-    command = "'${abspath("${path.module}/scripts/op-write-ssh-key.sh")}'"
+    # Run via `bash` explicitly so the script executes regardless of the
+    # committed file mode (a fresh clone gets 100644 -> bare-path exec would be
+    # "Permission denied"). The path is quoted because the repo path contains a
+    # space ("FusionCloudX Infrastructure"). The file is ALSO committed +x.
+    command = "bash '${abspath("${path.module}/scripts/op-write-ssh-key.sh")}'"
     environment = {
       OP_VAULT          = var.onepassword_vault_id
       OP_ITEM_TITLE     = var.ansible_ssh_key_item_title
