@@ -40,10 +40,13 @@ except Exception: sys.exit(0)
 print(next((f.get('value','') for f in d.get('fields',[]) if f.get('label')=='$1'), ''))" 2>/dev/null || true
 }
 
-# Idempotency: if the stored fingerprint matches, nothing to do.
+# Idempotency: no-op only if BOTH the fingerprint matches AND the sectioned
+# read the ssh-key-loader uses actually resolves (op_use_cli reads
+# op://VAULT/ITEM/Private Key/private_key — fields MUST be bound to the section).
 existing_fp="$(get_field public_key_fingerprint_sha256)"
-if [ -n "$existing_fp" ] && [ "$existing_fp" = "$SSH_PUBLIC_KEY_FP" ]; then
-  echo "op-write-ssh-key: '$OP_ITEM_TITLE' already current (fingerprint match) — no-op."
+sectioned_ok="$(op read "op://${OP_VAULT}/${OP_ITEM_TITLE}/Private Key/private_key" >/dev/null 2>&1 && echo yes || echo no)"
+if [ -n "$existing_fp" ] && [ "$existing_fp" = "$SSH_PUBLIC_KEY_FP" ] && [ "$sectioned_ok" = "yes" ]; then
+  echo "op-write-ssh-key: '$OP_ITEM_TITLE' already current (fingerprint + sectioned read OK) — no-op."
   exit 0
 fi
 
@@ -65,13 +68,16 @@ print(json.dumps({
     "title": os.environ["OP_ITEM_TITLE"],
     "category": "SECURE_NOTE",
     "tags": ["opentofu", "ansible", "ssh", "infrastructure"],
-    "sections": [{"label": "Private Key"}, {"label": "Public Key"}],
+    # Fields bind to a section by its `id` (NOT by label) — op item create
+    # leaves the field section-less if you reference {"label": ...}, which breaks
+    # the op://.../Private Key/private_key sectioned read.
+    "sections": [{"id": "sec_private", "label": "Private Key"}, {"id": "sec_public", "label": "Public Key"}],
     "fields": [
         {"type": "STRING", "purpose": "NOTES", "label": "notesPlain", "value": os.environ["OP_NOTE"]},
-        {"section": {"label": "Private Key"}, "type": "CONCEALED", "label": "private_key", "value": os.environ["SSH_PRIVATE_KEY"]},
-        {"section": {"label": "Private Key"}, "type": "STRING", "label": "key_type", "value": os.environ["KEY_TYPE"]},
-        {"section": {"label": "Public Key"}, "type": "STRING", "label": "public_key", "value": os.environ["SSH_PUBLIC_KEY"]},
-        {"section": {"label": "Public Key"}, "type": "STRING", "label": "public_key_fingerprint_sha256", "value": os.environ["SSH_PUBLIC_KEY_FP"]},
+        {"section": {"id": "sec_private"}, "type": "CONCEALED", "label": "private_key", "value": os.environ["SSH_PRIVATE_KEY"]},
+        {"section": {"id": "sec_private"}, "type": "STRING", "label": "key_type", "value": os.environ["KEY_TYPE"]},
+        {"section": {"id": "sec_public"}, "type": "STRING", "label": "public_key", "value": os.environ["SSH_PUBLIC_KEY"]},
+        {"section": {"id": "sec_public"}, "type": "STRING", "label": "public_key_fingerprint_sha256", "value": os.environ["SSH_PUBLIC_KEY_FP"]},
     ],
 }))
 PY
