@@ -281,21 +281,18 @@ stages:
 tofu-validate:
   stage: validate
   script:
-    - tofu -chdir=tofu/compute init
-    - tofu -chdir=tofu/compute validate
+    - for s in network opconnect compute; do tofu -chdir=tofu/$s init -backend=false && tofu -chdir=tofu/$s validate; done
 
 tofu-plan:
   stage: plan
   script:
-    - tofu -chdir=tofu/compute plan -out=tfplan
-  artifacts:
-    paths:
-      - tofu/compute/tfplan
+    - for s in network opconnect compute; do tofu -chdir=tofu/$s init && tofu -chdir=tofu/$s plan; done
 
 tofu-apply:
+  # compute reads network via remote-state, so apply the states in dependency order
   stage: apply
   script:
-    - tofu -chdir=tofu/compute apply -auto-approve tfplan
+    - for s in network opconnect compute; do tofu -chdir=tofu/$s init && tofu -chdir=tofu/$s apply -auto-approve; done
   when: manual
   only:
     - main

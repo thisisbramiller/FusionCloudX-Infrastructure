@@ -304,11 +304,11 @@ ansible postgresql -m systemd -a "name=postgresql state=restarted" --become
 ### View Container Details
 
 ```bash
-# Check OpenTofu outputs
-tofu -chdir=tofu/compute output postgresql_deployment_summary
+# PostgreSQL connection details
+tofu -chdir=tofu/compute output postgresql_connection
 
-# Or just the IP
-tofu -chdir=tofu/compute output postgresql_container_ipv4
+# Or the whole-fleet summary (hostnames + IPs)
+tofu -chdir=tofu/compute output infrastructure_summary
 ```
 
 ## 🔄 Workflow: OpenTofu → Ansible
@@ -318,11 +318,11 @@ This is the recommended workflow for infrastructure deployment.
 The `compute` state reads `network` (and `opconnect`) via remote-state, so apply the on-prem states in order: **network → opconnect → compute**.
 
 ```bash
-# 1. Provision PostgreSQL LXC container with OpenTofu
-#    (compute reads network via remote-state; apply order: network -> opconnect -> compute)
-tofu -chdir=tofu/compute init
-tofu -chdir=tofu/compute plan
-tofu -chdir=tofu/compute apply
+# 1. Provision the estate with OpenTofu, in dependency order
+#    (compute reads network via remote-state; opconnect is the secrets root)
+for s in network opconnect compute; do
+  tofu -chdir=tofu/$s init && tofu -chdir=tofu/$s apply
+done
 
 # 2. (No inventory update needed — the cloud.terraform dynamic inventory
 #    resolves the new host from tofu/compute state automatically)
@@ -526,11 +526,11 @@ The `cloud.terraform` plugin reads hosts directly from `tofu/compute` state — 
 # Verify the resolved dynamic inventory
 ansible-inventory -i inventory/terraform.yml --list
 
-# Confirm the host exists in OpenTofu state / outputs
-tofu -chdir=tofu/compute output ansible_inventory_postgresql
+# Confirm the host exists in compute state
+tofu -chdir=tofu/compute state list | grep postgresql
 
-# Inspect the raw output as JSON
-tofu -chdir=tofu/compute output -json ansible_inventory_postgresql | jq '.'
+# Inspect the resolved dynamic inventory as JSON
+ansible-inventory -i inventory/terraform.yml --list | jq '.'
 ```
 
 ## 🚨 Migration Notes
