@@ -142,7 +142,7 @@ Instead of Semaphore UI, we now use GitLab's native CI/CD with manual triggers:
 ## Communication
 
 **This Session (E2E Deployment)**:
-- Working directory: `/Users/fcx/Developer/Personal/Repositories/FusionCloudX Infrastructure`
+- Working directory: `/Users/fcx/Developer/Personal/Repositories/FusionCloudX-Infrastructure`
 - Branch: `feat/remove-semaphore-use-gitlab-cicd`
 - Status: Terraform apply in progress
 - ETA: ~10 minutes until complete

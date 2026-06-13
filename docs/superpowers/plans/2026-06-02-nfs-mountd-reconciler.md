@@ -10,7 +10,7 @@
 
 **Spec:** `docs/superpowers/specs/2026-06-02-nfs-mountd-reconciler-design.md` (approved, committed `c19fb32`).
 
-**Working directory for all commands:** `/Users/fcx/Developer/Personal/repos/FusionCloudX Infrastructure` (the repo). Branch: `feat/dns-automation`.
+**Working directory for all commands:** `/Users/fcx/Developer/Personal/repos/FusionCloudX-Infrastructure` (the repo). Branch: `feat/dns-automation`.
 
 ---
 

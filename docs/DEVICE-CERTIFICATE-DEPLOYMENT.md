@@ -28,7 +28,7 @@ This guide covers certificate deployment to **optional** network devices that ar
 Run the optional device certificate playbook:
 
 ```bash
-cd "FusionCloudX Infrastructure"
+cd FusionCloudX-Infrastructure
 ansible-playbook ansible/playbooks/optional/deploy-device-certificates.yml
 ```
 

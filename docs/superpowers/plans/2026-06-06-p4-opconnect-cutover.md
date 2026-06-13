@@ -185,7 +185,7 @@ In `tofu/opconnect/providers.tf`, replace the `# 1Password provider — SA-TOKEN
 
 - [ ] **Step 2: Verify formatting**
 
-Run: `cd "/Users/fcx/Developer/Personal/repos/FusionCloudX Infrastructure" && tofu fmt -check tofu/opconnect/`
+Run: `cd "/Users/fcx/Developer/Personal/repos/FusionCloudX-Infrastructure" && tofu fmt -check tofu/opconnect/`
 Expected: no output (clean). If it reprints a filename, run `tofu fmt tofu/opconnect/`.
 
 - [ ] **Step 3: Commit**
@@ -286,7 +286,7 @@ git checkout main && git pull --ff-only
   LOCAL DESKTOP 1Password (not Connect) — out of scope.
 
 - [ ] **Step 3: Enumerate every `op://` consumer → confirm one vault**
-  Run: `grep -rnoE 'op://[^ "'\'']+' "/Users/fcx/Developer/Personal/repos/FusionCloudX Infrastructure/ansible" "/Users/fcx/Developer/Personal/repos/FusionCloudX Infrastructure/tofu" 2>/dev/null | sort -u`
+  Run: `grep -rnoE 'op://[^ "'\'']+' "/Users/fcx/Developer/Personal/repos/FusionCloudX-Infrastructure/ansible" "/Users/fcx/Developer/Personal/repos/FusionCloudX-Infrastructure/tofu" 2>/dev/null | sort -u`
   Plus the items read by the `onepassword.connect`/`onepassword_item` lookups (Ansible SSH Key, GitLab Root, GitLab Runner Token, PostgreSQL Admin, PostgreSQL Wazuh DB User, TLS certs). Confirm all live in vault `ve6jgmyk77ssj7aqpeodt2uhyi`; if any live elsewhere, collect the full vault set for the `--vaults`/`--vault` flags.
 
 - [ ] **Step 4: [OP] Verify the live `op` CLI flag form** — confirm `op connect token create` accepts `--vault` (or `--vaults`) + `--expires-in 90d` on the installed `op` version: `op connect token create --help`.
@@ -312,7 +312,7 @@ Record the token issuance date (compute T+90d). Keep the new token OUT of the bu
 - [ ] **Step 1: Apply the opconnect state** (after the C0 pre-flight; no DNS pre-deletion needed)
 
 ```bash
-cd "/Users/fcx/Developer/Personal/repos/FusionCloudX Infrastructure"
+cd "/Users/fcx/Developer/Personal/repos/FusionCloudX-Infrastructure"
 tofu -chdir=tofu/opconnect plan -input=false -var opconnect_dns_name=opconnect-new   # expect 7 add / 0 change / 0 destroy
 tofu -chdir=tofu/opconnect apply -input=false -var opconnect_dns_name=opconnect-new  # [CONFIRM] before apply
 ```
@@ -366,7 +366,7 @@ Update the DR 1P-document note. Open a FRESH shell (re-sources `.zprofile` → n
 
 - [ ] **Step 3: Broad verify via the NEW Connect** (not a single no-op)
 ```bash
-cd "/Users/fcx/Developer/Personal/repos/FusionCloudX Infrastructure"
+cd "/Users/fcx/Developer/Personal/repos/FusionCloudX-Infrastructure"
 tofu -chdir=tofu/compute plan -input=false          # clean, reads secrets via new Connect
 cd "ansible" && ansible-playbook playbooks/site.yml  # 0 failed; non-empty asserts on each secret class
 ```
@@ -406,7 +406,7 @@ UDM record deleted).
 - [ ] **Step 1: Apply with the default var (canonical name)**
 
 ```bash
-cd "/Users/fcx/Developer/Personal/repos/FusionCloudX Infrastructure"
+cd "/Users/fcx/Developer/Personal/repos/FusionCloudX-Infrastructure"
 tofu -chdir=tofu/opconnect apply -input=false      # default opconnect_dns_name=opconnect
 ```
 Expected: `opconnect.fusioncloudx.home → 1101` created; `opconnect-new.fusioncloudx.home` record
@@ -429,7 +429,7 @@ Token is unchanged. Open a fresh shell; restart long-lived consumers (launchd/cr
 - [ ] **Step 4: Final broad verify**
 
 ```bash
-cd "/Users/fcx/Developer/Personal/repos/FusionCloudX Infrastructure"
+cd "/Users/fcx/Developer/Personal/repos/FusionCloudX-Infrastructure"
 tofu -chdir=tofu/compute plan -input=false          # clean via canonical hostname + new Connect
 cd "ansible" && ansible-playbook playbooks/site.yml  # 0 failed; non-empty asserts on each secret class
 ```

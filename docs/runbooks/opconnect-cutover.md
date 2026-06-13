@@ -68,8 +68,8 @@ LOCAL DESKTOP 1Password (not Connect) — out of scope.
 
 ```bash
 grep -rnoE 'op://[^ "'\'']+' \
-  "/Users/fcx/Developer/Personal/repos/FusionCloudX Infrastructure/ansible" \
-  "/Users/fcx/Developer/Personal/repos/FusionCloudX Infrastructure/tofu" \
+  "/Users/fcx/Developer/Personal/repos/FusionCloudX-Infrastructure/ansible" \
+  "/Users/fcx/Developer/Personal/repos/FusionCloudX-Infrastructure/tofu" \
   2>/dev/null | sort -u
 ```
 
@@ -134,7 +134,7 @@ Also keep an encrypted off-Connect backup (Backrest/restic). Document out-of-ban
 After the P4.0 pre-flight (no DNS pre-deletion needed):
 
 ```bash
-cd "/Users/fcx/Developer/Personal/repos/FusionCloudX Infrastructure"
+cd "/Users/fcx/Developer/Personal/repos/FusionCloudX-Infrastructure"
 tofu -chdir=tofu/opconnect plan -input=false -var opconnect_dns_name=opconnect-new   # expect 7 add / 0 change / 0 destroy
 tofu -chdir=tofu/opconnect apply -input=false -var opconnect_dns_name=opconnect-new  # [CONFIRM] before apply
 ```
@@ -230,7 +230,7 @@ long-lived consumers (launchd services, cron jobs, CI runners).
 ### Step 3 — Broad verify via the NEW Connect
 
 ```bash
-cd "/Users/fcx/Developer/Personal/repos/FusionCloudX Infrastructure"
+cd "/Users/fcx/Developer/Personal/repos/FusionCloudX-Infrastructure"
 tofu -chdir=tofu/compute plan -input=false          # clean, reads secrets via new Connect
 
 cd "ansible" && ansible-playbook playbooks/site.yml  # 0 failed; non-empty asserts on each secret class
@@ -317,7 +317,7 @@ Only after P4.5 is fully complete (VM 100 gone, old token/server revoked, old
 ### Step 1 — Apply with the default var (canonical name)
 
 ```bash
-cd "/Users/fcx/Developer/Personal/repos/FusionCloudX Infrastructure"
+cd "/Users/fcx/Developer/Personal/repos/FusionCloudX-Infrastructure"
 tofu -chdir=tofu/opconnect apply -input=false      # default opconnect_dns_name=opconnect
 ```
 
@@ -343,7 +343,7 @@ jobs, CI runners).
 ### Step 4 — Final broad verify
 
 ```bash
-cd "/Users/fcx/Developer/Personal/repos/FusionCloudX Infrastructure"
+cd "/Users/fcx/Developer/Personal/repos/FusionCloudX-Infrastructure"
 tofu -chdir=tofu/compute plan -input=false          # clean via canonical hostname + new Connect
 cd "ansible" && ansible-playbook playbooks/site.yml  # 0 failed; non-empty asserts on each secret class
 ```

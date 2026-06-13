@@ -46,7 +46,7 @@ ssh-add -l
 
 ```bash
 git clone <repository-url>
-cd "FusionCloudX Infrastructure"
+cd FusionCloudX-Infrastructure
 ```
 
 ### 2. Configure OpenTofu

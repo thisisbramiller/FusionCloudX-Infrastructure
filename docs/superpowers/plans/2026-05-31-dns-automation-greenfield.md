@@ -21,7 +21,7 @@
 
 - [ ] **Step 1 — Branch off main.**
 ```bash
-cd "/Users/fcx/Developer/Personal/repos/FusionCloudX Infrastructure"
+cd "/Users/fcx/Developer/Personal/repos/FusionCloudX-Infrastructure"
 git fetch origin && git checkout -b feat/dns-automation origin/main
 git status -s   # expect only untracked scratch
 ```
@@ -44,7 +44,7 @@ source ~/.zprofile && export UNIFI_API_KEY="$CLAUDE_UDM_PRO_API_TOKEN"
 
 - [ ] **Step 1 — List the TF-managed VM/LXC MACs + IPs from live Terraform state** (the authoritative scope):
 ```bash
-cd "/Users/fcx/Developer/Personal/repos/FusionCloudX Infrastructure/terraform"
+cd "/Users/fcx/Developer/Personal/repos/FusionCloudX-Infrastructure/terraform"
 terraform show -json | python3 -c '
 import json,sys
 d=json.load(sys.stdin)
@@ -124,7 +124,7 @@ curl -sk -X DELETE -H "X-API-KEY: $UNIFI_API_KEY" \
 ```
 - [ ] **Step 3 — Handle the local Terraform state orphans** (the PR-#37 `unifi_dns_record.fcx` may be in the shared local `terraform.tfstate`):
 ```bash
-cd "/Users/fcx/Developer/Personal/repos/FusionCloudX Infrastructure/terraform"
+cd "/Users/fcx/Developer/Personal/repos/FusionCloudX-Infrastructure/terraform"
 terraform state list | grep unifi_dns_record || echo "none in state"
 # if present:  terraform state rm 'unifi_dns_record.fcx'
 ```
@@ -160,7 +160,7 @@ data "unifi_network" "homelab" {
 ```
 - [ ] **Step 3 — `terraform validate`:**
 ```bash
-cd "/Users/fcx/Developer/Personal/repos/FusionCloudX Infrastructure/terraform"
+cd "/Users/fcx/Developer/Personal/repos/FusionCloudX-Infrastructure/terraform"
 terraform init -upgrade && terraform validate
 ```
 Expected: `Success! The configuration is valid.`
