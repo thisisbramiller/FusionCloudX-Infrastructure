@@ -1,0 +1,146 @@
+---
+# ==============================================================================
+# opconnect — SEED / ROTATE the off-site credentials bundle (spec D8)
+# ==============================================================================
+# Imported ONLY by playbooks/opconnect_credentials.yml (localhost, account-mode
+# `op`). NOT part of this role's main.yml deploy path. Idempotent + expiry-aware:
+#   - secret absent      -> SEED  (op connect server create + token create)
+#   - token near expiry  -> ROTATE (token only; server identity + keypair kept)
+#   - otherwise          -> NO-OP
+#
+# WARNING: never run the playbook with -v/-vvv (no_log is bypassed by verbose).
+# NOTE: first-run validation is pending the gated B3 step (param names, op flags,
+# and the Jinja expiry math are validated live, per the plan). Written from the
+# approved plan 2026-06-13.
+
+- name: Assert localhost (biometric op + AWS FIDO are workstation-bound)
+  ansible.builtin.assert:
+    that: inventory_hostname == 'localhost'
+    fail_msg: "Run via playbooks/opconnect_credentials.yml on the operator workstation only."
+    quiet: true
+
+- name: Assume shared-services for Secrets Manager (SSO -> OrganizationAccountAccessRole)
+  amazon.aws.sts_assume_role:
+    role_arn: "{{ opconnect_creds_assume_role_arn }}"
+    role_session_name: "opconnect-credentials-seed"
+    region: "{{ opconnect_creds_region }}"
+  register: _assumed
+  no_log: true
+
+- name: Read the current secret (absent on first seed)
+  ansible.builtin.set_fact:
+    _current: >-
+      {{ lookup('amazon.aws.aws_secret', opconnect_creds_secret_name,
+                region=opconnect_creds_region,
+                access_key=_assumed.sts_creds.access_key,
+                secret_key=_assumed.sts_creds.secret_key,
+                session_token=_assumed.sts_creds.session_token,
+                on_missing='skip') | default('', true) }}
+  no_log: true
+
+- name: Decide seed / rotate / no-op
+  vars:
+    _threshold_iso: "{{ '%Y-%m-%dT%H:%M:%SZ' | strftime((now(utc=true).timestamp() | int) + (opconnect_creds_rotate_threshold_days | int * 86400)) }}"
+    _cur_calc: "{{ (_current | from_json) if (_current | length > 0) else {} }}"
+  ansible.builtin.set_fact:
+    _cur: "{{ _cur_calc }}"
+    _need_seed: "{{ _current | length == 0 }}"
+    _need_rotate: "{{ (_current | length > 0) and (force | bool or ((_cur_calc.token_expires | default('1970-01-01T00:00:00Z')) < _threshold_iso)) }}"
+
+- name: No-op (bundle valid)
+  ansible.builtin.debug:
+    msg: >-
+      opconnect-credentials valid; token_expires {{ _cur.token_expires | default('?') }}
+      (rotate threshold {{ opconnect_creds_rotate_threshold_days }}d) — nothing to do.
+  when: not (_need_seed | bool) and not (_need_rotate | bool)
+
+- name: Seed / rotate
+  when: _need_seed | bool or _need_rotate | bool
+  environment:
+    OP_CONNECT_HOST: "" # force account mode — Connect env vars otherwise lock op to the read-only API mode
+    OP_CONNECT_TOKEN: ""
+  block:
+    - name: Create a 0700 scratch dir
+      ansible.builtin.tempfile:
+        state: directory
+        suffix: opconnect-seed
+      register: _tmp
+      no_log: true
+
+    - name: Create the Connect server (FIRST SEED ONLY — not idempotent)
+      ansible.builtin.command:
+        cmd: "op connect server create {{ opconnect_creds_server_name }} --vaults {{ opconnect_creds_vault }}"
+        chdir: "{{ _tmp.path }}" # emits 1password-credentials.json into cwd
+        creates: "{{ _tmp.path }}/1password-credentials.json"
+      when: _need_seed | bool
+      no_log: true
+
+    - name: Mint a Connect token with an explicit TTL (robust expiry; no JWT decode)
+      ansible.builtin.command:
+        cmd: >-
+          op connect token create breakglass-{{ '%Y%m%d' | strftime }}
+          --server {{ opconnect_creds_server_name }} --vaults {{ opconnect_creds_vault }}
+          --expires-in {{ opconnect_creds_token_ttl_days }}d
+      register: _tok
+      changed_when: true
+      no_log: true
+
+    - name: Compute token_expires = now + TTL (plain, non-secret field)
+      ansible.builtin.set_fact:
+        _token_expires: "{{ '%Y-%m-%dT%H:%M:%SZ' | strftime((now(utc=true).timestamp() | int) + (opconnect_creds_token_ttl_days | int * 86400)) }}"
+
+    - name: Generate the ansible keypair (SEED only — rotate preserves the existing key)
+      community.crypto.openssh_keypair:
+        path: "{{ _tmp.path }}/ansible_key"
+        type: ed25519
+        comment: "ansible@fusioncloudx-bootstrap"
+      when: _need_seed | bool
+      no_log: true
+
+    - name: Assemble the bundle JSON
+      ansible.builtin.set_fact:
+        _bundle_json: >-
+          {{ {
+            'connect_credentials_json': ((lookup('file', _tmp.path ~ '/1password-credentials.json') | b64encode) if (_need_seed | bool) else _cur.connect_credentials_json),
+            'connect_token': (_tok.stdout | trim),
+            'connect_host': opconnect_creds_connect_host,
+            'ansible_public_key': ((lookup('file', _tmp.path ~ '/ansible_key.pub') | trim) if (_need_seed | bool) else _cur.ansible_public_key),
+            'ansible_private_key': (lookup('file', _tmp.path ~ '/ansible_key') if (_need_seed | bool) else _cur.ansible_private_key),
+            'token_expires': _token_expires,
+            'created': ('%Y-%m-%dT%H:%M:%SZ' | strftime),
+            'notes': 'off-site opconnect credentials. proxmox/gitlab restore pointers in the runbook. NO AWS-root break-glass here (offline).'
+          } | to_json }}
+      no_log: true
+
+    - name: Write the bundle to Secrets Manager (idempotent — no version churn if unchanged)
+      community.aws.secretsmanager_secret:
+        name: "{{ opconnect_creds_secret_name }}"
+        state: present
+        json_secret: "{{ _bundle_json }}"
+        kms_key_id: "{{ opconnect_creds_kms_alias }}"
+        overwrite: true
+        region: "{{ opconnect_creds_region }}"
+        access_key: "{{ _assumed.sts_creds.access_key }}"
+        secret_key: "{{ _assumed.sts_creds.secret_key }}"
+        session_token: "{{ _assumed.sts_creds.session_token }}"
+      register: _write
+      no_log: true
+
+    - name: Report
+      ansible.builtin.debug:
+        msg: "opconnect-credentials {{ 'seeded' if _need_seed | bool else 'rotated' }}; token_expires {{ _token_expires }}; changed={{ _write.changed }}."
+  always:
+    - name: Shred scratch files (best-effort)
+      ansible.builtin.command:
+        cmd: "find {{ _tmp.path }} -type f -exec shred -u {} +"
+      when: _tmp.path is defined
+      changed_when: false
+      failed_when: false
+      no_log: true
+
+    - name: Remove the scratch dir
+      ansible.builtin.file:
+        path: "{{ _tmp.path }}"
+        state: absent
+      when: _tmp.path is defined
+      no_log: true

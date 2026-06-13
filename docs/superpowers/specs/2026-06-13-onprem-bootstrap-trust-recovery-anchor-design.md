@@ -1,15 +1,17 @@
-# onprem Bootstrap-Trust + Recovery-Anchor — Design Spec (Wave 1)
+# onprem opconnect off-site credentials — Bootstrap-Trust Design Spec (Wave 1)
 
-**Status:** APPROVED + 4 decisions locked (review 2026-06-13) — proceeding to writing-plans
+**Status:** APPROVED + locked (brainstorm 2026-06-13) — **refined same day** via voice: (a) seed/rotate is a pure-**Ansible** playbook, not a script and not in `site.yml`; (b) naming purged of the recovery-anchor/break-glass *metaphor* → the literal **opconnect-credentials**; (c) the CMK key policy is **root-enable-only** (as-built), not SSO-admin-conditional.
 **Task:** #68 (FusionCloudX hybrid machine-identity + secrets + bootstrap-trust)
-**Repos touched:** `aws-foundation` (new layer) + `onprem-infra` / FusionCloudX Infrastructure (consumer)
-**Supersedes:** the "Option D" stopgap (desktop `op` CLI account-mode write-back) as the bootstrap mechanism.
+**Repos touched:** `aws-foundation` (`15-opconnect-credentials` layer) + `onprem-infra` / FusionCloudX Infrastructure (consumer + seed).
+**Supersedes:** the "Option D" stopgap (desktop `op` CLI account-mode write-back) as the bootstrap mechanism. A standalone **bash** seed script was prototyped this session and **rejected** in favor of Ansible (worst-of-both-worlds: hand-rolled secret-handling + the bundle schema trapped in a second language).
+
+> **Naming note:** "recovery anchor" / "break-glass" describe the *role* this material plays in a disaster; they are **not** the artifact's identity. The thing itself is **opconnect's credentials**, stored off-site. Names are literal (matching `opconnect`, `gitlab`, `immich`); "recovery"/"break-glass" appear only as descriptors in prose.
 
 ---
 
 ## Goal
 
-Give the on-prem secrets root (opconnect / 1Password Connect) a **disaster-recoverable, FIDO-gated bootstrap** by relocating the bootstrap secret-zero into AWS — the trust anchor that already holds the OpenTofu state — **without** giving opconnect a standing machine identity and **without** moving day-2 operational secrets off-prem.
+Give the on-prem secrets root (opconnect / 1Password Connect) a **disaster-recoverable, FIDO-gated bootstrap** by storing an off-site copy of opconnect's credentials in AWS — the trust anchor that already holds the OpenTofu state — **without** giving opconnect a standing machine identity and **without** moving day-2 operational secrets off-prem.
 
 ---
 
@@ -23,13 +25,14 @@ Give the on-prem secrets root (opconnect / 1Password Connect) a **disaster-recov
 
 | # | Decision | Rationale |
 |---|---|---|
-| D1 | **Two tiers.** Operational/day-2 secrets stay **local** (1Password Connect on-prem, unchanged). The **recovery root-of-trust** goes **off-site** (AWS). | Locality is a runtime-availability rule (a remote vault is a total-blast-radius SPOF); the recovery anchor is governed by a different rule — survive the destruction of everything it recovers. Consensus + AWS guidance. |
+| D1 | **Two tiers.** Operational/day-2 secrets stay **local** (1Password Connect on-prem, unchanged). The off-site copy of opconnect's credentials goes **off-site** (AWS). | Locality is a runtime-availability rule (a remote vault is a total-blast-radius SPOF); the off-site copy is governed by a different rule — survive the destruction of everything it recovers. Consensus + AWS guidance. |
 | D2 | **Human-orchestrated bootstrap.** The trusted orchestrator is Branden via AWS SSO (`fcx-sso`) + FIDO (YubiKey + Titan). **No CI delegation, no Roles Anywhere, no new always-on service.** | Bootstrap = disaster-recovery / new-hardware: the operator is present, nothing else exists yet, and self-hosted GitLab is built *after* opconnect so it can't bootstrap it. Human + hardware key in the loop is a feature for the root of trust. |
-| D3 | **AWS is the recovery anchor.** Secret-zero collapses up to the AWS root/org account, break-glass, behind FIDO. | AWS is already the tfstate anchor — on-prem already can't cold-start without AWS, so this names a dependency already accepted, not a new one. |
-| D4 | **Option 1 — break-glass bundle whole in aws-foundation** (key + data colocated), separation enforced by the **key policy** (IAM), not by splitting repos. | AWS never separates a key from the data it wraps; recovery-of-the-estate is a foundation concern, not a workload; a recovery anchor must not depend "down" on the estate it recovers; one-place DR for a solo op. Separation-of-duties is an IAM concern, satisfied by the key policy. |
-| D5 | **CMK + IAM trust + bundle live in a NEW aws-foundation numbered layer** (`15-recovery-anchor`), not bolted onto `10-bootstrap`. **No new repo.** | aws-foundation convention: each CMK lives in the layer owning its consumer; decade-gaps exist for insertion; `10-bootstrap` is the highest-blast-radius prevent_destroy state — don't overload it. A new repo has no independent owner/cadence (pure overhead for a solo op). |
-| D6 | **Wire by KMS alias, NOT `terraform_remote_state`.** onprem-infra references `alias/tmpx/onprem-bootstrap` via a `data "aws_kms_alias"` data source. | HashiCorp explicitly discourages cross-state `remote_state` reads (consumer gets the producer's entire state snapshot + tight coupling). The alias is a stable string contract with zero coupling. |
-| D7 | **1Password stays the day-2 secrets plane** (on-prem Connect, unchanged). The 1Password→AWS Secrets Sync (beta) is an **optional future day-2 nicety** (humans edit in 1Password, fan-out to AWS Secrets Manager for AWS-native consumers; least-privilege on AWS access) — **not** part of Wave 1, and structurally cannot bootstrap (one-way, presupposes 1P is up). | Keeps the single human-facing pane; the sync is orthogonal to bootstrap. |
+| D3 | **AWS is the trust anchor.** Secret-zero collapses up to the AWS root/org account, break-glass, behind FIDO. | AWS is already the tfstate anchor — on-prem already can't cold-start without AWS, so this names a dependency already accepted, not a new one. |
+| D4 | **The CMK + the secret live together in a NEW aws-foundation numbered layer** (`15-opconnect-credentials`), separation enforced by the **key policy** (IAM), not by splitting repos. | AWS never separates a key from the data it wraps; recovery-of-the-estate is a foundation concern, not a workload; the layer must not depend "down" on the estate it recovers; one-place DR for a solo op. Separation-of-duties is an IAM concern, satisfied by the key policy. |
+| D5 | **The layer is a NEW aws-foundation layer**, not bolted onto `10-bootstrap`. **No new repo.** | aws-foundation convention: each CMK lives in the layer owning its consumer; decade-gaps exist for insertion; `10-bootstrap` is the highest-blast-radius prevent_destroy state — don't overload it. A new repo has no independent owner/cadence (pure overhead for a solo op). |
+| D6 | **Wire by KMS alias + secret name, NOT `terraform_remote_state`.** onprem references `alias/tmpx/onprem-opconnect` (`data "aws_kms_alias"`, tofu) + `tmpx/onprem/opconnect-credentials` (`amazon.aws.aws_secret`, Ansible). | HashiCorp explicitly discourages cross-state `remote_state` reads (consumer gets the producer's entire state snapshot + tight coupling). The alias/name is a stable string contract with zero coupling. |
+| D7 | **1Password stays the day-2 secrets plane** (on-prem Connect, unchanged). The 1Password→AWS Secrets Sync (beta) is an **optional future day-2 nicety**, **not** part of Wave 1, and structurally cannot bootstrap (one-way, presupposes 1P is up). | Keeps the single human-facing pane; the sync is orthogonal to bootstrap. |
+| **D8** | **Seed/rotate is a pure-Ansible playbook** (`opconnect_credentials.yml` → `opconnect` role `tasks/seed.yml`), **idempotent + expiry-aware**, run by hand on the operator workstation, **NOT** imported by `site.yml`, **NOT** a bash script. | Ansible is the estate's config-mgmt + the DR *restore* path is already an Ansible role, so a script would mean a second toolchain + a forked bundle schema (drift). `no_log` + module params are safer-by-default than hand-rolled shred/trap. The play breaks four properties `site.yml` must keep (can't run unattended/biometric; targets localhost not the fleet; no-reverse-dependency; highest-privilege ≠ most-frequent) → separate operator-run entry point, which is still 100% as-code (Ansible's own sample layout). |
 
 ---
 
@@ -37,102 +40,122 @@ Give the on-prem secrets root (opconnect / 1Password Connect) a **disaster-recov
 
 ```
                 AWS  (off-site recovery domain, already the tfstate anchor)
-  ┌─────────────────────────────────────────────────────────────────────┐
-  │ aws-foundation / 15-recovery-anchor   (NEW layer, own tofu state)     │
-  │   • CMK  alias/tmpx/onprem-bootstrap   (dedicated; NOT the tfstate CMK)│
-  │   • key policy: kms:Decrypt → IdC AdministratorAccess SSO role only    │
-  │       (FIDO-gated by Identity Center MFA; no kms:ViaService; no CI)    │
-  │   • break-glass bundle SECRET (Secrets Manager, whole)                 │
-  │   • outputs: bootstrap_cmk_arn, bootstrap_cmk_alias, breakglass_secret │
-  └─────────────────────────────────────────────────────────────────────┘
-        ▲ alias string contract (no remote_state)        │ human reads via
-        │                                                 │ SSO+FIDO at bootstrap/DR
-  ┌─────┴───────────────────────────────────────────────▼─────────────────┐
-  │ onprem-infra  (consumer)                                                │
-  │   tofu/opconnect (+ a tiny bootstrap read step):                        │
-  │     data "aws_kms_alias" "bootstrap" { name = "alias/tmpx/onprem-..." } │
-  │     ephemeral read of the bundle → inject 1P Connect creds into         │
-  │     opconnect at build time (cloud-init / ansible) → Connect comes up   │
-  │   Day-2: 1Password Connect (on-prem) serves the fleet — UNCHANGED       │
-  └────────────────────────────────────────────────────────────────────────┘
+  ┌─────────────────────────────────────────────────────────────────────────┐
+  │ aws-foundation / 15-opconnect-credentials   (NEW layer, own tofu state)   │
+  │   • CMK  alias/tmpx/onprem-opconnect   (dedicated; NOT the tfstate CMK)    │
+  │   • key policy: ROOT-ENABLE ONLY (estate convention) — use delegated to   │
+  │       shared-services IAM; both human-gated paths (IdC AdministratorAccess │
+  │       SSO + OrganizationAccountAccessRole) use it via IAM; FIDO-gating is  │
+  │       structural via Identity Center MFA. No kms:ViaService. No CI.        │
+  │   • SECRET  tmpx/onprem/opconnect-credentials  (Secrets Manager, JSON)     │
+  │       tofu owns the EMPTY container; value seeded out-of-band (Ansible)    │
+  │   • outputs: opconnect_cmk_arn/alias, opconnect_credentials_secret_arn/id  │
+  └─────────────────────────────────────────────────────────────────────────┘
+        ▲ alias + name string contract (no remote_state)     │ human reads via
+        │                                                     │ SSO+FIDO at seed/DR
+  ┌─────┴─────────────────────────────────────────────────────▼───────────────┐
+  │ onprem-infra                                                                │
+  │   SEED (produce):  ansible playbook opconnect_credentials.yml  (localhost)  │
+  │     → opconnect role tasks/seed.yml: mint/rotate Connect token (account     │
+  │       op), assemble bundle, write tmpx/onprem/opconnect-credentials.        │
+  │       idempotent + expiry-aware. NOT in site.yml. NOT a script.             │
+  │   CONSUME (restore):  tofu/opconnect reads the PUBLIC ansible key (alias    │
+  │     data source + ephemeral pubkey, non-secret) for cloud-init; the         │
+  │     opconnect/ssh-key-loader roles read credentials.json + token + private  │
+  │     key via amazon.aws.aws_secret (never tofu → never in state).            │
+  │   Day-2: 1Password Connect (on-prem) serves the fleet — UNCHANGED           │
+  └─────────────────────────────────────────────────────────────────────────────┘
 
   OFFLINE 3-2-1 copy of the bundle (encrypted, FIDO/passphrase-openable)
   → covers the "AWS unreachable" cold-start case.
 ```
 
-**Trusted-orchestrator model:** whoever runs `tofu apply` (Branden, authenticated via `fcx-sso` + FIDO) is the trust root. They read the bundle from AWS, inject it into opconnect at build time. opconnect itself never holds an AWS credential or a standing machine identity.
+**Trusted-orchestrator model:** whoever runs the seed playbook / `tofu apply` (Branden, via `fcx-sso` + FIDO + an unlocked 1Password desktop app) is the trust root. opconnect itself never holds an AWS credential or a standing machine identity.
 
 ---
 
 ## Components
 
-### A. `aws-foundation/15-recovery-anchor/` (NEW layer)
-- **Backend block:** byte-for-byte the estate convention — `bucket tmpx-tfstate-065094257518-use2`, `key 15-recovery-anchor/terraform.tfstate`, `use_lockfile=true`, explicit `kms_key_id` (tfstate CMK), `assume_role` OrganizationAccountAccessRole, plus the `terraform { encryption {} }` native AES-GCM block (enforced).
-- **`alias/tmpx/onprem-bootstrap` CMK** + alias. Key policy: root-enable to shared-services root (estate convention) + `kms:Decrypt`/`kms:DescribeKey` to the **IdC AdministratorAccess permission set** (`ArnLike AWSReservedSSO_AdministratorAccess_*`), **no `kms:ViaService`** (the documented cross-account-grant hook). No CI principal.
-- **break-glass bundle secret** (AWS Secrets Manager, JSON), encrypted under the CMK. Written **write-only** (`secret_string_wo` / managed out-of-state) so the plaintext never lands in this layer's state either.
-- **outputs:** `bootstrap_cmk_arn`, `bootstrap_cmk_alias` (`alias/tmpx/onprem-bootstrap`), `breakglass_secret_arn`.
-- **Account placement (default):** **shared-services** (where tfstate + the `tmpx` CMKs live; already a separate failure domain from Proxmox). *Decision to confirm:* SRA-purest is a dedicated **security/recovery account** (keep mgmt near-empty) — deferred as a future hardening unless chosen now.
+### A. `aws-foundation/15-opconnect-credentials/` (NEW layer — applied; rename pending)
+- **Backend:** estate convention — `bucket tmpx-tfstate-065094257518-use2`, `key 15-opconnect-credentials/terraform.tfstate`, `use_lockfile=true`, explicit `kms_key_id` (tfstate CMK), `assume_role` OrganizationAccountAccessRole, + the native `encryption {}` AES-GCM block (enforced).
+- **`alias/tmpx/onprem-opconnect` CMK** + alias. **Key policy = ROOT-ENABLE ONLY** (identical to the tfstate CMK in `10-bootstrap`): root-enable to shared-services root; use delegated to IAM. Both human-gated identities that touch the secret hold AdministratorAccess and use the key via IAM — the IdC AdministratorAccess SSO role (human bootstrap) **and** OrganizationAccountAccessRole (assumed by onprem ansible to read at seed/restore). **No `kms:ViaService`.** No CI principal. *(Earlier drafts scoped `kms:Decrypt` to the SSO-admin role only; that was corrected because it wrongly denied the OAAR read path — scoping is via IdC MFA + IAM, not a narrow key condition.)*
+- **`tmpx/onprem/opconnect-credentials` secret** (Secrets Manager, JSON), encrypted under the CMK. tofu owns the **empty container only**; value seeded out-of-band (Component E) so it never transits this layer's state.
+- **outputs:** `opconnect_cmk_arn`, `opconnect_cmk_alias` (`alias/tmpx/onprem-opconnect`), `opconnect_credentials_secret_arn`, `opconnect_credentials_secret_id`.
+- **Account:** **shared-services (065094257518)** (where tfstate + the `tmpx` CMKs live; already a separate failure domain from Proxmox).
 
-### B. `onprem-infra` consumer (opconnect bootstrap)
-- A small bootstrap read in `tofu/opconnect` (or a tiny `tofu/00-recovery-read` step): `data "aws_kms_alias" "bootstrap"` + an **`ephemeral`** read of the Secrets Manager bundle (OpenTofu 1.12 ephemeral resources) → inject the 1Password Connect `1password-credentials.json` + Connect token into opconnect via cloud-init `write_files` / the `opconnect` Ansible role. Nothing persists in onprem state.
-- **Result:** opconnect's Connect comes up from AWS-delivered material (Connect-free bootstrap, DR-portable, no Mac dependency). Replaces the Option-D `op`-CLI write-back as the *bootstrap* path.
+### B. `onprem-infra` CONSUME (opconnect restore)
+- `tofu/opconnect` reads the recovery CMK **by alias** (`data "aws_kms_alias"`, D6) and the **public** ansible key from the bundle (ephemeral read — public key is non-secret) for cloud-init `write_files`.
+- The Ansible `opconnect` + `ssh-key-loader` roles read the **secret** material (`1password-credentials.json` + Connect token + the ansible private key) via `amazon.aws.aws_secret` at provision time → never via tofu → never in state. The role deploys the Connect compose stack as today.
+- **Result:** opconnect bootstraps from AWS-delivered material (Connect-free bootstrap, DR-portable, no Mac dependency). Replaces the Option-D `op`-CLI write-back as the *bootstrap* path.
 
-### C. The break-glass bundle (contents)
-The **on-prem recovery seed** — gated by AWS SSO+FIDO. Candidate contents (pin in plan):
-- 1Password Connect `1password-credentials.json` + a Connect/SA token (the seed that brings Connect up).
-- The Ansible SSH keypair seed (or: generated once + stored as a 1P item served by Connect post-boot — preferred, also closes #8 for the SSH key).
-- Proxmox root + GitLab root **restore pointers** (not the live creds — references / recovery procedure).
+### C. The bundle (secret contents)
+The off-site copy of opconnect's credentials — gated by AWS SSO+FIDO. JSON fields:
+- `connect_credentials_json` (base64 of `1password-credentials.json`) + `connect_token` — the seed that brings Connect up.
+- `ansible_public_key` + `ansible_private_key` — the bootstrap keypair (closes the SSH-key half of #8; tofu reads only the public half, Ansible reads the private).
+- `token_expires` (ISO-8601, **plain** non-secret field) — written at mint time so the seed playbook's rotation conditional is a clean date-compare (no fragile in-Jinja JWT decode).
+- `created` (ISO-8601) + `notes` (proxmox/gitlab **restore pointers** — references, not live creds).
 - **NOT** the AWS root/account break-glass codes — those stay **offline/physical** (putting AWS-root recovery inside AWS is circular).
 
 ### D. Offline 3-2-1 copy
-An encrypted export of the bundle (e.g. `age`/`gpg` or a 1Password export), stored offline (encrypted USB / fireproof), openable with FIDO/passphrase alone — for the AWS-unreachable cold-start. Runbook item.
+An encrypted export of the bundle (`age`/`gpg`), stored offline (encrypted USB / fireproof), openable with FIDO/passphrase alone — for the AWS-unreachable cold-start. Runbook item (closes #60).
 
----
+### E. SEED / ROTATE — the Ansible playbook (D8)
+- `ansible/playbooks/opconnect_credentials.yml` → `import_role: name=opconnect, tasks_from=seed`. **NOT** imported by `site.yml`.
+- `hosts: localhost, connection: local, gather_facts: false` (biometric `op` + AWS FIDO live on the operator workstation; smaller fact-leak surface).
+- **Idempotent + expiry-aware:** read the current secret (`amazon.aws.aws_secret`, `on_missing: skip`); compute `need_seed` (secret absent → first-time `op connect server create`, which is **not** idempotent → guarded) and `need_rotate` (`token_expires` within `rotate_threshold_days`, default 14, or `force`). Otherwise no-op ("valid, expires X, nothing to do").
+- Rotation **re-mints only the token** (preserves the server identity + the ansible keypair → no fleet-wide bootstrap-key churn).
+- `op` mint task: `command`, `no_log: true`, `environment: { OP_CONNECT_HOST: "", OP_CONNECT_TOKEN: "" }` (forces account mode — Connect env vars otherwise lock `op` into Connect API mode, which **cannot** create servers/tokens; a Service Account gets 403). Biometric approval surfaces via the unlocked desktop app.
+- Write: `amazon.aws.sts_assume_role` → temp creds → `community.aws.secretsmanager_secret` (`json_secret`, `kms_key_id`, `no_log`; idempotent — unchanged value = no version churn). *(The write module is `community.aws.secretsmanager_secret`; the read is the `amazon.aws.aws_secret`/`secretsmanager_secret` lookup. No Ansible collection mints Connect tokens — `op connect ... create` is wrapped in `ansible.builtin.command`.)*
+- **Never run at `-vvv`** (documented `no_log` bypass + CVE lineage) — runbook rule.
 
 ## Issue #8 handling (secrets out of state)
-- Bundle written/read with **write-only / ephemeral** (`secret_string_wo` on write; `ephemeral` on read) → never in either repo's tofu state.
-- Move the Ansible SSH key to **Connect-served** (a 1P item) post-bootstrap so opconnect no longer needs `tls_private_key` in state; generated DB passwords migrate to `password_wo` / Connect-served. (#8 closes as a consequence; track residual in plan.)
-
----
+- The bundle is read by Ansible (`amazon.aws.aws_secret`) for all secret fields → never in either repo's tofu state. tofu reads only the public key.
+- The Ansible SSH key becomes **Connect-served / bundle-served** post-bootstrap so opconnect no longer needs `tls_private_key` in state; generated DB passwords migrate to `password_wo` / Connect-served. (#8 closes as a consequence; track residual in plan.)
 
 ## Security model
-- **FIDO-gating is free:** reading the bundle requires the `fcx-sso` login, which Identity Center enforces with always-on MFA (YubiKey + Titan). No extra resource.
-- **Separation of duties via key policy:** the `tmpx-TerraformExecutionRole` boundary already denies `ScheduleKeyDeletion`/`DisableKey`/`PutKeyPolicy` on CMKs (key-admin guardrail); the SSO Admin role gets `kms:Decrypt` only (key-user). Admin ≠ use, enforced by IAM, not repo split.
-- **No reverse dependency:** the anchor never depends on onprem-infra or 1Password Connect (the systems it recovers). One-way: foundation → onprem.
-- **Blast radius:** the recovery layer is its own state, separate from `10-bootstrap` (the locked, highest-blast-radius state).
-
----
+- **FIDO-gating is free:** reading the secret requires the `fcx-sso` login, which Identity Center enforces with always-on MFA (YubiKey + Titan). No extra resource.
+- **Separation of duties via key policy + permission boundary:** the `tmpx-TerraformExecutionRole` boundary already denies `ScheduleKeyDeletion`/`DisableKey`/`PutKeyPolicy` on CMKs (key-admin guardrail). The CMK is **root-enable-only** — use is an IAM concern; admin ≠ use, enforced by IAM + the boundary, not a repo split or a narrow key condition.
+- **No reverse dependency:** the layer never depends on onprem-infra or 1Password Connect (the systems it recovers). One-way: foundation → onprem.
+- **Blast radius:** the layer is its own state, separate from `10-bootstrap` (the locked, highest-blast-radius state).
+- **Seed leak surface:** `no_log` on every secret task; `connection: local`, `gather_facts: false`; never `-vvv`; biometric `op` (account mode, `OP_CONNECT_*` unset). Secrets pass as module params (not `argv`), held in registered vars (no temp files).
 
 ## Out of scope — future waves (documented, deferred with triggers)
-- **Wave 2a — CI machine identity:** GitHub/GitLab OIDC → AWS (the `aws-foundation/30-identity` OIDC plan, issue #27) for **day-2 deploys**. Trigger: the GitLab migration / wanting hands-off fleet deploys. NOT for bootstrap.
+- **Wave 2a — CI machine identity:** GitHub/GitLab OIDC → AWS (the `aws-foundation/30-identity` OIDC plan, issue #27) for **day-2 deploys**. Trigger: the GitLab migration / hands-off fleet deploys. NOT for bootstrap.
 - **Wave 2b — standing machine identity (IAM Roles Anywhere):** only if a fleet host ever needs to **autonomously** pull AWS secrets at runtime. Trigger: an autonomous-runtime-fetch need (may never fire under the human-injects model). Needs an X.509 CA + rotation.
 - **Day-2 1Password→AWS Secrets Sync** (D7) — optional, when a cloud-native consumer would otherwise round-trip to on-prem Connect.
-- **Repo rename** (onprem-infra → hybrid-infra) — ties to #67; orthogonal, doesn't change this placement.
+- **Repo rename** (onprem-infra → hybrid-infra) — ties to #67; orthogonal.
+- **Doc filename polish** — spec/plan filenames keep the `bootstrap-trust-recovery-anchor` working name (architecture-level); the artifact naming is literal in-content. Iterate later if desired.
 
-## Decisions locked (2026-06-13 review)
-1. **Account:** ✅ **shared-services (065094257518)** — consistent with tfstate + the `tmpx` CMKs; a dedicated recovery/security account is deferred as a future hardening.
-2. **Bundle store:** ✅ **AWS Secrets Manager** (multi-field JSON + native rotation) under the dedicated CMK.
-3. **SSH key:** ✅ **move to Connect-served** (a 1Password item post-bootstrap) — closes #8 for the SSH key + retires the Option-D `op`-CLI write-back. The AWS bundle holds the Connect **seed** (`1password-credentials.json` + token); the Ansible SSH key flows from Connect after boot, no longer `tls_private_key` in state.
-4. **onprem read placement:** ✅ **fold into `tofu/opconnect`** — per HashiCorp/OpenTofu state-boundary guidance (separate state by lifecycle/blast-radius, not aesthetics): the ephemeral bundle-read shares opconnect's exact lifecycle and produces no state, so a dedicated layer would add a 4th state + an apply-ordering edge for zero benefit.
+## Decisions locked (2026-06-13)
+1. **Account:** ✅ **shared-services (065094257518)** — consistent with tfstate + the `tmpx` CMKs; a dedicated recovery/security account deferred as future hardening.
+2. **Store:** ✅ **AWS Secrets Manager** (multi-field JSON + native rotation) under the dedicated CMK.
+3. **SSH key:** ✅ **bundle/Connect-served** — closes #8 for the SSH key + retires the Option-D `op`-CLI write-back. The AWS bundle holds the Connect seed + the ansible keypair; tofu reads only the public key.
+4. **onprem read placement:** ✅ tofu reads only the **public** key (folded into `tofu/opconnect`); Ansible reads all secrets (`amazon.aws.aws_secret`). No 4th state.
+5. **Seed mechanism (D8):** ✅ **pure-Ansible playbook**, idempotent + expiry-aware, separate from `site.yml`; **not** a bash script.
+6. **Key policy:** ✅ **root-enable-only** (estate convention), not SSO-admin-conditional.
 
 ## Acceptance criteria
-- `aws-foundation/15-recovery-anchor` exists, `tofu validate`/`plan` clean, follows the estate backend + encryption + tagging conventions; CMK + alias + bundle + outputs present; key policy grants the SSO Admin role `kms:Decrypt` only, no CI/ViaService.
-- onprem-infra reads the key by **alias data source** (no `remote_state`), reads the bundle **ephemerally** (not in state), injects into opconnect at build; a from-scratch opconnect bootstrap succeeds **without** the Mac `op` CLI account-mode path.
+- `aws-foundation/15-opconnect-credentials` exists, `tofu validate`/`plan` clean, follows the estate backend + encryption + tagging conventions; CMK + alias + (empty) secret + outputs present; key policy is root-enable-only, no CI/ViaService.
+- onprem reads the key by **alias data source** (no `remote_state`) + the **public** key ephemerally; Ansible reads the secrets via `amazon.aws.aws_secret` (not in state); a from-scratch opconnect bootstrap succeeds **without** the Mac `op` CLI account-mode path.
+- The seed playbook is **idempotent** (re-run with a valid, non-expiring token = no-op) and **expiry-aware** (rotates only within threshold/force); runs on `localhost`, account-mode `op`, `no_log`; **not** wired into `site.yml`.
 - No private key / DB password persists in either repo's tofu state (#8).
-- Offline 3-2-1 copy + DR runbook exist.
-- Anchor has **no** dependency on onprem-infra or 1Password Connect.
+- Offline 3-2-1 copy + DR runbook (`docs/runbooks/opconnect-credentials.md`) exist.
+- The layer has **no** dependency on onprem-infra or 1Password Connect.
 
 ## Test plan
 - `tofu validate` + `plan` both layers (live AWS, `fcx-sso`).
+- Seed idempotency: run `opconnect_credentials.yml` twice — second run reports "valid, nothing to do" (changed=false on the write).
+- Rotation: with `force=true` (or a near-expiry token), confirm a new token is minted, `token_expires` advances, the server identity + keypair are unchanged.
 - DR drill: from a clean opconnect (destroy + rebuild), bootstrap **only** via the AWS bundle + SSO/FIDO (no Mac `op` account mode); confirm Connect serves day-2.
-- Negative: confirm a principal WITHOUT the SSO Admin role / FIDO cannot `kms:Decrypt` the bundle.
+- Negative: a principal WITHOUT the SSO/OAAR path cannot `kms:Decrypt` / `get-secret-value`.
 - Grep both states post-apply: zero plaintext key/password material.
 
 ## Risks
-- **AWS-unreachable cold-start** → mitigated by the offline 3-2-1 copy (D4/section D).
-- **Ephemeral-resource maturity** (OpenTofu 1.12) → validate in plan; fallback is a scripted SDK read that never writes state.
-- **Account-placement churn** if shared-services → dedicated-recovery-account later → minimize by clean module boundaries.
+- **AWS-unreachable cold-start** → mitigated by the offline 3-2-1 copy (D/§D).
+- **Ephemeral-resource maturity** (OpenTofu) for the public-key read → validate in plan; fallback is a non-secret `aws_ssm_parameter` for the public key.
+- **`no_log` edge cases** (verbose runs, CVE lineage) → runbook rule: never `-vvv` the seed play.
+- **Account-placement churn** if shared-services → dedicated-recovery-account later → minimize via clean module boundaries.
 
 ---
 
-*Design approved via voice brainstorm 2026-06-13. Grounded in: the #68 candidate research, the hybrid-secrets-locality research, and the hybrid-IaC best-practice + aws-foundation deep-scan research (this session). Next: writing-plans for Wave 1.*
+*Design approved via voice brainstorm 2026-06-13; refined same day (seed→Ansible, literal naming, root-enable-only key policy). Grounded in: the #68 candidate research, the hybrid-secrets-locality research, the hybrid-IaC + aws-foundation deep-scan, and the Ansible-vs-script + amazon.aws/onepassword.connect collection research (this session).*

@@ -24,21 +24,21 @@ opconnect_sync_port: 8081
 # Connect log level (passed through OP_LOG_LEVEL). info|debug|trace.
 opconnect_log_level: "info"
 
-# Path ON THE ANSIBLE CONTROLLER to the 1password-credentials.json emitted by
-# `op connect server create` (the operator-run bootstrap, P4.1). Ansible COPIES
-# it from the controller to the compose dir on the VM (copy, NOT remote_src) —
-# no manual scp. This is the IaC consumption path, identical to how the fleet
-# roles place files.
+# Path ON THE ANSIBLE CONTROLLER to the 1password-credentials.json (the consume/
+# deploy source for the live VM). Ansible COPIES it to the compose dir on the VM
+# (copy, NOT remote_src). Phase C sources this from the AWS bundle instead of a
+# local path; until then this local path is the fallback.
 #
 # Division of responsibility (deliberate): the Connect SERVER + TOKEN creation
-# (`op signin` -> `op connect server/token create`) stays a MANUAL operator step
-# — it is account-privileged and a Service Account cannot manage Connect, so
-# neither ansible-on-this-Mac (no interactive biometric) nor a future GitLab CI
-# runner (Service-Account auth) can automate it. Ansible owns DEPLOYING the
-# resulting creds + reading secrets via Connect.
+# (`op connect server/token create`) is now CODIFIED in the `opconnect_credentials.yml`
+# seed playbook (localhost, account-mode `op`, biometric via the unlocked 1Password
+# desktop app) — NOT a manual ad-hoc step. It still CANNOT be a Service Account or
+# an unattended CI runner (a Service Account gets 403 on token create; CI has no
+# biometric). Ansible owns BOTH: seeding/rotating the off-site copy (seed.yml) and
+# deploying the creds + reading day-2 secrets via Connect.
 #
-# Lift-and-shift note: when IaC moves to GitLab CI, only THIS source path
-# changes (a CI secret/file instead of a local path); the copy mechanics are
+# Lift-and-shift note: when IaC moves to GitLab CI, only THIS source path changes
+# (read from the AWS bundle instead of a local file); the copy mechanics are
 # identical. Override with -e opconnect_credentials_local=<path>.
 opconnect_credentials_local: "{{ lookup('env', 'HOME') }}/opconnect-cutover/1password-credentials.json"
 
@@ -51,3 +51,19 @@ opconnect_credentials_local: "{{ lookup('env', 'HOME') }}/opconnect-cutover/1pas
 # chown the staged file to this UID + keep 0600 (owner-readable by opuser, NOT
 # world-readable). Override if a future image changes the UID.
 opconnect_container_uid: 999
+
+# ==============================================================================
+# Off-site credentials (the AWS `tmpx/onprem/opconnect-credentials` secret)
+# ==============================================================================
+# SHARED SCHEMA — these are the single source of truth for the bundle, referenced
+# by BOTH the producer (tasks/seed.yml) and the consumer (Phase C reads), so the
+# JSON schema can never drift between mint and consume. See spec D6/D8.
+opconnect_creds_secret_name: "tmpx/onprem/opconnect-credentials"
+opconnect_creds_region: "us-east-2"
+opconnect_creds_assume_role_arn: "arn:aws:iam::065094257518:role/OrganizationAccountAccessRole"
+opconnect_creds_kms_alias: "alias/tmpx/onprem-opconnect"
+opconnect_creds_vault: "FusionCloudX" # 1Password vault the Connect server is scoped to
+opconnect_creds_server_name: "opconnect" # `op connect server` name
+opconnect_creds_connect_host: "http://opconnect.fusioncloudx.home:8080"
+opconnect_creds_token_ttl_days: 90 # Connect token lifetime when minting (matches the estate rotation cadence)
+opconnect_creds_rotate_threshold_days: 14 # seed.yml rotates when token_expires is within this window
