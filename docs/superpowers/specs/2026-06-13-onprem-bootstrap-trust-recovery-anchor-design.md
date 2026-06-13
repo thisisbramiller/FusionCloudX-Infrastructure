@@ -159,3 +159,26 @@ An encrypted export of the bundle (`age`/`gpg`), stored offline (encrypted USB /
 ---
 
 *Design approved via voice brainstorm 2026-06-13; refined same day (seed→Ansible, literal naming, root-enable-only key policy). Grounded in: the #68 candidate research, the hybrid-secrets-locality research, the hybrid-IaC + aws-foundation deep-scan, and the Ansible-vs-script + amazon.aws/onepassword.connect collection research (this session).*
+
+---
+
+## Revision — Phase C re-decided (2026-06-13 PM)
+
+Phase A (CMK + secret) and Phase B (the Ansible seed) shipped + validated. Implementing the **consumer** (Phase C) surfaced two facts that revise the consume-side design below (D1–D8 stand; the bundle, the seed's existence, and the AWS-anchor model are unchanged). Plan: `docs/superpowers/plans/2026-06-13-onprem-phase-c-dedicated-key-directionB.md`.
+
+**Empirical findings (this session, verified live):**
+1. **The ephemeral pubkey read (Component B / D6) is structurally impossible — proven, not theoretical.** `tofu plan` on `tofu/opconnect` fails: *"Variable does not allow ephemeral value"* at `opconnect.tf:45` (`ansible_pubkey = local.ansible_ssh_public_key`). An OpenTofu ephemeral value cannot flow into a persisted attribute (cloud-init `user_data`), and bpg/proxmox has **no write-only twin** for it. This is the engine correctly enforcing #8. The spec's own Risk hedge ("fallback is a non-secret `aws_ssm_parameter`") is now the path.
+2. **The bundle's seed-generated keypair ≠ the live fleet 1P key** (fingerprints `6dV2…` vs `VrLco8…`). Reconciled as **intentional**, not a fork bug (see D9).
+3. **The estate is dev/stage of FusionCloudX business infra, not a homelab** (memory `infra-hybrid-not-just-homelab`; ClickUp roadmap has Teleport/Wazuh/CI-runners/FCX-dev collaborators). Per-host-key isolation for the secrets root is therefore the floor, not enterprise theater — the homelab "shared is fine" discount does not apply on this trajectory.
+
+**Revised decisions:**
+
+| # | Decision | Rationale |
+|---|---|---|
+| **D9** | **opconnect gets a DEDICATED bootstrap keypair**, distinct from the fleet's `Infrastructure Ansible SSH Key`. opconnect's cloud-init `authorized_keys` trusts ONLY the dedicated key; the fleet key is removed from opconnect. The 4 app VMs are **untouched**. | Blast-radius isolation of the secrets root (a fleet-key compromise — fleet pubkey sits in every VM's authorized_keys — cannot reach opconnect) + rotation decoupling (re-key the fleet without touching the `prevent_destroy` singleton). Under IaC the cost is one-time authoring, so the decision is purely on correctness. Authorities (MS PAM tier model, OWASP, NIST IR 7966, CyberArk, red-team) converge on dedicated-when-trust-differs; the venture trajectory (CI runners + collaborators) hits their "dedicated is mandatory" triggers. The seed already generates this key — D9 makes it intentional. (YubiKey/FIDO is the *human-access* plane — touch-per-use can't back an unattended automation key — so it does not flip this to shared.) |
+| **D10** | **tofu reads the dedicated PUBLIC key from an SSM String param** (`/tmpx/onprem/opconnect/ansible_public_key`, published by the seed) via `data "aws_ssm_parameter"` — replacing the (impossible) ephemeral read of D6/Component B. Public key in state is fine (non-secret); the private key + creds never touch tofu. | Realizes the spec's own fallback (Risk §). Auto-synced by the seed (zero manual steps, rotation-safe), keeping a read-only `aws` provider in `tofu/opconnect`. The CMK alias data source is dropped (an SSM String needs no KMS). |
+| **D11** | **Full Direction-B consume.** The seed writes the dedicated keypair + the Connect `credentials.json`/token to dedicated **1Password items** (day-2 root) **and** the AWS escrow (break-glass). opconnect's `ssh-key-loader` + deploy role read from **1P via account-mode `op`** (Connect-independent), retiring the manual local-file (`opconnect_credentials_local`) path. The AWS bundle becomes the clean-room-DR-only source. | Completes the never-built C4 (the bundle was seeded-but-unconsumed) and the #68 goal (no Mac/local dependency, AWS-anchored DR + 1P day-2). 1P-account-mode reads are non-circular (they hit 1password.com, not the local Connect). |
+
+**Direction:** **B** — 1Password is the day-2 root; the AWS escrow is break-glass/DR only. The single forced exception (opconnect's *bootstrap pubkey* read from SSM, since `tofu/opconnect` can't use the onepassword provider — circular) is a property of the bootstrap state, not a promotion of escrow to day-2.
+
+**Net effect on D6/Component B/C:** D6's "ephemeral pubkey" → SSM data source (D10). Component B/C's single shared keypair → a dedicated opconnect keypair (D9) homed in 1P + escrow + SSM-pubkey (D11). Everything else (CMK, secret, key policy, the seed's existence, the offline 3-2-1 copy, #8) stands.
