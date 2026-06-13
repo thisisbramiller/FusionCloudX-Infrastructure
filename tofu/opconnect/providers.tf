@@ -7,8 +7,8 @@
 #
 # Bootstrap trust (spec #68 / D6, D8): the Ansible keypair + the Connect seed live
 # in the AWS off-site bundle (tmpx/onprem/opconnect-credentials, seeded by the
-# `opconnect_credentials.yml` Ansible playbook). This state reads ONLY the recovery
-# CMK by ALIAS + the NON-SECRET ansible public key for cloud-init (recovery.tf); the
+# `opconnect_credentials.yml` Ansible playbook). This state reads ONLY the
+# NON-SECRET ansible public key from SSM for cloud-init (ssh-keys.tf); the
 # private key + Connect creds are read by ANSIBLE (amazon.aws.aws_secret), never by
 # tofu -> never in state (#8). The read-only `aws` provider below assumes
 # OrganizationAccountAccessRole into shared-services for those reads (the same path
@@ -33,9 +33,9 @@ terraform {
       version = "0.42.0-fcx1"
     }
     aws = {
-      # Read-only: the recovery CMK alias + the ephemeral public-key read
-      # (recovery.tf). The S3 backend + state encryption already use AWS
-      # (backend.tf / encryption.tf); this provider serves the data/ephemeral reads.
+      # Read-only: the SSM public-key read (ssh-keys.tf). The S3 backend + state
+      # encryption already use AWS (backend.tf / encryption.tf); this provider
+      # serves that data-source read.
       source  = "hashicorp/aws"
       version = "~> 6.0"
     }
@@ -70,7 +70,7 @@ provider "unifi" {
   # UNIFI_API_KEY environment variable, keeping the secret out of HCL/state.
 }
 
-# Read-only AWS for the off-site-credentials reads (recovery.tf). Assumes
+# Read-only AWS for the SSM public-key read (ssh-keys.tf). Assumes
 # OrganizationAccountAccessRole into shared-services (065094257518) — the same path
 # the backend + state encryption use. No write paths in this state.
 provider "aws" {

@@ -38,9 +38,9 @@ variable "opconnect_memory_mb" {
   description = "Dedicated memory (MB) for the opconnect VM."
 }
 
-# Removed (spec #68 / D8 — Phase C3):
+# Removed (spec #68 — Phase C):
 #   - ansible_pubkey: opconnect no longer owns the keypair; the ansible PUBLIC key
-#     comes from the AWS off-site bundle (recovery.tf -> local.ansible_ssh_public_key).
+#     comes from SSM (ssh-keys.tf -> local.ansible_ssh_public_key), published by the seed.
 #   - onepassword_vault_id / ansible_ssh_key_item_title: only the retired Option-D
-#     write-back (ssh-keys.tf) used them. The keypair now lives in the
-#     opconnect-credentials bundle; no 1Password write from this state.
+#     tls_private_key write-back used them. The dedicated key is now a 1Password
+#     SSH-Key item (read by Ansible); no 1Password write from this state.

@@ -17,7 +17,7 @@
 - **Sensitive values:** `op item create`/`edit` warn that assignment-statement args are visible to other processes → **use a JSON template** (`op item template get "Secure Note"`; `op item create --template F` / piped stdin). SSH-key gen passes no secret arg (safe); the creds item uses a template.
 - Connect (already validated): `op connect server create <name> --vaults V`; `op connect token create <name> --server <name> --vaults V --expires-in=Nd`.
 
-**As-built:** `recovery.tf` has the broken `ephemeral` read (UNAPPLIED; live still has `tls_private_key`+`null_resource`). Seed generates via `community.crypto.openssh_keypair` + writes escrow in-block (this plan moves gen→1P and distribution→always-run). opconnect role copies `creds.json` from `opconnect_credentials_local`. ssh-key-loader has an `op_use_cli` path. Live escrow key `6dV2…` is REPLACED on adoption by the new native 1P key; creds/token preserved. Fleet key `VrLco8…` untouched.
+**As-built:** `ssh-keys.tf` (renamed from `recovery.tf` — purged metaphor) has the broken `ephemeral` read (UNAPPLIED; live still has `tls_private_key`+`null_resource`). Seed generates via `community.crypto.openssh_keypair` + writes escrow in-block (this plan moves gen→1P and distribution→always-run). opconnect role copies `creds.json` from `opconnect_credentials_local`. ssh-key-loader has an `op_use_cli` path. Live escrow key `6dV2…` is REPLACED on adoption by the new native 1P key; creds/token preserved. Fleet key `VrLco8…` untouched.
 
 **Shared names (`opconnect_credentials/defaults/main.yml`):** `opconnect_creds_1p_ssh_item: "opconnect Bootstrap SSH Key"` · `opconnect_creds_1p_creds_item: "opconnect Connect Credentials"` · `opconnect_creds_ssm_pubkey_name: "/tmpx/onprem/opconnect/ansible_public_key"`.
 
@@ -125,7 +125,7 @@
 - [ ] **Step 7:** `--syntax-check`. Commit.
 
 ## CR3: tofu/opconnect — pubkey from SSM
-**File:** `tofu/opconnect/recovery.tf` — replace body with `data "aws_ssm_parameter" "ansible_pubkey" { name = "/tmpx/onprem/opconnect/ansible_public_key" }` + `local.ansible_ssh_public_key = trimspace(data.aws_ssm_parameter.ansible_pubkey.value)`. Drop the `aws_kms_alias` data source. `opconnect.tf:45` reference unchanged. `fmt`+`validate` (`TF_CLI_CONFIG_FILE="$PWD/.tofurc" AWS_PROFILE=fcx-sso`). Commit.
+**File:** `tofu/opconnect/ssh-keys.tf` (renamed from `recovery.tf`) — replace body with `data "aws_ssm_parameter" "ansible_pubkey" { name = "/tmpx/onprem/opconnect/ansible_public_key" }` + `local.ansible_ssh_public_key = trimspace(data.aws_ssm_parameter.ansible_pubkey.value)`. Drop the `aws_kms_alias` data source. `opconnect.tf:45` reference unchanged. `fmt`+`validate` (`TF_CLI_CONFIG_FILE="$PWD/.tofurc" AWS_PROFILE=fcx-sso`). Commit.
 
 ## CR4: ssh-key-loader — opconnect reads the native key via `op read --out-file`
 **Files:** `ansible/roles/ssh-key-loader/tasks/main.yml`, `ansible/playbooks/opconnect.yml`
