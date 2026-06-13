@@ -37,12 +37,7 @@ output "connect_host" {
   value       = "http://${var.opconnect_dns_name}.fusioncloudx.home:8080"
 }
 
-# ------------------------------------------------------------------------------
-# Ansible SSH key fingerprint — operator-facing reference (carried from the flat
-# terraform/outputs.tf). tls_private_key.ansible lives in this state, so the
-# fingerprint is sourced here directly (no 1Password read). Not sensitive.
-# ------------------------------------------------------------------------------
-output "ansible_ssh_key_fingerprint" {
-  description = "SHA256 fingerprint of the Ansible SSH key (for reference/debugging)."
-  value       = tls_private_key.ansible.public_key_fingerprint_sha256
-}
+# (ansible_ssh_key_fingerprint output removed — spec #68/C3. The keypair now lives
+#  in the AWS opconnect-credentials bundle, not in this state, so there is no
+#  tls_private_key resource to source the fingerprint from. The public key + its
+#  fingerprint live in the bundle / 1Password.)

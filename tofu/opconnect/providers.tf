@@ -1,17 +1,21 @@
 # ==============================================================================
 # opconnect state — provider requirements + configs
 # ==============================================================================
-# SECRETS-ROOT STATE. opconnect provisions the VM that RUNS 1Password Connect,
-# so it must apply WITHOUT depending on Connect (you cannot make Connect with
-# Connect) and no SA token exists. There is therefore intentionally NO
-# onepassword provider here: the Ansible SSH keypair is generated locally
-# (tls_private_key) and written to 1Password via the desktop `op` CLI in account
-# mode (ssh-keys.tf), which needs neither Connect nor an SA token. Day-2 secret
-# consumption happens later in tofu/compute + ansible, via Connect.
+# SECRETS-ROOT STATE. opconnect provisions the VM that RUNS 1Password Connect, so
+# it must apply WITHOUT depending on Connect (you cannot make Connect with Connect)
+# and no SA token exists. There is intentionally NO onepassword provider here.
 #
-# As with tofu/compute, AWS is ONLY the state backend + state-encryption key
-# provider (see backend.tf / encryption.tf) — there is intentionally NO aws
-# provider here.
+# Bootstrap trust (spec #68 / D6, D8): the Ansible keypair + the Connect seed live
+# in the AWS off-site bundle (tmpx/onprem/opconnect-credentials, seeded by the
+# `opconnect_credentials.yml` Ansible playbook). This state reads ONLY the recovery
+# CMK by ALIAS + the NON-SECRET ansible public key for cloud-init (recovery.tf); the
+# private key + Connect creds are read by ANSIBLE (amazon.aws.aws_secret), never by
+# tofu -> never in state (#8). The read-only `aws` provider below assumes
+# OrganizationAccountAccessRole into shared-services for those reads (the same path
+# the S3 backend + state encryption already use).
+#
+# (Replaces the retired Option-D path: a local tls_private_key written to 1Password
+# via the desktop `op` CLI. `tls` is dropped.)
 # ==============================================================================
 terraform {
   required_version = ">= 1.8"
@@ -28,12 +32,12 @@ terraform {
       source  = "tf.fusioncloudx.home/ubiquiti-community/unifi"
       version = "0.42.0-fcx1"
     }
-    tls = {
-      # Re-added: opconnect OWNS the Ansible SSH keypair (ssh-keys.tf generates it
-      # via tls_private_key and writes both halves to 1Password). The redesign had
-      # dropped hashicorp/tls assuming a bootstrap seeder that was never built.
-      source  = "hashicorp/tls"
-      version = "~> 4.0"
+    aws = {
+      # Read-only: the recovery CMK alias + the ephemeral public-key read
+      # (recovery.tf). The S3 backend + state encryption already use AWS
+      # (backend.tf / encryption.tf); this provider serves the data/ephemeral reads.
+      source  = "hashicorp/aws"
+      version = "~> 6.0"
     }
     ansible = {
       source  = "ansible/ansible"
@@ -66,8 +70,17 @@ provider "unifi" {
   # UNIFI_API_KEY environment variable, keeping the secret out of HCL/state.
 }
 
-# NOTE: no `provider "onepassword"` here by design — opconnect must apply
-# Connect-free. The Ansible SSH keypair is written to 1Password out-of-band via
-# the desktop `op` CLI (see ssh-keys.tf + scripts/op-write-ssh-key.sh).
+# Read-only AWS for the off-site-credentials reads (recovery.tf). Assumes
+# OrganizationAccountAccessRole into shared-services (065094257518) — the same path
+# the backend + state encryption use. No write paths in this state.
+provider "aws" {
+  region      = "us-east-2"
+  max_retries = 10
+
+  assume_role {
+    role_arn     = "arn:aws:iam::065094257518:role/OrganizationAccountAccessRole"
+    session_name = "tmpx-opconnect-read"
+  }
+}
 
 provider "ansible" {}

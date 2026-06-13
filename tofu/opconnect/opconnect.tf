@@ -29,7 +29,7 @@ module "opconnect" {
   # root — the fleet reads 1Password through Connect here). DR backups of this VM
   # must be snapshot-mode (vzdump default) — NEVER --mode stop, which would stop
   # the guest and dark-out Connect for every downstream apply/playbook.
-  on_boot      = true
+  on_boot = true
 
   # Foundation ubuntu template (9001) lives in the network/ state (P3, applied first).
   template_vm_id = data.terraform_remote_state.network.outputs.ubuntu_template_vm_id
