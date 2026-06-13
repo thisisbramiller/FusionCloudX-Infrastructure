@@ -1,6 +1,6 @@
 # onprem Bootstrap-Trust + Recovery-Anchor — Design Spec (Wave 1)
 
-**Status:** APPROVED (brainstorm 2026-06-13) — pending written review before writing-plans
+**Status:** APPROVED + 4 decisions locked (review 2026-06-13) — proceeding to writing-plans
 **Task:** #68 (FusionCloudX hybrid machine-identity + secrets + bootstrap-trust)
 **Repos touched:** `aws-foundation` (new layer) + `onprem-infra` / FusionCloudX Infrastructure (consumer)
 **Supersedes:** the "Option D" stopgap (desktop `op` CLI account-mode write-back) as the bootstrap mechanism.
@@ -109,11 +109,11 @@ An encrypted export of the bundle (e.g. `age`/`gpg` or a 1Password export), stor
 - **Day-2 1Password→AWS Secrets Sync** (D7) — optional, when a cloud-native consumer would otherwise round-trip to on-prem Connect.
 - **Repo rename** (onprem-infra → hybrid-infra) — ties to #67; orthogonal, doesn't change this placement.
 
-## Open decisions to confirm in review / plan
-1. **Account:** shared-services (default, simplest) vs a dedicated security/recovery account (SRA-purest).
-2. **Bundle store:** AWS Secrets Manager (default — multi-field JSON + rotation) vs SSM SecureString (cheaper, simpler).
-3. **Exact bundle contents** (section C) + whether the Ansible SSH key becomes Connect-served (recommended) vs stays in the bundle.
-4. **onprem read placement:** fold into `tofu/opconnect` vs a dedicated tiny `00-recovery-read` step.
+## Decisions locked (2026-06-13 review)
+1. **Account:** ✅ **shared-services (065094257518)** — consistent with tfstate + the `tmpx` CMKs; a dedicated recovery/security account is deferred as a future hardening.
+2. **Bundle store:** ✅ **AWS Secrets Manager** (multi-field JSON + native rotation) under the dedicated CMK.
+3. **SSH key:** ✅ **move to Connect-served** (a 1Password item post-bootstrap) — closes #8 for the SSH key + retires the Option-D `op`-CLI write-back. The AWS bundle holds the Connect **seed** (`1password-credentials.json` + token); the Ansible SSH key flows from Connect after boot, no longer `tls_private_key` in state.
+4. **onprem read placement:** ✅ **fold into `tofu/opconnect`** — per HashiCorp/OpenTofu state-boundary guidance (separate state by lifecycle/blast-radius, not aesthetics): the ephemeral bundle-read shares opconnect's exact lifecycle and produces no state, so a dedicated layer would add a 4th state + an apply-ordering edge for zero benefit.
 
 ## Acceptance criteria
 - `aws-foundation/15-recovery-anchor` exists, `tofu validate`/`plan` clean, follows the estate backend + encryption + tagging conventions; CMK + alias + bundle + outputs present; key policy grants the SSO Admin role `kms:Decrypt` only, no CI/ViaService.
