@@ -1,0 +1,18 @@
+---
+# ==============================================================================
+# opconnect_credentials role — defaults (the off-site bundle schema)
+# ==============================================================================
+# Single source of truth for the AWS `tmpx/onprem/opconnect-credentials` bundle.
+# When the consumer side (the opconnect deploy role reading the bundle, plan C4)
+# is built, promote the SHARED subset of these to group_vars so producer + consumer
+# can't drift. For now the seed is the only consumer, so they live here.
+opconnect_creds_secret_name: "tmpx/onprem/opconnect-credentials"
+opconnect_creds_region: "us-east-2"
+opconnect_creds_assume_role_arn: "arn:aws:iam::065094257518:role/OrganizationAccountAccessRole"
+opconnect_creds_sso_profile: "fcx-sso" # AWS CLI SSO profile used to assume the role; passed as a PARAM (not AWS_PROFILE env), else amazon.aws errors "both a profile and access tokens" when the lookup gets the assumed creds
+opconnect_creds_kms_alias: "alias/tmpx/onprem-opconnect"
+opconnect_creds_vault: "FusionCloudX" # 1Password vault the Connect server is scoped to
+opconnect_creds_server_name: "opconnect" # `op connect server` name
+opconnect_creds_connect_host: "http://opconnect.fusioncloudx.home:8080"
+opconnect_creds_token_ttl_days: 90 # Connect token lifetime when minting (matches the estate rotation cadence)
+opconnect_creds_rotate_threshold_days: 14 # rotate when token_expires is within this window

@@ -21,6 +21,7 @@ ansible/*.log
 
 # Python
 venv/
+.venv/
 .env
 __pycache__/
 

@@ -1,17 +1,21 @@
 ---
 # ==============================================================================
-# opconnect — SEED / ROTATE the off-site credentials bundle (spec D8)
+# opconnect_credentials role — SEED / ROTATE the off-site credentials bundle (D8)
 # ==============================================================================
-# Imported ONLY by playbooks/opconnect_credentials.yml (localhost, account-mode
-# `op`). NOT part of this role's main.yml deploy path. Idempotent + expiry-aware:
+# STANDALONE role (NO meta dependencies — deliberately, so it runs on localhost
+# without pulling the docker role the way the opconnect deploy role does).
+# Invoked ONLY by playbooks/opconnect_credentials.yml (localhost, account-mode op).
+# Idempotent + expiry-aware:
 #   - secret absent      -> SEED  (op connect server create + token create)
 #   - token near expiry  -> ROTATE (token only; server identity + keypair kept)
 #   - otherwise          -> NO-OP
 #
+# Account-mode op: the op tasks use `env -u OP_CONNECT_HOST -u OP_CONNECT_TOKEN`
+# to TRULY unset the Connect env vars (setting them to "" leaves them set-but-empty,
+# which keeps op in Connect API mode — see ssh-key-loader for the same gotcha).
+# Account mode then uses the unlocked 1Password desktop app (biometric).
+#
 # WARNING: never run the playbook with -v/-vvv (no_log is bypassed by verbose).
-# NOTE: first-run validation is pending the gated B3 step (param names, op flags,
-# and the Jinja expiry math are validated live, per the plan). Written from the
-# approved plan 2026-06-13.
 
 - name: Assert localhost (biometric op + AWS FIDO are workstation-bound)
   ansible.builtin.assert:
@@ -24,6 +28,7 @@
     role_arn: "{{ opconnect_creds_assume_role_arn }}"
     role_session_name: "opconnect-credentials-seed"
     region: "{{ opconnect_creds_region }}"
+    profile: "{{ opconnect_creds_sso_profile }}" # base SSO creds via PARAM, not AWS_PROFILE env
   register: _assumed
   no_log: true
 
@@ -56,9 +61,6 @@
 
 - name: Seed / rotate
   when: _need_seed | bool or _need_rotate | bool
-  environment:
-    OP_CONNECT_HOST: "" # force account mode — Connect env vars otherwise lock op to the read-only API mode
-    OP_CONNECT_TOKEN: ""
   block:
     - name: Create a 0700 scratch dir
       ansible.builtin.tempfile:
@@ -67,9 +69,23 @@
       register: _tmp
       no_log: true
 
+    # `env -u` TRULY unsets the Connect env vars so op uses ACCOUNT mode (desktop
+    # app / biometric). Empty-string via environment: would leave op in Connect mode.
     - name: Create the Connect server (FIRST SEED ONLY — not idempotent)
       ansible.builtin.command:
-        cmd: "op connect server create {{ opconnect_creds_server_name }} --vaults {{ opconnect_creds_vault }}"
+        argv:
+          - env
+          - -u
+          - OP_CONNECT_HOST
+          - -u
+          - OP_CONNECT_TOKEN
+          - op
+          - connect
+          - server
+          - create
+          - "{{ opconnect_creds_server_name }}"
+          - --vaults
+          - "{{ opconnect_creds_vault }}"
         chdir: "{{ _tmp.path }}" # emits 1password-credentials.json into cwd
         creates: "{{ _tmp.path }}/1password-credentials.json"
       when: _need_seed | bool
@@ -77,10 +93,23 @@
 
     - name: Mint a Connect token with an explicit TTL (robust expiry; no JWT decode)
       ansible.builtin.command:
-        cmd: >-
-          op connect token create breakglass-{{ '%Y%m%d' | strftime }}
-          --server {{ opconnect_creds_server_name }} --vaults {{ opconnect_creds_vault }}
-          --expires-in {{ opconnect_creds_token_ttl_days }}d
+        argv:
+          - env
+          - -u
+          - OP_CONNECT_HOST
+          - -u
+          - OP_CONNECT_TOKEN
+          - op
+          - connect
+          - token
+          - create
+          - "fusioncloudx-onprem-{{ '%Y%m%d' | strftime }}"
+          - --server
+          - "{{ opconnect_creds_server_name }}"
+          - --vaults
+          - "{{ opconnect_creds_vault }}"
+          - --expires-in
+          - "{{ opconnect_creds_token_ttl_days }}d"
       register: _tok
       changed_when: true
       no_log: true

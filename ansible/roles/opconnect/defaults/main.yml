@@ -52,18 +52,6 @@ opconnect_credentials_local: "{{ lookup('env', 'HOME') }}/opconnect-cutover/1pas
 # world-readable). Override if a future image changes the UID.
 opconnect_container_uid: 999
 
-# ==============================================================================
-# Off-site credentials (the AWS `tmpx/onprem/opconnect-credentials` secret)
-# ==============================================================================
-# SHARED SCHEMA — these are the single source of truth for the bundle, referenced
-# by BOTH the producer (tasks/seed.yml) and the consumer (Phase C reads), so the
-# JSON schema can never drift between mint and consume. See spec D6/D8.
-opconnect_creds_secret_name: "tmpx/onprem/opconnect-credentials"
-opconnect_creds_region: "us-east-2"
-opconnect_creds_assume_role_arn: "arn:aws:iam::065094257518:role/OrganizationAccountAccessRole"
-opconnect_creds_kms_alias: "alias/tmpx/onprem-opconnect"
-opconnect_creds_vault: "FusionCloudX" # 1Password vault the Connect server is scoped to
-opconnect_creds_server_name: "opconnect" # `op connect server` name
-opconnect_creds_connect_host: "http://opconnect.fusioncloudx.home:8080"
-opconnect_creds_token_ttl_days: 90 # Connect token lifetime when minting (matches the estate rotation cadence)
-opconnect_creds_rotate_threshold_days: 14 # seed.yml rotates when token_expires is within this window
+# (Off-site credentials bundle schema lives in the standalone `opconnect_credentials`
+#  role's defaults — that role seeds/rotates tmpx/onprem/opconnect-credentials on
+#  localhost WITHOUT this role's docker meta-dependency. See playbooks/opconnect_credentials.yml.)
