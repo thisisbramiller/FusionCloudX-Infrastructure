@@ -86,7 +86,35 @@
   delegate_to: localhost
   become: false
   run_once: true
-  when: op_use_cli | default(false) | bool
+  when: (op_use_cli | default(false) | bool) and (op_ssh_key_ref | default('') | length == 0)
+  tags: ['ssh-key', 'always']
+
+# Dedicated-key path (opconnect): when op_ssh_key_ref is a full op:// reference
+# (carrying its own ?ssh-format=openssh query), `op read --out-file` writes the
+# key STRAIGHT to the 0600 temp file — no stdout, no copy task. This sidesteps
+# the item/section/field template and is mutually exclusive with the stdout-read
+# + Write-copy tasks (their WHENs require op_ssh_key_ref to be empty).
+- name: Retrieve SSH private key via op read --out-file (full reference)
+  ansible.builtin.command:
+    argv:
+      - env
+      - -u
+      - OP_CONNECT_HOST
+      - -u
+      - OP_CONNECT_TOKEN
+      - op
+      - read
+      - "--out-file"
+      - "{{ ssh_key_loader_temp_path }}"
+      - "--file-mode"
+      - "0600"
+      - "--force"
+      - "{{ op_ssh_key_ref }}"
+  delegate_to: localhost
+  become: false
+  run_once: true
+  when: (op_use_cli | default(false) | bool) and (op_ssh_key_ref | default('') | length > 0)
+  no_log: true
   tags: ['ssh-key', 'always']
 
 - name: Write SSH key to secure temp file
@@ -101,6 +129,9 @@
   become: false
   run_once: true
   no_log: true
+  # Skipped on the dedicated-key path — `op read --out-file` already wrote the
+  # file. Runs only when op_ssh_key_ref is empty (Connect path + op stdout path).
+  when: (op_ssh_key_ref | default('') | length == 0)
   tags: ['ssh-key', 'always']
 
 - name: Display SSH key load status

@@ -23,9 +23,11 @@
 # Requirements:
 #   - `op` CLI on the ANSIBLE CONTROLLER, authed (SA token OR desktop / `op signin`)
 #   - TF_VAR_onepassword_vault_id set (ssh-key-loader op:// path; asserted below)
-#   - 1password-credentials.json on the CONTROLLER at opconnect_credentials_local
-#     (default ~/opconnect-cutover/1password-credentials.json); ansible copies it to
-#     the VM automatically — no manual scp. Generated via `op connect server create`.
+#   - The 1Password creds item `opconnect Connect Credentials` (vault FusionCloudX)
+#     seeded by the opconnect_credentials role — the opconnect deploy role reads
+#     the b64 credentials_json field from it via account-mode `op` and decodes it
+#     onto the VM (no controller-side file, no manual scp). Generated via
+#     `op connect server create` inside the seed playbook.
 #
 # The Deploy play's pre-flight assertion accepts OP_SERVICE_ACCOUNT_TOKEN OR
 # OP_CONNECT_* purely as a coarse "a 1Password auth path is present" gate — the
@@ -42,6 +44,9 @@
   connection: local
   vars:
     op_use_cli: true
+    # dedicated native SSH-Key item (D9); hardcoded item title must match
+    # opconnect_creds_1p_ssh_item in the opconnect_credentials role.
+    op_ssh_key_ref: "op://{{ lookup('env','TF_VAR_onepassword_vault_id') }}/opconnect Bootstrap SSH Key/private key?ssh-format=openssh"
 
   pre_tasks:
     # G4 guard: an unset vault id makes the op:// path "op:///Item/..." and `op`

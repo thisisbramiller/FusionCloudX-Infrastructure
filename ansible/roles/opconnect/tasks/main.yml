@@ -8,15 +8,17 @@
 #
 # SECRETS-ROOT BOOTSTRAP PATH. Unlike the app roles (mealie/tandoor/immich),
 # this role does NOT read 1Password via Connect — it BUILDS Connect. The two
-# artifacts Connect needs are generated OUT-OF-BAND at P4 using the Service
-# Account token (NOT Connect):
+# artifacts Connect needs are generated OUT-OF-BAND by the opconnect_credentials
+# seed role using account-mode `op` (NOT Connect):
 #     op connect server create opconnect     # -> 1password-credentials.json
 #     op connect token create  opconnect ... # -> the Connect access token
-# 1password-credentials.json is available on the ANSIBLE CONTROLLER at
-# `opconnect_credentials_local`; the role copies it to the VM (no manual scp).
-# The Connect access token is consumed by
-# DOWNSTREAM repointing (OP_CONNECT_TOKEN), not by Connect itself, so it is not
-# handled here. See the P4 cutover note in tofu/opconnect/opconnect.tf.
+# The seed stores the creds.json b64-encoded in the 1Password item
+# `opconnect Connect Credentials` (vault FusionCloudX). THIS role reads that field
+# back via account-mode `op` (OP_CONNECT_* unset → Connect-independent) and decodes
+# it into the compose dir on the VM — no controller-side file, no manual scp.
+# The Connect access token is consumed by DOWNSTREAM repointing (OP_CONNECT_TOKEN),
+# not by Connect itself, so it is not handled here. See the P4 cutover note in
+# tofu/opconnect/opconnect.tf.
 # ==============================================================================
 
 - name: Create opconnect compose directory
@@ -28,15 +30,35 @@
     mode: '0750'
   tags: ['opconnect', 'deploy']
 
-# The 1password-credentials.json is generated out-of-band by the operator
-# (`op connect server create`, P4.1). Ansible COPIES it from the controller
-# (opconnect_credentials_local) into the compose dir on the VM — NO manual scp,
-# the same way every other role places files. (copy, NOT remote_src: src is on
-# the controller.) The compose file's relative `./1password-credentials.json`
-# mount expects it at this dest.
+# The 1password-credentials.json is read DAY-2 from the 1Password creds item
+# (`opconnect Connect Credentials`, seeded by the opconnect_credentials role) via
+# account-mode `op` (OP_CONNECT_* unset → Connect-independent: this role BUILDS
+# Connect, so it cannot depend on one). The item stores the creds.json b64-encoded
+# in a concealed field; we read it on the controller and decode it into the compose
+# dir on the VM. The compose file's relative `./1password-credentials.json` mount
+# expects it at this dest.
+- name: Read Connect credentials.json from 1Password (account-mode op, Connect-independent)
+  ansible.builtin.command:
+    argv:
+      - env
+      - -u
+      - OP_CONNECT_HOST
+      - -u
+      - OP_CONNECT_TOKEN
+      - op
+      - read
+      - "op://{{ opconnect_creds_vault }}/{{ opconnect_creds_1p_creds_item }}/credentials_json"
+  delegate_to: localhost
+  become: false
+  run_once: true
+  register: _opc_creds_b64
+  changed_when: false
+  no_log: true
+  tags: ['opconnect', 'deploy', 'secrets']
+
 - name: Stage 1Password Connect credentials into the compose directory
   ansible.builtin.copy:
-    src: "{{ opconnect_credentials_local }}"
+    content: "{{ _opc_creds_b64.stdout | b64decode }}"
     dest: "{{ opconnect_compose_dir }}/1password-credentials.json"
     # Owned by the container's opuser (UID 999), NOT root: connect-sync runs as
     # opuser and reads this :ro-mounted file. root:root 0600 -> "permission
@@ -58,10 +80,11 @@
   ansible.builtin.fail:
     msg: >-
       {{ opconnect_compose_dir }}/1password-credentials.json is missing or empty.
-      The controller-side source ({{ opconnect_credentials_local }}) must be the
-      non-empty file emitted by `op connect server create` (P4.1) — the relative
-      ./ bind in docker-compose would otherwise create an empty mount and
-      connect-sync cannot authenticate.
+      The credentials_json field of the 1Password item
+      `{{ opconnect_creds_1p_creds_item }}` (vault {{ opconnect_creds_vault }}) must
+      hold the b64-encoded creds emitted by `op connect server create` (seeded by
+      the opconnect_credentials role) — the relative ./ bind in docker-compose would
+      otherwise create an empty mount and connect-sync cannot authenticate.
   when: not _opconnect_creds_stat.stat.exists or _opconnect_creds_stat.stat.size == 0
   tags: ['opconnect', 'deploy', 'secrets']
 

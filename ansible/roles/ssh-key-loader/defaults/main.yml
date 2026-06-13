@@ -16,3 +16,10 @@ ssh_key_loader_field_name: "private_key"
 # Connect server (e.g. the opconnect bootstrap playbook). Default false = fleet
 # behaviour (Connect path, unchanged).
 op_use_cli: false
+
+# Optional full op:// reference (carries its own ?ssh-format=openssh query) for a
+# native 1Password SSH-Key item. When set (alongside op_use_cli), the loader uses
+# `op read --out-file` to write the key straight to ssh_key_loader_temp_path,
+# bypassing the item/section/field stdout path. Default empty = fleet behaviour
+# unchanged (the fleet uses the item/section/field template instead).
+op_ssh_key_ref: ""

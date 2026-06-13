@@ -24,23 +24,23 @@ opconnect_sync_port: 8081
 # Connect log level (passed through OP_LOG_LEVEL). info|debug|trace.
 opconnect_log_level: "info"
 
-# Path ON THE ANSIBLE CONTROLLER to the 1password-credentials.json (the consume/
-# deploy source for the live VM). Ansible COPIES it to the compose dir on the VM
-# (copy, NOT remote_src). Phase C sources this from the AWS bundle instead of a
-# local path; until then this local path is the fallback.
+# The 1password-credentials.json is read DAY-2 from the 1Password creds item
+# (`opconnect Connect Credentials`) via account-mode `op` (Connect-independent:
+# OP_CONNECT_* unset). The role decodes the b64 `credentials_json` field into the
+# compose dir on the VM. The local controller-side file is RETIRED (Phase C, D11).
 #
 # Division of responsibility (deliberate): the Connect SERVER + TOKEN creation
-# (`op connect server/token create`) is now CODIFIED in the `opconnect_credentials.yml`
+# (`op connect server/token create`) is CODIFIED in the `opconnect_credentials.yml`
 # seed playbook (localhost, account-mode `op`, biometric via the unlocked 1Password
 # desktop app) — NOT a manual ad-hoc step. It still CANNOT be a Service Account or
 # an unattended CI runner (a Service Account gets 403 on token create; CI has no
-# biometric). Ansible owns BOTH: seeding/rotating the off-site copy (seed.yml) and
-# deploying the creds + reading day-2 secrets via Connect.
-#
-# Lift-and-shift note: when IaC moves to GitLab CI, only THIS source path changes
-# (read from the AWS bundle instead of a local file); the copy mechanics are
-# identical. Override with -e opconnect_credentials_local=<path>.
-opconnect_credentials_local: "{{ lookup('env', 'HOME') }}/opconnect-cutover/1password-credentials.json"
+# biometric). Ansible owns BOTH: seeding/rotating the 1P creds item + off-site
+# escrow (the seed role) and deploying the creds + reading day-2 secrets via Connect.
+
+# Shared with the opconnect_credentials (seed) role — KEEP IN SYNC with
+# ansible/roles/opconnect_credentials/defaults/main.yml.
+opconnect_creds_vault: "FusionCloudX"
+opconnect_creds_1p_creds_item: "opconnect Connect Credentials"
 
 # UID/GID of `opuser` inside the official 1password/connect-api|sync images. The
 # credentials file is bind-mounted read-only and read by this non-root user — so
