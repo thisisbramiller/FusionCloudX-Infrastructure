@@ -16,3 +16,11 @@ opconnect_creds_server_name: "opconnect" # `op connect server` name
 opconnect_creds_connect_host: "http://opconnect.fusioncloudx.home:8080"
 opconnect_creds_token_ttl_days: 90 # Connect token lifetime when minting (matches the estate rotation cadence)
 opconnect_creds_rotate_threshold_days: 14 # rotate when token_expires is within this window
+
+# Shared names (Phase C — dedicated key + Direction B). 1Password generates the
+# dedicated SSH-Key item; the seed reads it back and distributes (escrow + SSM +
+# 1P creds item). These three names are referenced by both this seed and the
+# downstream opconnect consumer (ssh-key-loader / opconnect deploy role).
+opconnect_creds_1p_ssh_item: "opconnect Bootstrap SSH Key" # native 1P SSH-Key item (1P generates)
+opconnect_creds_1p_creds_item: "opconnect Connect Credentials" # 1P Secure Note holding creds.json + token
+opconnect_creds_ssm_pubkey_name: "/tmpx/onprem/opconnect/ansible_public_key" # SSM String param: cloud-init pubkey
