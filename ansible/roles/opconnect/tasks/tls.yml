@@ -1,0 +1,133 @@
+---
+# ==============================================================================
+# opconnect native TLS — phase 2 (Direction A, #68). Runs ON opconnect.
+# ==============================================================================
+# Connect is up on loopback HTTP. Read the server cert from opconnect's OWN local
+# Connect REST API (uri-only — no onepassword.connect collection needed on the VM),
+# write it on the box, then flip connect-api to native TLS (OP_TLS_*). The private
+# key is read AND written on the same host (never crosses the wire); the cert is
+# never escrowed to AWS. Requires `opconnect_tls_connect_token` (set by the play
+# from the AWS bundle).
+#
+# Sync-readiness gate FIRST (modeled on the proven P4.3 layered gate, cutover spec
+# 2026-06-06-p4-opconnect-cutover-design.md): /heartbeat (liveness) is NOT enough —
+# the cert item is only retrievable after connect-sync pulls the vault from
+# 1password.com (the deploy role documents sync=TOKEN_NEEDED is EXPECTED at its end).
+# Poll /health until sync LEAVES TOKEN_NEEDED *and* sqlite is ACTIVE, LOUD hard
+# timeout, BEFORE the item read — a wedged/slow sync fails loudly, not an opaque hang.
+
+- name: Wait for connect-sync to prime the vault (/health, not just /heartbeat)
+  ansible.builtin.uri:
+    url: "http://localhost:{{ opconnect_api_port }}/health"
+    headers:
+      Authorization: "Bearer {{ opconnect_tls_connect_token }}"
+    return_content: true
+    status_code: 200
+  register: _sync_health
+  retries: 36 # 36 x 5s = 180s ceiling for the first vault sync
+  delay: 5
+  until:
+    - _sync_health.status == 200
+    - (_sync_health.json.dependencies | selectattr('service', 'equalto', 'sqlite') | map(attribute='status') | first | default('')) == 'ACTIVE'
+    - (_sync_health.json.dependencies | selectattr('service', 'equalto', 'sync') | map(attribute='status') | first | default('')) not in ['TOKEN_NEEDED', '']
+  no_log: true
+
+- name: Find the FusionCloudX vault id (local Connect)
+  ansible.builtin.uri:
+    url: "http://localhost:{{ opconnect_api_port }}/v1/vaults"
+    headers:
+      Authorization: "Bearer {{ opconnect_tls_connect_token }}"
+    return_content: true
+  register: _vaults
+  retries: 30
+  delay: 5
+  until:
+    - _vaults.status == 200
+    - (_vaults.json | selectattr('name', 'equalto', opconnect_creds_vault) | list | length > 0)
+  no_log: true
+
+- name: Resolve vault id
+  ansible.builtin.set_fact:
+    _vault_id: "{{ (_vaults.json | selectattr('name', 'equalto', opconnect_creds_vault) | first).id }}"
+  no_log: true
+
+- name: Find the Intermediate CA Bundle item (retry until synced)
+  ansible.builtin.uri:
+    url: "http://localhost:{{ opconnect_api_port }}/v1/vaults/{{ _vault_id }}/items"
+    headers:
+      Authorization: "Bearer {{ opconnect_tls_connect_token }}"
+    return_content: true
+  register: _items
+  retries: 30
+  delay: 5
+  until:
+    - _items.status == 200
+    - (_items.json | selectattr('title', 'equalto', 'FusionCloudX Intermediate CA Bundle') | list | length > 0)
+  no_log: true
+
+- name: Resolve item id
+  ansible.builtin.set_fact:
+    _item_id: "{{ (_items.json | selectattr('title', 'equalto', 'FusionCloudX Intermediate CA Bundle') | first).id }}"
+  no_log: true
+
+- name: Get the item detail (file content_paths)
+  ansible.builtin.uri:
+    url: "http://localhost:{{ opconnect_api_port }}/v1/vaults/{{ _vault_id }}/items/{{ _item_id }}"
+    headers:
+      Authorization: "Bearer {{ opconnect_tls_connect_token }}"
+    return_content: true
+  register: _item
+  retries: 30
+  delay: 5
+  until:
+    - _item.status == 200
+    - (_item.json.files | default([]) | selectattr('name', 'equalto', 'fullchain.pem') | list | length > 0)
+    - (_item.json.files | default([]) | selectattr('name', 'equalto', 'server-key.pem') | list | length > 0)
+  no_log: true
+
+- name: Ensure the TLS dir exists (0750, UID 999)
+  ansible.builtin.file:
+    path: "{{ opconnect_tls_dir }}"
+    state: directory
+    owner: "{{ opconnect_container_uid }}"
+    group: "{{ opconnect_container_uid }}"
+    mode: '0750'
+
+- name: Download fullchain + server key from local Connect, write 0600 (UID 999)
+  ansible.builtin.uri:
+    url: "http://localhost:{{ opconnect_api_port }}{{ (_item.json.files | selectattr('name', 'equalto', item.fname) | first).content_path }}"
+    headers:
+      Authorization: "Bearer {{ opconnect_tls_connect_token }}"
+    return_content: true
+    dest: "{{ opconnect_tls_dir }}/{{ item.fname }}"
+    mode: '0600'
+    owner: "{{ opconnect_container_uid }}"
+    group: "{{ opconnect_container_uid }}"
+  loop:
+    - { fname: "fullchain.pem" }
+    - { fname: "server-key.pem" }
+  no_log: true
+
+- name: Re-render compose with native TLS enabled
+  ansible.builtin.template:
+    src: docker-compose.yml.j2
+    dest: "{{ opconnect_compose_dir }}/docker-compose.yml"
+    owner: root
+    group: root
+    mode: '0640'
+  vars:
+    opconnect_tls_enabled: true
+  notify: restart opconnect
+
+- name: Apply (restart connect-api on TLS)
+  ansible.builtin.meta: flush_handlers
+
+- name: Verify HTTPS is serving (local loopback liveness)
+  ansible.builtin.uri:
+    url: "https://localhost:{{ opconnect_https_external_port }}/heartbeat"
+    validate_certs: false # loopback liveness only; CR10 validates issuer + SAN against the hostname
+    status_code: 200
+  register: _https_hb
+  retries: 12
+  delay: 5
+  until: _https_hb is succeeded

@@ -21,26 +21,33 @@ opconnect_compose_dir: "/opt/opconnect"
 opconnect_api_port: 8080
 opconnect_sync_port: 8081
 
+# Native Connect TLS (Direction A, #68). Two-phase: deploy on loopback HTTP
+# (opconnect_tls_enabled=false), then tls.yml self-serves the cert on-box and
+# re-renders the compose with opconnect_tls_enabled=true (OP_TLS_* on connect-api).
+opconnect_tls_enabled: false # phase flag — true on the 2nd (TLS) render
+opconnect_https_external_port: 443 # host port published for HTTPS (container OP_HTTPS_PORT=8443)
+opconnect_tls_dir: "{{ opconnect_compose_dir }}/tls" # holds fullchain.pem + server-key.pem (0600, UID 999)
+
 # Connect log level (passed through OP_LOG_LEVEL). info|debug|trace.
 opconnect_log_level: "info"
 
-# The 1password-credentials.json is read DAY-2 from the 1Password creds item
-# (`opconnect Connect Credentials`) via account-mode `op` (Connect-independent:
-# OP_CONNECT_* unset). The role decodes the b64 `credentials_json` field into the
-# compose dir on the VM. The local controller-side file is RETIRED (Phase C, D11).
+# The 1password-credentials.json is read from the AWS bundle (Direction A, #68) via
+# amazon.aws.aws_secret on the controller (SSO+FIDO; Connect-independent). The role
+# decodes the b64 `connect_credentials_json` field into the compose dir on the VM.
 #
 # Division of responsibility (deliberate): the Connect SERVER + TOKEN creation
 # (`op connect server/token create`) is CODIFIED in the `opconnect_credentials.yml`
 # seed playbook (localhost, account-mode `op`, biometric via the unlocked 1Password
 # desktop app) — NOT a manual ad-hoc step. It still CANNOT be a Service Account or
 # an unattended CI runner (a Service Account gets 403 on token create; CI has no
-# biometric). Ansible owns BOTH: seeding/rotating the 1P creds item + off-site
-# escrow (the seed role) and deploying the creds + reading day-2 secrets via Connect.
+# biometric). Ansible owns BOTH: seeding/rotating the AWS bundle (the seed role) and
+# deploying the creds + reading day-2 secrets via Connect.
 
 # Shared with the opconnect_credentials (seed) role — KEEP IN SYNC with
-# ansible/roles/opconnect_credentials/defaults/main.yml.
+# ansible/roles/opconnect_credentials/defaults/main.yml. (Direction A: creds.json
+# comes from the AWS bundle, not a 1P item — the 1P creds-item name is gone.)
+# opconnect_creds_vault is still used by tls.yml to resolve the cert vault by name.
 opconnect_creds_vault: "FusionCloudX"
-opconnect_creds_1p_creds_item: "opconnect Connect Credentials"
 
 # UID/GID of `opuser` inside the official 1password/connect-api|sync images. The
 # credentials file is bind-mounted read-only and read by this non-root user — so

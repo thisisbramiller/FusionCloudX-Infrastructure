@@ -16,20 +16,34 @@ services:
     container_name: connect-api
     restart: always
     ports:
-      - "{{ opconnect_api_port }}:8080"
+      # HTTP is bound to LOOPBACK only — on-box (tls.yml self-serve) + health, never
+      # LAN-reachable (Direction A: opconnect must not serve fleet secrets in cleartext).
+      - "127.0.0.1:{{ opconnect_api_port }}:8080"
+{% if opconnect_tls_enabled %}
+      # Native Connect TLS published to the fleet (container OP_HTTPS_PORT=8443).
+      - "{{ opconnect_https_external_port }}:8443"
+{% endif %}
     environment:
       # OP_LOG_LEVEL is an operability extension; the official compose shape has no env vars.
       OP_LOG_LEVEL: "{{ opconnect_log_level }}"
+{% if opconnect_tls_enabled %}
+      OP_HTTPS_PORT: "8443"
+      OP_TLS_CERT_FILE: "/home/opuser/.op/tls/fullchain.pem"
+      OP_TLS_KEY_FILE: "/home/opuser/.op/tls/server-key.pem"
+{% endif %}
     volumes:
       - "./1password-credentials.json:/home/opuser/.op/1password-credentials.json:ro"
       - "data:/home/opuser/.op/data"
+{% if opconnect_tls_enabled %}
+      - "./tls:/home/opuser/.op/tls:ro"
+{% endif %}
 
   connect-sync:
     image: {{ opconnect_connect_sync_image }}:{{ opconnect_connect_version }}
     container_name: connect-sync
     restart: always
     ports:
-      - "{{ opconnect_sync_port }}:8080"
+      - "127.0.0.1:{{ opconnect_sync_port }}:8080" # internal sync service — loopback only
     environment:
       # OP_LOG_LEVEL is an operability extension; the official compose shape has no env vars.
       OP_LOG_LEVEL: "{{ opconnect_log_level }}"

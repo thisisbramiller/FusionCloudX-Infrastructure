@@ -42,5 +42,6 @@ variable "opconnect_memory_mb" {
 #   - ansible_pubkey: opconnect no longer owns the keypair; the ansible PUBLIC key
 #     comes from SSM (ssh-keys.tf -> local.ansible_ssh_public_key), published by the seed.
 #   - onepassword_vault_id / ansible_ssh_key_item_title: only the retired Option-D
-#     tls_private_key write-back used them. The dedicated key is now a 1Password
-#     SSH-Key item (read by Ansible); no 1Password write from this state.
+#     tls_private_key write-back used them. The dedicated key is now GENERATED LOCALLY
+#     by the seed (Direction A): the private half lives in the AWS bundle (read by
+#     Ansible), the public half in SSM (read here). 1Password holds nothing for opconnect.
