@@ -1,3 +1,8 @@
+> ⚠️ **SUPERSEDED — HISTORICAL PLAN, DO NOT FOLLOW.** This op-CLI write-back approach (Direction B / "Option
+> D" — `tls_private_key` in opconnect state, `null_resource`, `op-write-ssh-key.sh`) was superseded
+> 2026-06-13/14 by **Direction A**. As-built: `docs/superpowers/plans/2026-06-13-onprem-phase-c-directionA.md`
+> (PR #59 merged fc1c43d) + runbook `docs/runbooks/opconnect-credentials.md`.
+
 # opconnect Connect-Independence via op-CLI Write-Back — Implementation Plan
 
 **Goal:** Close the regression `d6dd2af` introduced — make `tofu/opconnect` apply with ZERO live-Connect dependency again — using option D (op-CLI write-back), the minimal-blast-radius fix. Full best-practice architecture is deferred to task #68 (`docs/enhance-harden-later.md`).

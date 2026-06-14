@@ -7,11 +7,14 @@
 # (ansible_host/ansible_group authored by the opconnect state) the SAME IaC way
 # the fleet is resolved — no hardcoded IP.
 #
-# Pass it EXPLICITLY: `ansible-playbook -i opconnect.inventory.yml playbooks/opconnect.yml`.
+# Pass it EXPLICITLY: `env -u AWS_PROFILE ansible-playbook -i opconnect.inventory.yml playbooks/opconnect.yml`.
 # It is intentionally NOT under ./inventory/ (the ansible.cfg dir-inventory) so
 # that ordinary fleet runs do NOT load this S3-backed source and thus do not
-# require AWS credentials. Reading this inventory DOES require AWS creds
-# (AWS_PROFILE=fcx-sso) since the opconnect state is the S3 + SSE-KMS backend.
+# require AWS credentials. Reading this inventory DOES require a live fcx-sso SSO
+# session (the opconnect state is the S3 + SSE-KMS backend), but NOT an
+# AWS_PROFILE env var: the cloud.terraform plugin shells out to tofu, which
+# self-authenticates via the in-config `profile = "fcx-sso"` on its backend. Run
+# with `env -u AWS_PROFILE` so a stray env var can't override that.
 #
 # project_path is resolved relative to the CWD ansible is run from (ansible/),
 # matching inventory/terraform.yml's ../terraform convention.

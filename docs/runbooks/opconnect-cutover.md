@@ -1,3 +1,10 @@
+> ⚠️ **HISTORICAL — COMPLETED P4 CUTOVER.** This documents the one-time migration from the snowflake 1Password
+> Connect (VM 100 @ 192.168.40.44) to the new opconnect VM 1101, executed during P4 (merged). It is NOT the
+> current architecture: **Phase C Direction A** (PR #59 merged fc1c43d, 2026-06-14) re-based opconnect on the
+> AWS Secrets Manager bundle + native Connect TLS. For current ops use `docs/runbooks/opconnect-credentials.md`
+> (seed/rotate/DR) and `docs/runbooks/opconnect-token-rotation.md` (fleet operational token). The P4.x phases,
+> temp-subdomain, OP_CONNECT_HOST repoints, and VM-100 retirement below are historical.
+
 # opconnect Cutover Runbook — P4.0 – P4.6
 
 ## Purpose

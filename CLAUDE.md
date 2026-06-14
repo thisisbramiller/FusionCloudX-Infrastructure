@@ -71,14 +71,14 @@ Config lives in `tofu/`, split into three independently-applied root states plus
 ```
 tofu/
 ├── network/      # State 1: networking primitives consumed by everything downstream
-├── opconnect/    # State 2: 1Password Connect items + secrets surface
+├── opconnect/    # State 2: the VM that RUNS 1Password Connect (the secrets root)
 ├── compute/      # State 3: VMs, LXC, cloud-init, SSH keys, Ansible inventory, outputs
 └── modules/      # Shared reusable modules consumed by the states above
 ```
 
 **`tofu/network/`** — networking primitives (read by `opconnect` and `compute` via remote state).
 
-**`tofu/opconnect/`** — all 1Password items (SSH key, PostgreSQL, GitLab, Tandoor, Immich credentials) and the secrets surface.
+**`tofu/opconnect/`** — State 2: the VM that runs 1Password Connect (the secrets root). It provisions VM 1101 + cloud-init + DNS and reads ONLY the bootstrap Ansible **public** key from SSM (`data.aws_ssm_parameter`). It holds NO 1Password items and intentionally has NO `onepassword` provider.
 
 **`tofu/compute/`** — the bulk of the infrastructure, composed from `modules/`:
 
@@ -93,7 +93,7 @@ tofu/
 | qemu VMs | VMs via `for_each` from `vm_configs`; 10 clone retries; per-VM datastore support |
 | lxc debian template | Downloads Debian 12 LXC template |
 | lxc postgresql | PostgreSQL LXC container definition |
-| ssh keys | Ansible SSH key generation (`tls_private_key`) |
+| ssh keys | Fleet Ansible SSH key **read** from 1Password via Connect (`ssh-keys.tf` is a `data` source, not a `tls_private_key` resource) |
 | ansible inventory | Dynamic inventory via OpenTofu Ansible provider |
 | outputs | Infrastructure summary, URLs, 1Password item IDs |
 
@@ -303,15 +303,27 @@ Main branch: `main`
 
 ## SSH Key Management
 
-Ansible SSH keys are managed through 1Password Connect for automated, secure access:
+There are two distinct SSH key paths.
 
-**Architecture** _(content accuracy for IDs/authorship tracked separately)_:
-1. **OpenTofu** generates ED25519 SSH key pair via `tls_private_key`
-2. **OpenTofu** stores key in 1Password as "Infrastructure Ansible SSH Key" (secure_note)
+### PATH A — Fleet key (1Password Connect)
+
+The fleet Ansible key lives in 1Password and is **read** via Connect — OpenTofu never generates it. `compute/ssh-keys.tf` is a `data` source, never a `tls_private_key` resource.
+
+1. The fleet ED25519 key is stored in 1Password as "Infrastructure Ansible SSH Key"
+2. **OpenTofu** (`compute/ssh-keys.tf`) reads the public key from 1Password via Connect (a `data` source) to seed cloud-init `authorized_keys`
 3. **Ansible** cleans any leftover temp key from previous runs (clean-before-load)
-4. **Ansible** retrieves fresh key from 1Password Connect via `ssh-key-loader` role
+4. **Ansible** retrieves the key from 1Password Connect via the `ssh-key-loader` role
 5. **Ansible** writes key to temp file (`/tmp/.ansible_ssh_key`) with 0600 permissions
 6. **Ansible** cleans up temp file after playbook completion
+
+### PATH B — opconnect bootstrap key (Direction A)
+
+The opconnect bootstrap key is a **dedicated** key, generated **locally** by the seed playbook (`ansible/playbooks/opconnect_credentials.yml`) — OpenTofu does NOT generate it and stores no `tls_private_key` in state.
+
+1. The **seed** (`opconnect_credentials.yml`) generates a dedicated Ed25519 key locally
+2. The **private** key is stored in the AWS Secrets Manager bootstrap bundle
+3. The **public** key is published to SSM (`/tmpx/onprem/opconnect/ansible_public_key`)
+4. **OpenTofu** (`tofu/opconnect/`) reads ONLY the public key from SSM via `data.aws_ssm_parameter` — no `tls_private_key` resource, no private key in state
 
 **Clean-Before-Load Pattern**:
 Similar to Jenkins `deleteDir()` at pipeline start, the `ssh-key-loader` role removes any existing temp key before loading a fresh one. This ensures failed runs don't leave stale keys and the next run always starts with a clean workspace.

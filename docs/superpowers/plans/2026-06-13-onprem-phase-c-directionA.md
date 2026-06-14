@@ -1,5 +1,7 @@
 # onprem opconnect Phase C — Direction A (AWS-anchored, op-CLI-free consumer, native Connect TLS) Implementation Plan
 
+> STATUS: EXECUTED + MERGED — PR #59 merged to main (fc1c43d, 2026-06-14). Direction A is live; the CREATE (clean-room first-seed) and ROTATE paths were validated end-to-end twice (2026-06-13/14); tofu plan no-op on onprem/opconnect AND aws-foundation/15 after seed and after rotate. The unchecked - [ ] steps below are the original plan, retained as the execution record.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: superpowers:subagent-driven-development (or executing-plans). Steps use `- [ ]`. Every `tofu apply` / seed run / secret write / opconnect rebuild touches LIVE AWS or the secrets root — each is a **STOP-and-confirm with Branden** (CR9/CR10 are hard gates). **Never** run the seed at `-v`/`-vvv` (`no_log` bypass). **Never** print a secret value — only fingerprints / hashes / public keys. Shred temp files after secret handling. No `Co-Authored-By: Claude` trailer on commits (Branden's personal repo).
 
 **Goal:** Complete the #68 opconnect consumer in **Direction A** — opconnect bootstraps entirely from the **AWS bundle** (dedicated SSH private key + `credentials.json` + Connect token via `amazon.aws.aws_secret`), the cloud-init **public** key from **SSM**, its Connect API served over **TLS using 1Password Connect's native TLS** (cert self-served on-box, no nginx), and **zero `op`-CLI / 1Password-account-mode in the consumer**. The 4 fleet VMs (1P-via-Connect, unchanged) are untouched.
@@ -22,7 +24,7 @@
 - `certificates` role: PATH A (Connect, fleet) + PATH B (`op`, opconnect) gated by `op_use_cli` (`defaults/main.yml:28`). opconnect.yml runs it PRE-deploy. `nginx.yml` only drops an SSL **snippet** (no `server{}`/`listen 443`/`proxy_pass`); nothing installs nginx on opconnect. → remove PATH B + `op_use_cli` (fleet keeps PATH A); **opconnect stops using the certificates role entirely** (native Connect TLS instead).
 - AWS layer `aws-foundation/15-opconnect-credentials`: bundle already holds creds.json+token+keypair; tofu reads only the SSM pubkey. **No aws-foundation changes.**
 - `tofu/opconnect/ssh-keys.tf`: reads the SSM pubkey (D10, committed). `variables.tf` trailing comment still says the key "is now a 1Password SSH-Key item" (stale — fix in CR3).
-- **Inventory reality (grounded):** `ansible.cfg` sets `inventory = ./inventory/`; group_vars live at `ansible/inventory/group_vars/all.yml` (a FILE). The seed playbook runs `-i 'localhost,'`; the opconnect consumer runs `-i opconnect.inventory.yml` (a separate `cloud.terraform` dynamic inventory, S3-backed, needs `AWS_PROFILE=fcx-sso`). **Neither runner loads `inventory/group_vars/`** → the shared bundle contract must come via `vars_files`, NOT group_vars.
+- **Inventory reality (grounded):** `ansible.cfg` sets `inventory = ./inventory/`; group_vars live at `ansible/inventory/group_vars/all.yml` (a FILE). The seed playbook runs `-i 'localhost,'`; the opconnect consumer runs with TWO inventories (`-i inventory-bootstrap-localhost.yml -i opconnect.inventory.yml`) and NO `AWS_PROFILE` env — the cloud.terraform inventory + the tofu backend self-authenticate via the in-config `profile=fcx-sso` (bootstrap-localhost scopes the venv python to localhost; opconnect.inventory.yml is the `cloud.terraform` dynamic inventory, S3-backed). **Neither runner loads `inventory/group_vars/`** → the shared bundle contract must come via `vars_files`, NOT group_vars.
 
 **Bundle JSON fields** (written by the seed): `connect_credentials_json` (b64), `connect_token`, `connect_host`, `ansible_public_key`, `ansible_private_key`, `token_expires`, `created`, `notes`.
 
@@ -142,7 +144,7 @@ opconnect_creds_sso_profile: "{{ opconnect_bundle_sso_profile }}"
 
 ## CR3: tofu/opconnect — SSM pubkey (confirm) + fix stale comment
 **Files:** `tofu/opconnect/ssh-keys.tf` (confirm only), `tofu/opconnect/variables.tf` (one comment edit)
-- [ ] Confirm `ssh-keys.tf` reads `/tmpx/onprem/opconnect/ansible_public_key` via `data "aws_ssm_parameter"`; `tofu -chdir=tofu/opconnect validate` clean (`TF_CLI_CONFIG_FILE="$PWD/.tofurc" AWS_PROFILE=fcx-sso`); no `onepassword` provider in `providers.tf`.
+- [ ] Confirm `ssh-keys.tf` reads `/tmpx/onprem/opconnect/ansible_public_key` via `data "aws_ssm_parameter"`; `tofu -chdir=tofu/opconnect validate` clean (`TF_CLI_CONFIG_FILE="$PWD/.tofurc"`; tofu self-authenticates via the in-config `profile=fcx-sso`); no `onepassword` provider in `providers.tf`.
 - [ ] Edit the trailing comment in `variables.tf` (the block ~line 41-47 that says the dedicated key "is now a 1Password SSH-Key item") to Direction A: the dedicated key is **generated locally by the seed**, the **private** half lives in the AWS bundle, the **public** half in SSM (read here); 1Password holds nothing for opconnect.
 - [ ] Also fix the stale Direction-B comment in `ssh-keys.tf` (~line 8, "private key + creds read by ANSIBLE from 1Password (Direction B)") → Direction A: Ansible reads the private key + creds from the **AWS bundle** (`amazon.aws.aws_secret`); tofu reads only the non-secret SSM public key.
 - [ ] `tofu -chdir=tofu/opconnect fmt`. Commit.
@@ -470,7 +472,7 @@ Must be inserted **between** the Deploy play and the Cleanup play (the TLS read 
 
 ## CR9 (GATED — first Direction-A seed: generates the key locally, writes the bundle + SSM)
 - [ ] Preconditions: 1P desktop **unlocked** (for `op connect server/token create`); `aws sso login --sso-session fcx-sso`.
-- [ ] **GATED** (NO `-v`; use the documented inline inventory): `cd ansible && OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES no_proxy='*' .venv/bin/ansible-playbook playbooks/opconnect_credentials.yml -i 'localhost,' -e "ansible_python_interpreter=$PWD/.venv/bin/python"`.
+- [ ] **GATED** (NO `-v`; use the documented inline inventory): `cd ansible && env -u AWS_PROFILE OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES no_proxy='*' .venv/bin/ansible-playbook playbooks/opconnect_credentials.yml -i 'localhost,' -e "ansible_python_interpreter=$PWD/.venv/bin/python"`. **NOTE:** a first-seed when a live Connect server already exists requires `-e recreate_connect_server=true` (deletes + re-mints the server; `credentials.json` is emitted ONLY at server create). A token-only rotation uses `-e force=true` instead (key/server/creds preserved).
 - [ ] **Verify (no secret values printed):**
   - Bundle keys: `aws secretsmanager get-secret-value --secret-id tmpx/onprem/opconnect-credentials --region us-east-2 --query SecretString --output text | jq 'keys'` (AWS_PROFILE=fcx-sso) → includes `ansible_private_key`, `ansible_public_key`, `connect_credentials_json`, `connect_token`, `token_expires`.
   - SSM == bundle pubkey (compare strings, no key bytes echoed beyond the pubkey).
@@ -481,7 +483,7 @@ Must be inserted **between** the Deploy play and the Cleanup play (the TLS read 
 ## CR10 (GATED — opconnect-only rebuild + verify, incl. native TLS)
 - [ ] `tofu -chdir=tofu/opconnect plan` — `data.aws_ssm_parameter.ansible_pubkey` read; cloud-init authorizes the **dedicated** pubkey; any legacy `tls_private_key`/`null_resource` destroyed (#8). Confirm dedicated key, not fleet.
 - [ ] **GATED:** lift `prevent_destroy` on VM 1101 → `tofu apply` → restore `prevent_destroy`.
-- [ ] **GATED (use the opconnect inventory + SSO profile — else `hosts: opconnect` plays match 0 hosts and silently skip):** `cd ansible && AWS_PROFILE=fcx-sso .venv/bin/ansible-playbook playbooks/opconnect.yml -i opconnect.inventory.yml -e "ansible_python_interpreter=$PWD/.venv/bin/python"`. Before claiming the gate, confirm the play recap shows a non-zero host count for the deploy + TLS plays.
+- [ ] **GATED (use the TWO-inventory form — else `hosts: opconnect` plays match 0 hosts and silently skip):** `cd ansible && env -u AWS_PROFILE OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES no_proxy='*' .venv/bin/ansible-playbook -i inventory-bootstrap-localhost.yml -i opconnect.inventory.yml playbooks/opconnect.yml`. Before claiming the gate, confirm the play recap shows a non-zero host count for the deploy + TLS plays.
 - [ ] **Verify:**
   - Ansible authenticated with the **dedicated** key (from the AWS bundle); fleet pubkey **absent** from opconnect `authorized_keys` (grep → 0).
   - **Native TLS up:** `openssl s_client -connect opconnect.fusioncloudx.home:{{ opconnect_https_external_port }} </dev/null 2>/dev/null | openssl x509 -noout -issuer -subject -ext subjectAltName` → FusionCloudX intermediate issuer **and** SAN covers `opconnect.fusioncloudx.home` (**KEY RISK** — if the shared server cert's SAN omits the host, reissue/mint before claiming the gate). Connect serves a test secret over `https://`.

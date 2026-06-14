@@ -1,3 +1,10 @@
+> ⚠️ **SUPERSEDED — HISTORICAL.** This Wave 1 "recovery-anchor" plan is not the as-built design. It was
+> superseded 2026-06-13/14 by **Direction A** (dedicated key, AWS-bundle bootstrap, native Connect TLS). The
+> ephemeral pubkey read proposed here was rejected (an ephemeral value cannot feed persisted cloud-init) and
+> replaced by an SSM `aws_ssm_parameter` data source. As-built:
+> `docs/superpowers/plans/2026-06-13-onprem-phase-c-directionA.md` (PR #59 merged fc1c43d) +
+> runbook `docs/runbooks/opconnect-credentials.md`.
+
 # onprem opconnect off-site credentials — Implementation Plan (Wave 1)
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans (or subagent-driven-development) to implement task-by-task. Steps use checkbox (`- [ ]`) syntax.

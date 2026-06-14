@@ -100,15 +100,19 @@ The off-site copy of opconnect's credentials — gated by AWS SSO+FIDO. JSON fie
 An encrypted export of the bundle (`age`/`gpg`), stored offline (encrypted USB / fireproof), openable with FIDO/passphrase alone — for the AWS-unreachable cold-start. Runbook item (closes #60).
 
 ### E. SEED / ROTATE — the Ansible playbook (D8)
-- `ansible/playbooks/opconnect_credentials.yml` → `import_role: name=opconnect, tasks_from=seed`. **NOT** imported by `site.yml`.
+- `ansible/playbooks/opconnect_credentials.yml` → `import_role: name=opconnect_credentials`. **NOT** imported by `site.yml`.
 - `hosts: localhost, connection: local, gather_facts: false` (biometric `op` + AWS FIDO live on the operator workstation; smaller fact-leak surface).
 - **Idempotent + expiry-aware:** read the current secret (`amazon.aws.aws_secret`, `on_missing: skip`); compute `need_seed` (secret absent → first-time `op connect server create`, which is **not** idempotent → guarded) and `need_rotate` (`token_expires` within `rotate_threshold_days`, default 14, or `force`). Otherwise no-op ("valid, expires X, nothing to do").
+- **`recreate_connect_server` mode:** a **first-seed when a live Connect server already exists** requires `-e recreate_connect_server=true` — it **deletes + re-mints** the Connect server (so `credentials.json` is emitted again, since `credentials.json` is produced **only at server create** time). Without it, a first-seed against an existing server would mint a token but never re-emit `credentials.json`. (Distinct from plain rotate, which preserves the server.)
 - Rotation **re-mints only the token** (preserves the server identity + the ansible keypair → no fleet-wide bootstrap-key churn).
 - `op` mint task: `command`, `no_log: true`, `environment: { OP_CONNECT_HOST: "", OP_CONNECT_TOKEN: "" }` (forces account mode — Connect env vars otherwise lock `op` into Connect API mode, which **cannot** create servers/tokens; a Service Account gets 403). Biometric approval surfaces via the unlocked desktop app.
 - Write: `amazon.aws.sts_assume_role` → temp creds → `community.aws.secretsmanager_secret` (`json_secret`, `kms_key_id`, `no_log`; idempotent — unchanged value = no version churn). *(The write module is `community.aws.secretsmanager_secret`; the read is the `amazon.aws.aws_secret`/`secretsmanager_secret` lookup. No Ansible collection mints Connect tokens — `op connect ... create` is wrapped in `ansible.builtin.command`.)*
 - **Never run at `-vvv`** (documented `no_log` bypass + CVE lineage) — runbook rule.
 
 ## Issue #8 handling (secrets out of state)
+
+> **RESOLVED (as-built, verified 2026-06-13/14).** opconnect's **dedicated** key is served from the **AWS bundle only** (read by Ansible via `amazon.aws.aws_secret`), with the **public half in SSM** (`/tmpx/onprem/opconnect/ansible_public_key`) — tofu reads **only the pubkey** (`data "aws_ssm_parameter"`). The **fleet** key stays in **1Password** (unchanged). There is **no `tls_private_key` / `null_resource`** in `tofu/opconnect` state, and the SSH private key no longer persists in tofu state — verified twice.
+
 - The bundle is read by Ansible (`amazon.aws.aws_secret`) for all secret fields → never in either repo's tofu state. tofu reads only the public key.
 - The Ansible SSH key becomes **Connect-served / bundle-served** post-bootstrap so opconnect no longer needs `tls_private_key` in state; generated DB passwords migrate to `password_wo` / Connect-served. (#8 closes as a consequence; track residual in plan.)
 
@@ -146,13 +150,14 @@ An encrypted export of the bundle (`age`/`gpg`), stored offline (encrypted USB /
 - `tofu validate` + `plan` both layers (live AWS, `fcx-sso`).
 - Seed idempotency: run `opconnect_credentials.yml` twice — second run reports "valid, nothing to do" (changed=false on the write).
 - Rotation: with `force=true` (or a near-expiry token), confirm a new token is minted, `token_expires` advances, the server identity + keypair are unchanged.
+- `recreate_connect_server` mode: a first-seed against an **existing** live Connect server with `-e recreate_connect_server=true` deletes + re-mints the server, re-emits `credentials.json`, and the consumer brings Connect back to a live API.
 - DR drill: from a clean opconnect (destroy + rebuild), bootstrap **only** via the AWS bundle + SSO/FIDO (no Mac `op` account mode); confirm Connect serves day-2.
 - Negative: a principal WITHOUT the SSO/OAAR path cannot `kms:Decrypt` / `get-secret-value`.
 - Grep both states post-apply: zero plaintext key/password material.
 
 ## Risks
 - **AWS-unreachable cold-start** → mitigated by the offline 3-2-1 copy (D/§D).
-- **Ephemeral-resource maturity** (OpenTofu) for the public-key read → validate in plan; fallback is a non-secret `aws_ssm_parameter` for the public key.
+- **Ephemeral-resource maturity** (OpenTofu) for the public-key read → **RESOLVED.** The ephemeral pubkey read is structurally impossible (an ephemeral value cannot flow into a persisted attribute), so the `data "aws_ssm_parameter"` source is the committed path (per D10), not a fallback.
 - **`no_log` edge cases** (verbose runs, CVE lineage) → runbook rule: never `-vvv` the seed play.
 - **Account-placement churn** if shared-services → dedicated-recovery-account later → minimize via clean module boundaries.
 
@@ -188,6 +193,8 @@ Phase A (CMK + secret) and Phase B (the Ansible seed) shipped + validated. Imple
 ---
 
 ## Revision 2 — Phase C RE-decided to Direction A (2026-06-13, late) — SUPERSEDES the Direction-B revision above
+
+**Status: AS-BUILT / VALIDATED 2026-06-13/14** — Direction A implemented + end-to-end validated (full CREATE clean-room first-seed + ROTATE, run twice; live Connect API 200; tofu no-op on both layers after seed and rotate; a `kms_key_id` alias-vs-ARN drift was caught and fixed on the 2nd pass). PR #59 merged to main (`fc1c43d`).
 
 The D11 / "Direction B" decision above was a **drift** from this spec's original intent and is **withdrawn**. The original Goal, Component B, the Issue-#8 handling, and the Acceptance criteria all specify **Direction A**: opconnect bootstraps from the AWS bundle (`credentials.json` + token + private key via `amazon.aws.aws_secret`), Connect-free, with **no Mac / `op`-CLI dependency**. A voice review (2026-06-13) re-grounded Phase C on that original intent plus a fresh unbiased multi-lens brainstorm. **D1–D10 stand. D11 is replaced by D11′–D14 below.**
 
