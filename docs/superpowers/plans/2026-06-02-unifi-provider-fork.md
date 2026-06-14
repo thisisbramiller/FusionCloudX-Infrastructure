@@ -16,7 +16,7 @@
 - Synthetic source host: **`tf.fusioncloudx.home`** → full source `tf.fusioncloudx.home/ubiquiti-community/unifi`
 - Synthetic version: **`0.42.0-fcx1`** (sorts above `0.41.25`, below a future real `0.42.0`; bump suffix `fcx2`… per rebuild)
 - Mirror root: `~/.terraform.d/plugins` → binary at `~/.terraform.d/plugins/tf.fusioncloudx.home/ubiquiti-community/unifi/0.42.0-fcx1/<os_arch>/terraform-provider-unifi_v0.42.0-fcx1`
-- Infra repo: `/Users/fcx/Developer/Personal/repos/FusionCloudX Infrastructure`
+- Infra repo: `/Users/fcx/Developer/Personal/repos/FusionCloudX-Infrastructure`
 
 ---
 
@@ -147,7 +147,7 @@ Expected: branch pushed; copy the SHA into the build script (Task 4) + `PATCHED-
 
 ## Task 4: Rewrite `build-unifi-provider.sh` [BUILD]
 
-**Files:** Modify `/Users/fcx/Developer/Personal/repos/FusionCloudX Infrastructure/scripts/build-unifi-provider.sh` (full rewrite)
+**Files:** Modify `/Users/fcx/Developer/Personal/repos/FusionCloudX-Infrastructure/scripts/build-unifi-provider.sh` (full rewrite)
 
 - [ ] **Step 1: Replace the script**
 
@@ -206,7 +206,7 @@ EOF
 - [ ] **Step 2: Offline-validate**
 
 ```bash
-cd "/Users/fcx/Developer/Personal/repos/FusionCloudX Infrastructure"
+cd "/Users/fcx/Developer/Personal/repos/FusionCloudX-Infrastructure"
 bash -n scripts/build-unifi-provider.sh && echo SYNTAX_OK
 command -v shellcheck >/dev/null && shellcheck scripts/build-unifi-provider.sh || echo "shellcheck skipped"
 ```
@@ -249,7 +249,7 @@ with:
 - [ ] **Step 3: Syntax-check + commit**
 
 ```bash
-cd "/Users/fcx/Developer/Personal/repos/FusionCloudX Infrastructure"
+cd "/Users/fcx/Developer/Personal/repos/FusionCloudX-Infrastructure"
 terraform -chdir=terraform fmt -check provider.tf || terraform -chdir=terraform fmt provider.tf
 git add terraform/provider.tf terraform/PATCHED-PROVIDER.md
 git commit -m "refactor(unifi): consume patched provider via filesystem mirror (synthetic host/version)"
@@ -280,7 +280,7 @@ provider_installation {
 ```bash
 export GH_TOKEN="${GH_TOKEN:-$GITHUB_PERSONAL_ACCESS_TOKEN}"
 export UNIFI_FORK_SHA="<patches tip SHA from Task 3 Step 2>"
-"/Users/fcx/Developer/Personal/repos/FusionCloudX Infrastructure/scripts/build-unifi-provider.sh"
+"/Users/fcx/Developer/Personal/repos/FusionCloudX-Infrastructure/scripts/build-unifi-provider.sh"
 ls -la ~/.terraform.d/plugins/tf.fusioncloudx.home/ubiquiti-community/unifi/0.42.0-fcx1/*/
 ```
 Expected: `terraform-provider-unifi_v0.42.0-fcx1` present under the `darwin_arm64` dir.
@@ -288,7 +288,7 @@ Expected: `terraform-provider-unifi_v0.42.0-fcx1` present under the `darwin_arm6
 - [ ] **Step 3: Lock checksums (run via login shell for UNIFI_API_KEY etc.)**
 
 ```bash
-cd "/Users/fcx/Developer/Personal/repos/FusionCloudX Infrastructure/terraform"
+cd "/Users/fcx/Developer/Personal/repos/FusionCloudX-Infrastructure/terraform"
 zsh -ilc 'terraform providers lock -fs-mirror="$HOME/.terraform.d/plugins" -platform=darwin_arm64'
 grep -A4 'tf.fusioncloudx.home/ubiquiti-community/unifi' .terraform.lock.hcl
 ```
@@ -301,7 +301,7 @@ Expected: a lock block for `tf.fusioncloudx.home/ubiquiti-community/unifi` with 
 - [ ] **Step 1: init + plan with no dev_overrides**
 
 ```bash
-cd "/Users/fcx/Developer/Personal/repos/FusionCloudX Infrastructure/terraform"
+cd "/Users/fcx/Developer/Personal/repos/FusionCloudX-Infrastructure/terraform"
 zsh -ilc 'terraform init -input=false 2>&1 | tail -15'
 zsh -ilc 'terraform plan -input=false -no-color > /tmp/fork_verify.out 2>&1; echo "PLAN_EXIT=$?"'
 echo "--- dev_overrides warning gone? (want 0) ---"; grep -c 'dev_overrides\|development overrides' /tmp/fork_verify.out
@@ -314,8 +314,8 @@ Expected: `init` succeeds installing `unifi` from the mirror with the locked che
 
 ```bash
 export UNIFI_FORK_SHA="<same SHA>"
-"/Users/fcx/Developer/Personal/repos/FusionCloudX Infrastructure/scripts/build-unifi-provider.sh"
-cd "/Users/fcx/Developer/Personal/repos/FusionCloudX Infrastructure/terraform"
+"/Users/fcx/Developer/Personal/repos/FusionCloudX-Infrastructure/scripts/build-unifi-provider.sh"
+cd "/Users/fcx/Developer/Personal/repos/FusionCloudX-Infrastructure/terraform"
 zsh -ilc 'terraform init -input=false 2>&1 | grep -iE "unifi|lock|checksum|error" | tail -5'
 ```
 Expected: re-init succeeds against the unchanged lockfile (the rebuilt binary matches the `h1:`), no checksum mismatch.
@@ -327,7 +327,7 @@ Expected: re-init succeeds against the unchanged lockfile (the rebuilt binary ma
 - [ ] **Step 1: Commit the lockfile change**
 
 ```bash
-cd "/Users/fcx/Developer/Personal/repos/FusionCloudX Infrastructure"
+cd "/Users/fcx/Developer/Personal/repos/FusionCloudX-Infrastructure"
 git add terraform/.terraform.lock.hcl
 git commit -m "chore(unifi): lock patched provider (h1:) from filesystem mirror"
 ```

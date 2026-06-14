@@ -11,14 +11,15 @@
 # Clean-before-load: Any leftover SSH key from a previous failed run is
 # removed before loading a fresh key (similar to 'mvn clean install').
 #
-# Requirements:
-#   - TF_VAR_onepassword_vault_id environment variable set (BOTH paths)
-#   PATH A — Connect (op_use_cli: false, fleet default):
-#     - OP_CONNECT_HOST + OP_CONNECT_TOKEN environment variables set
-#     - onepassword.connect collection installed
-#   PATH B — op CLI (op_use_cli: true, Connect-less opconnect rebuild):
-#     - `op` CLI on the controller, authed via `op signin` / 1Password desktop
-#       (or OP_SERVICE_ACCOUNT_TOKEN). Connect vars NOT required.
+# Source is selected by `ssh_key_source` (default 'connect') — NOT a global boolean:
+#   PATH A — Connect (ssh_key_source: connect, FLEET default):
+#     - OP_CONNECT_HOST + OP_CONNECT_TOKEN env vars set; onepassword.connect installed
+#     - TF_VAR_onepassword_vault_id env var set (the fleet item lives in that vault)
+#   PATH B — AWS bundle (ssh_key_source: aws_bundle, opconnect bootstrap):
+#     - reads ansible_private_key from the AWS Secrets Manager bundle via
+#       amazon.aws.aws_secret (assume-role into shared-services) on the controller
+#       (SSO+FIDO at the workstation). Connect-independent: opconnect BUILDS Connect,
+#       so its key cannot come from Connect. No `op` CLI anywhere (Direction A, #68).
 # ==============================================================================
 
 # --- Clean workspace before loading (removes any leftover from failed runs) ---
@@ -31,13 +32,62 @@
   run_once: true
   tags: ['ssh-key', 'always']
 
-# --- Load fresh SSH key ---
+# --- PATH B — AWS bundle (ssh_key_source: aws_bundle, opconnect bootstrap) ---
+# opconnect BUILDS Connect, so its key cannot come from Connect. Read the dedicated
+# private key from the AWS Secrets Manager bundle on the controller (SSO+FIDO), write
+# it straight to the 0600 temp file. No `op`, no Connect.
+- name: Assume shared-services for the opconnect bundle read (aws_bundle source)
+  amazon.aws.sts_assume_role:
+    role_arn: "{{ opconnect_bundle_assume_role_arn }}"
+    role_session_name: "opconnect-ssh-key-load"
+    region: "{{ opconnect_bundle_region }}"
+    profile: "{{ opconnect_bundle_sso_profile }}"
+  delegate_to: localhost
+  become: false
+  run_once: true
+  no_log: true
+  register: _sshload_assumed
+  when: ssh_key_source | default('connect') == 'aws_bundle'
+  tags: ['ssh-key', 'always']
+
+- name: Read the dedicated private key from the AWS bundle
+  set_fact:
+    _bundle_priv: >-
+      {{ (lookup('amazon.aws.aws_secret', opconnect_bundle_secret_name,
+            region=opconnect_bundle_region,
+            access_key=_sshload_assumed.sts_creds.access_key,
+            secret_key=_sshload_assumed.sts_creds.secret_key,
+            session_token=_sshload_assumed.sts_creds.session_token)
+          | from_json).ansible_private_key }}
+  delegate_to: localhost
+  become: false
+  run_once: true
+  no_log: true
+  when: ssh_key_source | default('connect') == 'aws_bundle'
+  tags: ['ssh-key', 'always']
+
+- name: Write the bundle private key to the secure temp file (0600)
+  copy:
+    # openssh_keypair writes a trailing newline; preserve it (ssh rejects a key
+    # without one). The Connect path writes its own file below.
+    content: "{{ _bundle_priv if _bundle_priv.endswith('\n') else _bundle_priv + '\n' }}"
+    dest: "{{ ssh_key_loader_temp_path }}"
+    mode: '0600'
+  delegate_to: localhost
+  become: false
+  run_once: true
+  no_log: true
+  when: ssh_key_source | default('connect') == 'aws_bundle'
+  tags: ['ssh-key', 'always']
+
+# --- PATH A — Connect (ssh_key_source: connect, FLEET default) ---
 - name: Set 1Password Connect token variable
   set_fact:
     _op_connect_token: "{{ lookup('env', 'OP_CONNECT_TOKEN') }}"
   no_log: true
   run_once: true
   delegate_to: localhost
+  when: ssh_key_source | default('connect') == 'connect'
   tags: ['ssh-key', 'always']
 
 - name: Set vault ID variable
@@ -45,6 +95,7 @@
     _op_vault_id: "{{ lookup('env', 'TF_VAR_onepassword_vault_id') }}"
   run_once: true
   delegate_to: localhost
+  when: ssh_key_source | default('connect') == 'connect'
   tags: ['ssh-key', 'always']
 
 - name: Retrieve Ansible SSH private key from 1Password Connect
@@ -61,51 +112,26 @@
   run_once: true
   no_log: true
   register: _ssh_key_result
-  when: not (op_use_cli | default(false) | bool)
+  when: ssh_key_source | default('connect') == 'connect'
   tags: ['ssh-key', 'always']
 
-- name: Retrieve Ansible SSH private key via op (1Password CLI / desktop)
-  # `env -u` TRULY unsets OP_CONNECT_* for the op subprocess. Setting them to ""
-  # via `environment:` leaves them SET-but-empty, which keeps op in Connect mode
-  # (op then tries an empty-host Connect call: "unsupported protocol scheme").
-  # Unset => op uses account/desktop (or OP_SERVICE_ACCOUNT_TOKEN) auth, reading
-  # 1Password directly — the Connect-independent path.
-  ansible.builtin.command:
-    argv:
-      - env
-      - -u
-      - OP_CONNECT_HOST
-      - -u
-      - OP_CONNECT_TOKEN
-      - op
-      - read
-      - "op://{{ _op_vault_id }}/{{ ssh_key_loader_item_name }}/{{ ssh_key_loader_section_name }}/{{ ssh_key_loader_field_name }}"
-  register: _ssh_key_op
-  changed_when: false
-  no_log: true
-  delegate_to: localhost
-  become: false
-  run_once: true
-  when: op_use_cli | default(false) | bool
-  tags: ['ssh-key', 'always']
-
-- name: Write SSH key to secure temp file
+- name: Write SSH key to secure temp file (Connect path)
   copy:
-    # op path: `command.stdout` is right-stripped, but an OpenSSH private key MUST
-    # end with a trailing newline or ssh rejects it ("invalid format") — re-add it.
-    # Connect path: the field value already carries its trailing newline.
-    content: "{{ (_ssh_key_op.stdout + '\n') if (op_use_cli | default(false) | bool) else _ssh_key_result.field.value }}"
+    # The Connect field value already carries its trailing newline. (The aws_bundle
+    # path wrote its own 0600 file above.)
+    content: "{{ _ssh_key_result.field.value }}"
     dest: "{{ ssh_key_loader_temp_path }}"
     mode: '0600'
   delegate_to: localhost
   become: false
   run_once: true
   no_log: true
+  when: ssh_key_source | default('connect') == 'connect'
   tags: ['ssh-key', 'always']
 
 - name: Display SSH key load status
   debug:
-    msg: "SSH key loaded via {{ (op_use_cli | default(false) | bool) | ternary('op CLI', '1Password Connect') }} to {{ ssh_key_loader_temp_path }}"
+    msg: "SSH key loaded via {{ ssh_key_source | default('connect') }} to {{ ssh_key_loader_temp_path }}"
   run_once: true
   delegate_to: localhost
   tags: ['ssh-key', 'always']

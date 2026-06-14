@@ -6,13 +6,12 @@
 # Path to write the temporary SSH key file
 ssh_key_loader_temp_path: "/tmp/.ansible_ssh_key"
 
-# 1Password item details
+# 1Password item details (PATH A — Connect, fleet)
 ssh_key_loader_item_name: "Infrastructure Ansible SSH Key"
 ssh_key_loader_section_name: "Private Key"
 ssh_key_loader_field_name: "private_key"
 
-# When true, fetch the SSH key via the `op` CLI (1Password desktop / SA token)
-# instead of the Connect API. Set to true in playbooks that run without a live
-# Connect server (e.g. the opconnect bootstrap playbook). Default false = fleet
-# behaviour (Connect path, unchanged).
-op_use_cli: false
+# Source selector (Direction A, #68): 'connect' (FLEET default, PATH A — 1Password
+# Connect) or 'aws_bundle' (opconnect bootstrap, PATH B — read the dedicated private
+# key from the AWS Secrets Manager bundle). Set on the opconnect bootstrap play.
+ssh_key_source: connect

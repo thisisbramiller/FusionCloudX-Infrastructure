@@ -38,6 +38,7 @@
     mode: '0600'
     owner: root
     group: root
+  no_log: true # never print the private key (would leak at -v/-vv)
   when: certificates_deploy_server | bool
   notify: Restart nginx
 

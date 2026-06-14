@@ -33,6 +33,12 @@ Connect-independent fix**; the durable architecture is deferred here.
   eliminates**" the trust anchor.
 
 - **AWS SSM anchor design** (convention-compliant per the full 108-file map of `aws-foundation`):
+  > **SUPERSEDED (2026-06-13)** by the implemented #68 design: a Secrets Manager bundle in
+  > `aws-foundation/15-opconnect-credentials` (CMK `alias/tmpx/onprem-opconnect`, secret
+  > `tmpx/onprem/opconnect-credentials`), seeded by the Ansible `opconnect_credentials.yml`
+  > playbook. tofu reads only the public key. See the spec/plan
+  > (`docs/superpowers/specs|plans/2026-06-13-onprem-bootstrap-trust-recovery-anchor*`). The SSM
+  > sketch below is kept for historical context only.
   - New LOW layer `onprem-infra/tofu/00-foundation`: generate `tls_private_key` (ed25519) → write
     the private key to **SSM SecureString** at `/tmpx/onprem/bootstrap/ssh/private` under a **NEW**
     purpose CMK `alias/tmpx/onprem-bootstrap` (NEVER the state CMK `alias/tmpx/tfstate`) in

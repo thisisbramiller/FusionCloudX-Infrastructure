@@ -1,0 +1,27 @@
+---
+# ==============================================================================
+# opconnect_credentials role — defaults (the off-site bundle schema)
+# ==============================================================================
+# Single source of truth for the AWS `tmpx/onprem/opconnect-credentials` bundle.
+# When the consumer side (the opconnect deploy role reading the bundle, plan C4)
+# is built, promote the SHARED subset of these to group_vars so producer + consumer
+# can't drift. For now the seed is the only consumer, so they live here.
+# The AWS-bundle access contract is the single source in playbooks/vars/opconnect-bundle.yml
+# (loaded by this seed's playbook via vars_files). Reference it here so producer + consumer
+# can't drift. (Resolved lazily at use-time; the vars_files load makes opconnect_bundle_* available.)
+opconnect_creds_secret_name: "{{ opconnect_bundle_secret_name }}"
+opconnect_creds_region: "{{ opconnect_bundle_region }}"
+opconnect_creds_assume_role_arn: "{{ opconnect_bundle_assume_role_arn }}"
+opconnect_creds_sso_profile: "{{ opconnect_bundle_sso_profile }}" # AWS CLI SSO profile used to assume the role; passed as a PARAM (not AWS_PROFILE env), else amazon.aws errors "both a profile and access tokens" when the lookup gets the assumed creds
+opconnect_creds_kms_alias: "alias/tmpx/onprem-opconnect"
+opconnect_creds_vault: "FusionCloudX" # 1Password vault the Connect server is scoped to
+opconnect_creds_server_name: "opconnect" # `op connect server` name
+opconnect_creds_connect_host: "https://opconnect.fusioncloudx.home" # native Connect TLS (Direction A): 8443 in-container, published on host 443
+opconnect_creds_token_ttl_days: 90 # Connect token lifetime when minting (matches the estate rotation cadence)
+opconnect_creds_rotate_threshold_days: 14 # rotate when token_expires is within this window
+
+# Phase C — Direction A. The seed GENERATES the dedicated keypair LOCALLY
+# (community.crypto.openssh_keypair), publishes the public half to SSM, and writes the
+# private half + creds.json + token into the AWS bundle. 1Password holds NOTHING for
+# opconnect (no 1P SSH-Key item, no 1P creds item) — see spec Rev 2 (D11'/D12).
+opconnect_creds_ssm_pubkey_name: "/tmpx/onprem/opconnect/ansible_public_key" # SSM String param: cloud-init pubkey

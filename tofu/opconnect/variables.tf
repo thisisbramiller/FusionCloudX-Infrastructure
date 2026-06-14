@@ -8,17 +8,6 @@ variable "proxmox_api_url" {
   description = "Proxmox VE API URL."
 }
 
-variable "onepassword_vault_id" {
-  type        = string
-  description = "1Password Vault ID that holds the infrastructure credential items (read via the configured 1Password auth path — old Connect during the P4 cutover; SA token / op signin for a from-scratch rebuild). Provide via TF_VAR_onepassword_vault_id or a tfvars file."
-}
-
-variable "ansible_ssh_key_item_title" {
-  type        = string
-  default     = "Infrastructure Ansible SSH Key"
-  description = "Title of the 1Password item holding the Ansible SSH key. Bootstrap-seeded BEFORE opconnect apply; read here as a data source via the configured 1Password auth path (old Connect during the P4 cutover; SA token / op signin for a rebuild) — the private key never enters TF state."
-}
-
 # ------------------------------------------------------------------------------
 # DNS subdomain
 # ------------------------------------------------------------------------------
@@ -49,5 +38,10 @@ variable "opconnect_memory_mb" {
   description = "Dedicated memory (MB) for the opconnect VM."
 }
 
-# (ansible_pubkey var removed — opconnect now OWNS the keypair via ssh-keys.tf;
-#  the Connect-less-rebuild pubkey-injection escape hatch is obsolete.)
+# Removed (spec #68 — Phase C):
+#   - ansible_pubkey: opconnect no longer owns the keypair; the ansible PUBLIC key
+#     comes from SSM (ssh-keys.tf -> local.ansible_ssh_public_key), published by the seed.
+#   - onepassword_vault_id / ansible_ssh_key_item_title: only the retired Option-D
+#     tls_private_key write-back used them. The dedicated key is now GENERATED LOCALLY
+#     by the seed (Direction A): the private half lives in the AWS bundle (read by
+#     Ansible), the public half in SSM (read here). 1Password holds nothing for opconnect.

@@ -1,0 +1,15 @@
+# Bootstrap localhost definition for the opconnect consumer run (#68 Direction A).
+# The opconnect bring-up needs boto3 on the CONTROLLER (amazon.aws aws_secret +
+# sts_assume_role for the AWS-bundle reads in play 1 and the delegate_to: localhost
+# tasks in the deploy/TLS plays), and boto3 lives in this repo's .venv. Point
+# localhost at the venv python ansible itself runs under — WITHOUT forcing that
+# interpreter onto the remote opconnect VM (which uses its own /usr/bin/python3).
+#
+# Use ALONGSIDE the dynamic inventory (do NOT pass -e ansible_python_interpreter,
+# which is global + highest-precedence and would leak the venv path to the VM):
+#   ansible-playbook -i inventory-bootstrap-localhost.yml -i opconnect.inventory.yml playbooks/opconnect.yml
+all:
+  hosts:
+    localhost:
+      ansible_connection: local
+      ansible_python_interpreter: "{{ ansible_playbook_python }}"

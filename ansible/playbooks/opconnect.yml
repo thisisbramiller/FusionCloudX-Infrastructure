@@ -1,142 +1,125 @@
 ---
 # ==============================================================================
-# opconnect Deployment Playbook
+# opconnect Deployment Playbook (Direction A, #68)
 # ==============================================================================
 # Deploys 1Password Connect (connect-api + connect-sync) on the opconnect VM via
-# Docker Compose — the secrets-root bring-up.
+# Docker Compose — the secrets-root bring-up — then serves it over native TLS.
 #
-# BOOTSTRAP SECRET READS — 1Password DIRECT via the `op` CLI (Connect-independent):
+# BOOTSTRAP SECRET READS — from the AWS Secrets Manager bundle (Connect-independent):
+#   Play 1 reads the dedicated SSH private key, and the Deploy play reads
+#   credentials.json, from the bundle via amazon.aws.aws_secret on the controller
+#   (assume-role into shared-services; SSO+FIDO at the workstation). NO `op` CLI, NO
+#   dependency on a live Connect — opconnect BUILDS Connect, so it cannot read from
+#   one. This resolves the chicken-and-egg: opconnect rebuilds from bare metal with
+#   no live Connect anywhere on the network.
 #
-#   Both bring-up plays set `op_use_cli: true`, so the ssh-key-loader and
-#   certificates roles read their bootstrap secrets (the Ansible SSH key + the 4
-#   TLS cert files) straight from 1Password via the `op` CLI — NOT from any Connect
-#   server. OP_CONNECT_* are explicitly unset for those `op` calls (`env -u`), so
-#   the read path never depends on the very Connect this play is (re)building. THIS
-#   is the resolution to the chicken-and-egg: opconnect can be destroyed and rebuilt
-#   from bare metal with no live Connect anywhere on the network.
+# TLS (native): Connect comes up on LOOPBACK HTTP; the TLS play then reads the server
+# cert from opconnect's OWN local Connect, writes it on-box, and flips connect-api to
+# native TLS (OP_TLS_*). The cert never crosses the wire; nothing plaintext is on the LAN.
 #
-#   `op` auth for those reads is sourced (in order) from: an OP_SERVICE_ACCOUNT_TOKEN
-#   in the environment, or an operator 1Password desktop / `op signin` session.
-#       export OP_SERVICE_ACCOUNT_TOKEN=...   # or: op signin / 1Password desktop
-#       ansible-playbook playbooks/opconnect.yml
-#
-# Requirements:
-#   - `op` CLI on the ANSIBLE CONTROLLER, authed (SA token OR desktop / `op signin`)
-#   - TF_VAR_onepassword_vault_id set (ssh-key-loader op:// path; asserted below)
-#   - 1password-credentials.json on the CONTROLLER at opconnect_credentials_local
-#     (default ~/opconnect-cutover/1password-credentials.json); ansible copies it to
-#     the VM automatically — no manual scp. Generated via `op connect server create`.
-#
-# The Deploy play's pre-flight assertion accepts OP_SERVICE_ACCOUNT_TOKEN OR
-# OP_CONNECT_* purely as a coarse "a 1Password auth path is present" gate — the
-# actual reads use `op` (desktop/SA). The new Connect serves all consumers once up.
+# Requirements (operator workstation):
+#   - aws sso login --sso-session fcx-sso  (FIDO)
+#   - boto3/botocore + amazon.aws/community.aws/community.crypto in the venv
+#   - the AWS bundle tmpx/onprem/opconnect-credentials seeded (opconnect_credentials.yml)
+#   - run with the opconnect dynamic inventory: -i opconnect.inventory.yml (AWS_PROFILE=fcx-sso)
+# NEVER run with -v/-vvv — verbose bypasses no_log.
 # ==============================================================================
 
-# Reads the Ansible SSH private key from 1Password via the `op` CLI (op_use_cli:
-# true), authed by the controller's SA token / desktop session — NOT via a Connect
-# server (OP_CONNECT_* are unset for the `op` call). Connect-independent by design:
-# the rebuild needs no live Connect, old or new.
-- name: Load SSH Key from 1Password (op CLI)
+# Reads the dedicated Ansible SSH private key from the AWS bundle (Direction A, #68)
+# via amazon.aws.aws_secret on the controller (SSO+FIDO at the workstation) — NOT via
+# `op` and NOT via Connect. Connect-independent by design: opconnect BUILDS Connect,
+# so its key cannot come from Connect; the rebuild needs no live Connect, old or new.
+- name: Load SSH Key from the AWS bundle
   hosts: localhost
   gather_facts: false
   connection: local
+  vars_files:
+    - vars/opconnect-bundle.yml # opconnect_bundle_* (vars_files does NOT inherit across plays)
   vars:
-    op_use_cli: true
-
-  pre_tasks:
-    # G4 guard: an unset vault id makes the op:// path "op:///Item/..." and `op`
-    # fails with a cryptic parse error rather than a clear "vault id missing".
-    - name: Assert TF_VAR_onepassword_vault_id is set
-      ansible.builtin.assert:
-        that:
-          - "lookup('env', 'TF_VAR_onepassword_vault_id') | length > 0"
-        fail_msg: >-
-          TF_VAR_onepassword_vault_id is empty. Export it (the FusionCloudX vault
-          UUID) before running the opconnect bootstrap — the ssh-key-loader op://
-          read needs it.
-        quiet: true
-      tags: ['ssh-key', 'always']
+    ssh_key_source: aws_bundle
 
   roles:
     - role: ssh-key-loader
       tags: ['ssh-key', 'always']
 
-# Common bootstrap — same baseline every fleet VM gets via site.yml's
-# "Common Infrastructure Configuration" (apt cache + the certificates role:
-# FusionCloudX CA trust + server cert). opconnect lives in its own state/inventory,
-# so site.yml does not reach it — this play wires opconnect into the identical
-# bootstrap so it is a fully-managed VM, not a special case. Unlike the fleet
-# (which reads certs via Connect), this play sets op_use_cli: true so the certs are
-# read from 1Password via the `op` CLI — keeping the bring-up Connect-independent.
-- name: Common Infrastructure Configuration (opconnect)
+# (Direction A drops the pre-deploy `certificates` play: opconnect does NOT use the
+# shared certificates role. It serves its own TLS via native Connect TLS, cert
+# self-served on-box AFTER deploy — see the "Configure opconnect native TLS" play
+# below + roles/opconnect/tasks/tls.yml. The apt-cache update folded into the Deploy
+# play's pre_tasks.)
+- name: Deploy 1Password Connect
   hosts: opconnect
   become: yes
   gather_facts: yes
+  vars_files:
+    - vars/opconnect-bundle.yml # opconnect_bundle_* — the deploy role reads creds.json from the bundle
   vars:
     ansible_ssh_private_key_file: "/tmp/.ansible_ssh_key"
-    op_use_cli: true
-  tags: ['common', 'certificates']
 
   pre_tasks:
+    # Folded in from the retired pre-deploy "Common Infrastructure" play (Direction A
+    # drops the pre-deploy certificates run — TLS is self-served post-deploy, CR6b).
     - name: Update apt cache
       ansible.builtin.apt:
         update_cache: yes
         cache_valid_time: 3600
       tags: ['always']
 
-  roles:
-    # Do NOT pass certificates_* role-params here (they would shadow the role's
-    # in-playbook Connect retrieval and require a manual /tmp/*.pem file).
-    - role: certificates
-      tags: ['certificates']
-
-- name: Deploy 1Password Connect
-  hosts: opconnect
-  become: yes
-  gather_facts: yes
-  vars:
-    ansible_ssh_private_key_file: "/tmp/.ansible_ssh_key"
-    # The whole opconnect bootstrap is the op-CLI path (matches plays 1 & 2). Set
-    # here too so the auth-gate `not op_use_cli` guard + the status debug evaluate
-    # correctly in this play — the opconnect role itself does not branch on it.
-    op_use_cli: true
-
-  pre_tasks:
-    # Under op_use_cli: true (the opconnect default) the SSH key + certs were ALREADY
-    # read via `op` in the ssh-key-loader + certificates plays above, so op auth
-    # (1Password desktop / `op signin` / SA token) is proven by the time we reach
-    # this play — no further gate. The check below therefore applies ONLY to the
-    # legacy Connect read path (op_use_cli: false), which needs OP_CONNECT_*. Without
-    # the `not op_use_cli` guard this gate would falsely reject the documented
-    # desktop / `op signin` happy path (no OP_CONNECT_*, no SA token).
-    - name: Ensure a 1Password auth path is available (Connect read path)
-      ansible.builtin.fail:
-        msg: >-
-          No 1Password auth path for the Connect read path (op_use_cli: false): set
-          OP_CONNECT_HOST + OP_CONNECT_TOKEN (or OP_SERVICE_ACCOUNT_TOKEN). The op-CLI
-          bootstrap (op_use_cli: true, opconnect default) instead uses an authenticated
-          `op` session — 1Password desktop / `op signin` / SA token — already validated
-          by the SSH-key + certificate plays above.
-      when: >-
-        not (op_use_cli | default(false) | bool) and
-        lookup('env', 'OP_SERVICE_ACCOUNT_TOKEN') == '' and
-        (lookup('env', 'OP_CONNECT_HOST') == '' or lookup('env', 'OP_CONNECT_TOKEN') == '')
-
-    - name: Display opconnect bootstrap auth status
+    - name: Display opconnect bootstrap mode
       ansible.builtin.debug:
         msg: >-
-          {% if op_use_cli | default(false) | bool -%}
-          Bootstrapping 1Password Connect via the `op` CLI (op_use_cli: true) — secrets read
-          straight from 1Password (desktop / `op signin` / SA token); OP_CONNECT_* unset for
-          the op subprocess. Connect-independent rebuild.
-          {%- elif lookup('env', 'OP_SERVICE_ACCOUNT_TOKEN') != '' -%}
-          Bootstrapping 1Password Connect via the Service Account token (Connect read path).
-          {%- else -%}
-          Bootstrapping 1Password Connect via 1Password Connect at {{ lookup('env', 'OP_CONNECT_HOST') }} (Connect read path).
-          {%- endif %}
+          Bootstrapping 1Password Connect (Direction A): SSH key + credentials.json
+          read from the AWS bundle (amazon.aws.aws_secret, SSO+FIDO). No `op`, no live
+          Connect dependency. TLS is self-served on-box in the next play.
 
   roles:
     - opconnect
+
+# Native Connect TLS, cert self-served ON-BOX. Connect is up on loopback HTTP; read
+# the server cert from opconnect's OWN local Connect, write it on the box, flip
+# connect-api to OP_TLS_*. Must sit BETWEEN Deploy and Cleanup (the TLS read needs
+# /tmp/.ansible_ssh_key, which the Cleanup play shreds).
+- name: Configure opconnect native TLS (cert self-served on-box)
+  hosts: opconnect
+  become: yes
+  gather_facts: yes
+  vars_files:
+    - vars/opconnect-bundle.yml # opconnect_bundle_*
+  vars:
+    ansible_ssh_private_key_file: "/tmp/.ansible_ssh_key"
+
+  pre_tasks:
+    - name: Assume shared-services for the bundle (Connect token)
+      amazon.aws.sts_assume_role:
+        role_arn: "{{ opconnect_bundle_assume_role_arn }}"
+        role_session_name: "opconnect-tls-token"
+        region: "{{ opconnect_bundle_region }}"
+        profile: "{{ opconnect_bundle_sso_profile }}"
+      delegate_to: localhost
+      become: false
+      run_once: true
+      register: _tls_assumed
+      no_log: true
+
+    - name: Read the Connect token from the AWS bundle
+      ansible.builtin.set_fact:
+        opconnect_tls_connect_token: >-
+          {{ (lookup('amazon.aws.aws_secret', opconnect_bundle_secret_name,
+                region=opconnect_bundle_region,
+                access_key=_tls_assumed.sts_creds.access_key,
+                secret_key=_tls_assumed.sts_creds.secret_key,
+                session_token=_tls_assumed.sts_creds.session_token)
+              | from_json).connect_token }}
+      delegate_to: localhost
+      become: false
+      run_once: true
+      no_log: true
+
+  tasks:
+    - name: Include opconnect TLS tasks (native Connect TLS, on-box)
+      ansible.builtin.include_role:
+        name: opconnect
+        tasks_from: tls.yml
 
 - name: Cleanup SSH Key
   hosts: localhost

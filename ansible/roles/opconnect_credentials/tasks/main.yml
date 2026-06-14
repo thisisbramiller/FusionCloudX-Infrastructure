@@ -1,0 +1,311 @@
+---
+# ==============================================================================
+# opconnect_credentials role — Phase C (Direction A): the seed GENERATES the
+# dedicated SSH key locally + distributes it (AWS bundle + SSM pubkey) (D9/D10/D11'/D12)
+# ==============================================================================
+# STANDALONE role (NO meta dependencies — deliberately, so it runs on localhost
+# without pulling the docker role the way the opconnect deploy role does).
+# Invoked ONLY by playbooks/opconnect_credentials.yml (localhost).
+#
+# Direction A: the seed GENERATES the dedicated keypair LOCALLY (community.crypto.
+# openssh_keypair), NOT via `op` (which would create a 1P item; opconnect's key is
+# AWS-only). It mirrors the material to:
+#   - the AWS Secrets Manager bundle (authoritative bootstrap source: privkey +
+#     creds.json + token) — read by the opconnect consumer via amazon.aws.aws_secret
+#   - an SSM String param (pubkey only — tofu/opconnect reads this for cloud-init)
+# 1Password holds NOTHING for opconnect (no SSH-Key item, no creds item). The seed
+# still uses account-mode `op` ONLY for `op connect server/token create`.
+#
+# Idempotent + expiry-aware:
+#   - bundle absent / no key -> GENERATE the keypair locally + SEED (op connect
+#                               server create + token create)
+#   - token near expiry      -> ROTATE (token only; server identity + key kept)
+#   - otherwise              -> NO-OP on the token; distribution (SSM/bundle) still
+#                               runs (always-run + idempotent) so adoption is safe.
+#
+# Account-mode op: the op tasks use `env -u OP_CONNECT_HOST -u OP_CONNECT_TOKEN`
+# to TRULY unset the Connect env vars (setting them to "" leaves them set-but-empty,
+# which keeps op in Connect API mode — see ssh-key-loader for the same gotcha).
+# Account mode then uses the unlocked 1Password desktop app (biometric).
+#
+# WARNING: never run the playbook with -v/-vvv (no_log is bypassed by verbose).
+
+- name: Assert localhost (biometric op + AWS FIDO are workstation-bound)
+  ansible.builtin.assert:
+    that: inventory_hostname == 'localhost'
+    fail_msg: "Run via playbooks/opconnect_credentials.yml on the operator workstation only."
+    quiet: true
+
+- name: Assume shared-services for Secrets Manager (SSO -> OrganizationAccountAccessRole)
+  amazon.aws.sts_assume_role:
+    role_arn: "{{ opconnect_creds_assume_role_arn }}"
+    role_session_name: "opconnect-credentials-seed"
+    region: "{{ opconnect_creds_region }}"
+    profile: "{{ opconnect_creds_sso_profile }}" # base SSO creds via PARAM, not AWS_PROFILE env
+  register: _assumed
+  no_log: true
+
+- name: Read the current secret (absent on first seed)
+  ansible.builtin.set_fact:
+    _current: >-
+      {{ lookup('amazon.aws.aws_secret', opconnect_creds_secret_name,
+                region=opconnect_creds_region,
+                access_key=_assumed.sts_creds.access_key,
+                secret_key=_assumed.sts_creds.secret_key,
+                session_token=_assumed.sts_creds.session_token,
+                on_missing='skip') | default('', true) }}
+  no_log: true
+
+- name: Decide seed / rotate / no-op
+  vars:
+    _threshold_iso: "{{ '%Y-%m-%dT%H:%M:%SZ' | strftime((now(utc=true).timestamp() | int) + (opconnect_creds_rotate_threshold_days | int * 86400)) }}"
+    _cur_calc: "{{ (_current | from_json) if (_current | length > 0) else {} }}"
+  ansible.builtin.set_fact:
+    _cur: "{{ _cur_calc }}"
+    _need_seed: "{{ _current | length == 0 }}"
+    _need_rotate: "{{ (_current | length > 0) and (force | bool or ((_cur_calc.token_expires | default('1970-01-01T00:00:00Z')) < _threshold_iso)) }}"
+
+- name: No-op (token bundle valid — distribution still runs below)
+  ansible.builtin.debug:
+    msg: >-
+      opconnect-credentials token valid; token_expires {{ _cur.token_expires | default('?') }}
+      (rotate threshold {{ opconnect_creds_rotate_threshold_days }}d) — no token mint; SSM/escrow re-asserted.
+  when: not (_need_seed | bool) and not (_need_rotate | bool)
+
+# Direction A (D12): the dedicated keypair is GENERATED LOCALLY inside the Distribute
+# block below (community.crypto.openssh_keypair, in the 0700 scratch dir) — NOT via
+# the `op` CLI (which would make a 1P item; opconnect's key is AWS-only). 1Password
+# holds nothing for opconnect. The seed still uses account-mode `op` ONLY for
+# `op connect server/token create` (the only way to mint Connect creds), then escrows
+# them to the AWS bundle.
+
+# ------------------------------------------------------------------------------
+# Scratch dir — shared by the seed/rotate token flow + the always-run creds item.
+# Lifted out of the seed/rotate block so the JSON-template tasks (Step 5) and the
+# escrow write (Step 6) can use it on a no-op run too. The `always:` block at the
+# bottom shreds + removes it regardless of which path ran.
+# ------------------------------------------------------------------------------
+- name: Distribute (token flow gated; SSM + 1P creds + escrow always-run)
+  block:
+    - name: Create a 0700 scratch dir
+      ansible.builtin.tempfile:
+        state: directory
+        suffix: opconnect-seed
+      register: _tmp
+      no_log: true
+
+    # --------------------------------------------------------------------------
+    # Step 1/2 (Direction A) — GENERATE the dedicated keypair locally. First seed
+    # OR adoption (bundle present but no key) -> generate; else reuse the current
+    # bundle's keypair (rotation re-mints the TOKEN only, never the key).
+    # --------------------------------------------------------------------------
+    - name: Generate the dedicated Ed25519 keypair locally (first seed / adoption)
+      community.crypto.openssh_keypair:
+        path: "{{ _tmp.path }}/opconnect_ed25519"
+        type: ed25519
+        comment: "opconnect-bootstrap"
+      register: _keygen
+      when: _need_seed | bool or (_cur.ansible_private_key | default('') | length == 0)
+      no_log: true
+
+    - name: Read the generated keypair back (first seed / adoption only)
+      ansible.builtin.slurp:
+        src: "{{ item }}"
+      loop:
+        - "{{ _tmp.path }}/opconnect_ed25519"
+        - "{{ _tmp.path }}/opconnect_ed25519.pub"
+      register: _keyfiles
+      when: _keygen.changed | default(false)
+      no_log: true
+
+    - name: Compute effective keypair (generated this run, else current bundle)
+      ansible.builtin.set_fact:
+        _eff_priv: "{{ (_keyfiles.results[0].content | b64decode) if (_keygen.changed | default(false)) else _cur.ansible_private_key }}"
+        _eff_pub: "{{ (_keyfiles.results[1].content | b64decode | trim) if (_keygen.changed | default(false)) else _cur.ansible_public_key }}"
+      no_log: true
+
+    - name: Assert the effective keypair is non-empty (never escrow an empty key)
+      ansible.builtin.assert:
+        that:
+          - _eff_priv | length > 0
+          - _eff_pub | length > 0
+        fail_msg: "Refusing to write the bundle with an empty SSH key (would orphan the running opconnect VM)."
+        quiet: true
+
+    # --------------------------------------------------------------------------
+    # Step 3 — token / creds (TOKEN-scoped: server create on seed, token mint on
+    # seed-or-rotate). `env -u` TRULY unsets the Connect env vars so op uses
+    # ACCOUNT mode (desktop app / biometric). Empty-string via environment: would
+    # leave op in Connect mode.
+    # --------------------------------------------------------------------------
+    # Delete-then-create (FIRST SEED only): a Connect server's 1password-credentials.json
+    # is emitted ONCE at create and CANNOT be re-fetched, so re-seeding (bundle absent)
+    # requires minting a NEW server. `op connect server create` is NOT idempotent — against
+    # an existing server it conflicts/duplicates. So if a server named {{ server }} exists,
+    # delete it first. GUARDED by recreate_connect_server (default false): _need_seed fires
+    # whenever the bundle is ABSENT, which is usually deliberate but could be an ACCIDENTAL
+    # loss — in which case the right move is to RESTORE the bundle (preserves the server
+    # identity, no fleet-wide token re-distribution), NOT silently destroy the live server.
+    # So an existing server + no flag = FAIL LOUD with guidance; flag = deliberate recreate.
+    - name: List existing Connect servers (first-seed only)
+      ansible.builtin.command:
+        argv: [env, -u, OP_CONNECT_HOST, -u, OP_CONNECT_TOKEN, op, connect, server, list, --format, json]
+      register: _connect_servers
+      changed_when: false
+      failed_when: false
+      when: _need_seed | bool
+      no_log: true
+
+    - name: Refuse to destroy a live Connect server without explicit authorization
+      ansible.builtin.assert:
+        that:
+          - recreate_connect_server | default(false) | bool
+        fail_msg: >-
+          Bundle ABSENT but a Connect server named '{{ opconnect_creds_server_name }}'
+          already exists. First-seed mints a NEW server (its credentials.json cannot be
+          re-fetched). Refusing to delete it implicitly: if you LOST the bundle, RESTORE it
+          from the off-site/offline copy (keeps the server identity, no fleet token churn).
+          To deliberately delete + recreate (clean-room rebuild), re-run with
+          -e recreate_connect_server=true.
+        quiet: true
+      when:
+        - _need_seed | bool
+        - (_connect_servers.stdout | default('[]') | from_json | selectattr('name', 'equalto', opconnect_creds_server_name) | list | length) > 0
+
+    - name: Delete existing Connect server(s) before re-create (authorized clean-room)
+      ansible.builtin.command:
+        argv: [env, -u, OP_CONNECT_HOST, -u, OP_CONNECT_TOKEN, op, connect, server, delete, "{{ item }}"]
+      loop: "{{ _connect_servers.stdout | default('[]') | from_json | selectattr('name', 'equalto', opconnect_creds_server_name) | map(attribute='id') | list }}"
+      when:
+        - _need_seed | bool
+        - recreate_connect_server | default(false) | bool
+      no_log: true
+
+    # --------------------------------------------------------------------------
+    - name: Create the Connect server (FIRST SEED ONLY — not idempotent)
+      ansible.builtin.command:
+        argv:
+          - env
+          - -u
+          - OP_CONNECT_HOST
+          - -u
+          - OP_CONNECT_TOKEN
+          - op
+          - connect
+          - server
+          - create
+          - "{{ opconnect_creds_server_name }}"
+          - --vaults
+          - "{{ opconnect_creds_vault }}"
+        chdir: "{{ _tmp.path }}" # emits 1password-credentials.json into cwd
+        creates: "{{ _tmp.path }}/1password-credentials.json"
+      when: _need_seed | bool
+      no_log: true
+
+    - name: Mint a Connect token with an explicit TTL (robust expiry; no JWT decode)
+      ansible.builtin.command:
+        argv:
+          - env
+          - -u
+          - OP_CONNECT_HOST
+          - -u
+          - OP_CONNECT_TOKEN
+          - op
+          - connect
+          - token
+          - create
+          - "fusioncloudx-onprem-{{ '%Y%m%d' | strftime }}"
+          - --server
+          - "{{ opconnect_creds_server_name }}"
+          - --vaults
+          - "{{ opconnect_creds_vault }}"
+          - --expires-in
+          - "{{ opconnect_creds_token_ttl_days }}d"
+      register: _tok
+      changed_when: true
+      when: _need_seed | bool or _need_rotate | bool
+      no_log: true
+
+    - name: Compute token_expires = now + TTL (plain, non-secret field)
+      ansible.builtin.set_fact:
+        _token_expires: "{{ '%Y-%m-%dT%H:%M:%SZ' | strftime((now(utc=true).timestamp() | int) + (opconnect_creds_token_ttl_days | int * 86400)) }}"
+      when: _need_seed | bool or _need_rotate | bool
+
+    - name: Compute effective creds/token (minted this run, else current bundle)
+      ansible.builtin.set_fact:
+        _eff_creds_b64: "{{ (lookup('file', _tmp.path ~ '/1password-credentials.json') | b64encode) if (_need_seed | bool) else _cur.connect_credentials_json }}"
+        _eff_token: "{{ (_tok.stdout | trim) if (_need_seed or _need_rotate) else _cur.connect_token }}"
+        _eff_token_expires: "{{ _token_expires if (_need_seed or _need_rotate) else _cur.token_expires }}"
+      no_log: true
+
+    # --------------------------------------------------------------------------
+    # Step 4 — publish pubkey to SSM (always-run; non-secret String param)
+    # --------------------------------------------------------------------------
+    - name: Publish dedicated ansible public key to SSM
+      community.aws.ssm_parameter:
+        name: "{{ opconnect_creds_ssm_pubkey_name }}"
+        value: "{{ _eff_pub }}"
+        string_type: String
+        overwrite_value: changed
+        region: "{{ opconnect_creds_region }}"
+        access_key: "{{ _assumed.sts_creds.access_key }}"
+        secret_key: "{{ _assumed.sts_creds.secret_key }}"
+        session_token: "{{ _assumed.sts_creds.session_token }}"
+      no_log: true # STS session creds passed as args — never expose them at -v
+
+    # Direction A: creds.json + token go ONLY into the AWS bundle (Step 6). No 1P
+    # creds item is created (1Password holds nothing for opconnect).
+
+    # --------------------------------------------------------------------------
+    # Step 6 — assemble + write the escrow bundle (always-run; idempotent;
+    # keypair sourced from 1P via _eff_pub/_eff_priv, creds/token from _eff_*).
+    # --------------------------------------------------------------------------
+    - name: Assemble the bundle JSON
+      ansible.builtin.set_fact:
+        _bundle_json: >-
+          {{ {
+            'connect_credentials_json': _eff_creds_b64,
+            'connect_token': _eff_token,
+            'connect_host': opconnect_creds_connect_host,
+            'ansible_public_key': _eff_pub,
+            'ansible_private_key': _eff_priv,
+            'token_expires': _eff_token_expires,
+            'created': ('%Y-%m-%dT%H:%M:%SZ' | strftime),
+            'notes': 'off-site opconnect credentials (Direction A: authoritative bootstrap source). proxmox/gitlab restore pointers in the runbook. NO AWS-root break-glass here (offline).'
+          } | to_json }}
+      no_log: true
+
+    - name: Write the bundle to Secrets Manager (idempotent — no version churn if unchanged)
+      community.aws.secretsmanager_secret:
+        name: "{{ opconnect_creds_secret_name }}"
+        state: present
+        json_secret: "{{ _bundle_json }}"
+        kms_key_id: "{{ opconnect_creds_kms_alias }}"
+        overwrite: true
+        region: "{{ opconnect_creds_region }}"
+        access_key: "{{ _assumed.sts_creds.access_key }}"
+        secret_key: "{{ _assumed.sts_creds.secret_key }}"
+        session_token: "{{ _assumed.sts_creds.session_token }}"
+      register: _write
+      no_log: true
+
+    - name: Report
+      ansible.builtin.debug:
+        msg: >-
+          opconnect-credentials {{ 'seeded' if _need_seed | bool else ('rotated' if _need_rotate | bool else 're-asserted') }};
+          token_expires {{ _eff_token_expires }}; escrow changed={{ _write.changed }}.
+  always:
+    - name: Shred scratch files (best-effort)
+      ansible.builtin.command:
+        cmd: "find {{ _tmp.path }} -type f -exec shred -u {} +"
+      when: _tmp.path is defined
+      changed_when: false
+      failed_when: false
+      no_log: true
+
+    - name: Remove the scratch dir
+      ansible.builtin.file:
+        path: "{{ _tmp.path }}"
+        state: absent
+      when: _tmp.path is defined
+      no_log: true
