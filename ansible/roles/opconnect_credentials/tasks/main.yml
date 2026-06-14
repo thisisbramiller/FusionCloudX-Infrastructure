@@ -251,6 +251,7 @@
         access_key: "{{ _assumed.sts_creds.access_key }}"
         secret_key: "{{ _assumed.sts_creds.secret_key }}"
         session_token: "{{ _assumed.sts_creds.session_token }}"
+      no_log: true # STS session creds passed as args — never expose them at -v
 
     # Direction A: creds.json + token go ONLY into the AWS bundle (Step 6). No 1P
     # creds item is created (1Password holds nothing for opconnect).
