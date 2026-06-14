@@ -106,6 +106,14 @@
   loop:
     - { fname: "fullchain.pem" }
     - { fname: "server-key.pem" }
+  # A freshly-deployed Connect syncs item METADATA (files list + content_path) before
+  # the file CONTENT BLOBS — a content GET in that window returns HTTP 500. Retry the
+  # whole download until both blobs are materialized (verified transient on-box: 500 ->
+  # 200 within minutes). ~150s ceiling.
+  register: _cert_dl
+  retries: 30
+  delay: 5
+  until: _cert_dl is succeeded
   no_log: true
 
 - name: Re-render compose with native TLS enabled
