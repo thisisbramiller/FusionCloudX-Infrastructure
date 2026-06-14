@@ -138,6 +138,50 @@
     # ACCOUNT mode (desktop app / biometric). Empty-string via environment: would
     # leave op in Connect mode.
     # --------------------------------------------------------------------------
+    # Delete-then-create (FIRST SEED only): a Connect server's 1password-credentials.json
+    # is emitted ONCE at create and CANNOT be re-fetched, so re-seeding (bundle absent)
+    # requires minting a NEW server. `op connect server create` is NOT idempotent — against
+    # an existing server it conflicts/duplicates. So if a server named {{ server }} exists,
+    # delete it first. GUARDED by recreate_connect_server (default false): _need_seed fires
+    # whenever the bundle is ABSENT, which is usually deliberate but could be an ACCIDENTAL
+    # loss — in which case the right move is to RESTORE the bundle (preserves the server
+    # identity, no fleet-wide token re-distribution), NOT silently destroy the live server.
+    # So an existing server + no flag = FAIL LOUD with guidance; flag = deliberate recreate.
+    - name: List existing Connect servers (first-seed only)
+      ansible.builtin.command:
+        argv: [env, -u, OP_CONNECT_HOST, -u, OP_CONNECT_TOKEN, op, connect, server, list, --format, json]
+      register: _connect_servers
+      changed_when: false
+      failed_when: false
+      when: _need_seed | bool
+      no_log: true
+
+    - name: Refuse to destroy a live Connect server without explicit authorization
+      ansible.builtin.assert:
+        that:
+          - recreate_connect_server | default(false) | bool
+        fail_msg: >-
+          Bundle ABSENT but a Connect server named '{{ opconnect_creds_server_name }}'
+          already exists. First-seed mints a NEW server (its credentials.json cannot be
+          re-fetched). Refusing to delete it implicitly: if you LOST the bundle, RESTORE it
+          from the off-site/offline copy (keeps the server identity, no fleet token churn).
+          To deliberately delete + recreate (clean-room rebuild), re-run with
+          -e recreate_connect_server=true.
+        quiet: true
+      when:
+        - _need_seed | bool
+        - (_connect_servers.stdout | default('[]') | from_json | selectattr('name', 'equalto', opconnect_creds_server_name) | list | length) > 0
+
+    - name: Delete existing Connect server(s) before re-create (authorized clean-room)
+      ansible.builtin.command:
+        argv: [env, -u, OP_CONNECT_HOST, -u, OP_CONNECT_TOKEN, op, connect, server, delete, "{{ item }}"]
+      loop: "{{ _connect_servers.stdout | default('[]') | from_json | selectattr('name', 'equalto', opconnect_creds_server_name) | map(attribute='id') | list }}"
+      when:
+        - _need_seed | bool
+        - recreate_connect_server | default(false) | bool
+      no_log: true
+
+    # --------------------------------------------------------------------------
     - name: Create the Connect server (FIRST SEED ONLY — not idempotent)
       ansible.builtin.command:
         argv:
