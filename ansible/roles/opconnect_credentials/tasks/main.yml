@@ -8,8 +8,8 @@
 # Invoked ONLY by playbooks/opconnect_credentials.yml (localhost).
 #
 # Direction A: the seed GENERATES the dedicated keypair LOCALLY (community.crypto.
-# openssh_keypair), NOT via `op` (op item create would make a 1P item; opconnect's
-# key is AWS-only). It mirrors the material to:
+# openssh_keypair), NOT via `op` (which would create a 1P item; opconnect's key is
+# AWS-only). It mirrors the material to:
 #   - the AWS Secrets Manager bundle (authoritative bootstrap source: privkey +
 #     creds.json + token) — read by the opconnect consumer via amazon.aws.aws_secret
 #   - an SSM String param (pubkey only — tofu/opconnect reads this for cloud-init)
@@ -74,7 +74,7 @@
 
 # Direction A (D12): the dedicated keypair is GENERATED LOCALLY inside the Distribute
 # block below (community.crypto.openssh_keypair, in the 0700 scratch dir) — NOT via
-# `op item create` (that would make a 1P item; opconnect's key is AWS-only). 1Password
+# the `op` CLI (which would make a 1P item; opconnect's key is AWS-only). 1Password
 # holds nothing for opconnect. The seed still uses account-mode `op` ONLY for
 # `op connect server/token create` (the only way to mint Connect creds), then escrows
 # them to the AWS bundle.

@@ -16,7 +16,7 @@ opconnect_creds_sso_profile: "{{ opconnect_bundle_sso_profile }}" # AWS CLI SSO 
 opconnect_creds_kms_alias: "alias/tmpx/onprem-opconnect"
 opconnect_creds_vault: "FusionCloudX" # 1Password vault the Connect server is scoped to
 opconnect_creds_server_name: "opconnect" # `op connect server` name
-opconnect_creds_connect_host: "http://opconnect.fusioncloudx.home:8080"
+opconnect_creds_connect_host: "https://opconnect.fusioncloudx.home" # native Connect TLS (Direction A): 8443 in-container, published on host 443
 opconnect_creds_token_ttl_days: 90 # Connect token lifetime when minting (matches the estate rotation cadence)
 opconnect_creds_rotate_threshold_days: 14 # rotate when token_expires is within this window
 
