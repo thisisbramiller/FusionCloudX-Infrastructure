@@ -160,7 +160,7 @@ Apply the states in order: `network` → `opconnect` → `compute`. Each is its 
 ```bash
 # State 1: network (foundation)
 (cd tofu/network   && tofu init && tofu plan && tofu apply)
-# State 2: opconnect (1Password items / secrets)
+# State 2: opconnect (the VM running 1Password Connect; reads only the SSM pubkey, holds no 1P items)
 (cd tofu/opconnect && tofu init && tofu plan && tofu apply)
 # State 3: compute (VMs, LXC, inventory, outputs)
 (cd tofu/compute   && tofu init && tofu plan && tofu apply)
@@ -252,7 +252,6 @@ Run It Up VM (ID 1111) ───────────┤         │
 
 | Item | Type | Contents |
 |------|------|----------|
-| Infrastructure Ansible SSH Key | Secure Note | ED25519 private/public key pair |
 | PostgreSQL Admin (postgres) | Database | postgres user credentials |
 | PostgreSQL - Mealie Database User | Database | mealie user credentials |
 | PostgreSQL - Tandoor Database User | Database | tandoor user credentials |
@@ -260,6 +259,8 @@ Run It Up VM (ID 1111) ───────────┤         │
 | GitLab Runner Registration Token | Password | 32-char alphanumeric token |
 | Tandoor Secret Key | Password | 50-char Django SECRET_KEY |
 | Immich Database Password | Password | 32-char alphanumeric database credential |
+
+> The above are created by `compute/secrets.tf` (State 3). The fleet Ansible SSH key ("Infrastructure Ansible SSH Key") is **read** from 1Password by `compute/ssh-keys.tf` (a `data` source), **not** created by OpenTofu — see SSH Key Management PATH A. opconnect's dedicated bootstrap key (PATH B) lives in the AWS Secrets Manager bundle, not 1Password.
 
 ## Certificate Management
 
