@@ -1,3 +1,5 @@
+> ⛔ **SUPERSEDED (2026-06-13, late) — DO NOT EXECUTE.** Direction B was a drift from the #68 intent. The active plan is **`2026-06-13-onprem-phase-c-directionA.md`** (AWS-anchored, `op`-CLI-free consumer, on-box TLS self-serve). See spec **Revision 2** (D11′/D12/D13/D14). Kept for decision history only. D9 (dedicated key) + D10 (SSM pubkey) carried forward; D11 (1P day-2 / `op` consume) withdrawn.
+
 # onprem opconnect Phase C — REVISED (dedicated key + Direction B) Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: superpowers:executing-plans (or subagent-driven-development). Steps use `- [ ]`. Every `tofu apply` / seed run / secret write touches LIVE AWS, 1Password, or the secrets root — each is a STOP-and-confirm with Branden. Never run the seed at `-v`/`-vvv` (`no_log` bypass).
