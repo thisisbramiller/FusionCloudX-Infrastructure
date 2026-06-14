@@ -21,7 +21,10 @@
 #   - aws sso login --sso-session fcx-sso  (FIDO)
 #   - boto3/botocore + amazon.aws/community.aws/community.crypto in the venv
 #   - the AWS bundle tmpx/onprem/opconnect-credentials seeded (opconnect_credentials.yml)
-#   - run with the opconnect dynamic inventory: -i opconnect.inventory.yml (AWS_PROFILE=fcx-sso)
+#   - run with BOTH inventories: -i inventory-bootstrap-localhost.yml -i opconnect.inventory.yml
+#     (bootstrap-localhost scopes the venv python to localhost; opconnect.inventory.yml is the
+#     cloud.terraform dynamic inventory). NO AWS_PROFILE env — the tofu backend/provider and the
+#     cloud.terraform inventory self-authenticate via the in-config profile (profile=fcx-sso).
 # NEVER run with -v/-vvv — verbose bypasses no_log.
 # ==============================================================================
 

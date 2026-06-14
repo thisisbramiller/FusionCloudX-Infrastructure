@@ -1,5 +1,7 @@
 # opconnect 90-Day Token Rotation Runbook
 
+> **Scope:** the FLEET operational Connect token (Keychain `opconnectfcxtoken` -> `OP_CONNECT_TOKEN`), distinct from opconnect's own DR bundle (`docs/runbooks/opconnect-credentials.md`, Direction A). Since Phase C, opconnect serves **native TLS**, so `OP_CONNECT_HOST` carries `https://` and the health checks below use the HTTPS endpoint, not `http://...:8080`. A focused reconciliation of this fleet-token procedure against Direction A is tracked separately.
+
 ## Purpose
 
 The fleet's `OP_CONNECT_TOKEN` (Keychain key `opconnectfcxtoken`) is created with
@@ -36,7 +38,7 @@ Set up a check that calls `GET /v1/vaults` with the live token:
 curl -fsS \
   -H "Authorization: Bearer $OP_CONNECT_TOKEN" \
   -H "Content-type: application/json" \
-  http://opconnect.fusioncloudx.home:8080/v1/vaults
+  https://opconnect.fusioncloudx.home/v1/vaults
 ```
 
 - A non-200 response or connection failure = alert immediately (token expired or Connect down).
@@ -81,7 +83,7 @@ Before touching any live consumer, confirm the new token is functional:
 curl -fsS \
   -H "Authorization: Bearer <newtoken>" \
   -H "Content-type: application/json" \
-  http://opconnect.fusioncloudx.home:8080/v1/vaults
+  https://opconnect.fusioncloudx.home/v1/vaults
 ```
 
 Expected: HTTP 200 with the infra vault (`ve6jgmyk77ssj7aqpeodt2uhyi`) present in the

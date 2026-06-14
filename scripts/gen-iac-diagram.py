@@ -10,8 +10,8 @@ Usage:
     python3 scripts/gen-iac-diagram.py [OUTPUT_PATH]
     IAC_DIAGRAM_OUT=/path/to/file.excalidraw.md python3 scripts/gen-iac-diagram.py
 
-The node/edge model below is a SNAPSHOT of the as-built fleet as of 2026-06-12 (VMID
-Scheme B, opconnect Option D, S3+SSE-KMS backend, prevent_destroy singletons). When the
+The node/edge model below is a SNAPSHOT of the as-built fleet as of 2026-06-14 (VMID
+Scheme B, opconnect Direction A, S3+SSE-KMS backend, prevent_destroy singletons). When the
 fleet changes, re-derive ground truth via
     tofu -chdir=tofu/<state> graph
     tofu -chdir=tofu/<state> state list
@@ -100,7 +100,7 @@ def arrow(x1, y1, x2, y2, color="#1e1e1e", dashed=False, sw=2):
     elements.append(e)
 
 # ---------- title + banner ----------
-text(60, 30, 1900, "IaC Dependency Graph  ·  onprem-infra (OpenTofu, as-built 2026-06-12)", size=28, align="left", tid="main-title")
+text(60, 30, 1900, "IaC Dependency Graph  ·  onprem-infra (OpenTofu, as-built 2026-06-14)", size=28, align="left", tid="main-title")
 text(60, 78, 1900, "tofu/network  →  tofu/opconnect  →  tofu/compute   ·   generated from `tofu graph` + state list   ·   apply in order, destroy reverse", size=16, align="left", tid="subtitle")
 
 # ---------- state container backdrops (drawn first = behind) ----------
@@ -130,15 +130,13 @@ node(ox, 320, ow, 70, "module.opconnect\nVM 1101 · proxmox-vm · prevent_destro
 node(ox, 420, ow, 60, "opconnect_cloud_init\nuser_data + vendor_data", "opc", size=14)
 node(ox, 510, ow, 64, "opconnect_dns\nunifi_client + unifi_dns_record", "opc", size=14)
 node(ox, 604, ow, 56, "ansible_host / ansible_group\nopconnect", "opc", size=14)
-node(ox, 700, ow, 62, "tls_private_key.ansible (ED25519)\n→ null_resource ssh_key_writeback", "opc", size=14)
-OPC_1P = (ox, 800, ow, 70)
-node(*OPC_1P, "1Password  (op CLI, account mode)\nOption D — NO onepassword provider here", "op1p", size=13)
+node(ox, 700, ow, 62, "data.aws_ssm_parameter.ansible_pubkey\n/tmpx/onprem/opconnect/ansible_public_key\n→ local.ansible_ssh_public_key", "opc", size=13)
+node(ox, 800, ow, 70, "AWS Secrets Manager bundle (seed-managed)\ntmpx/onprem/opconnect-credentials — Ed25519 private key\n+ Connect creds + token; consumed on-VM, NOT in state", "sec", size=12, sub_dashed=True)
 node(ox, 900, ow, 78, "1Password Connect installed on the VM\nby Ansible (connect-api + connect-sync);\nserves Day-2 secrets", "op1p", size=12, sub_dashed=True)
 arrow(ox + ow/2, 286, ox + ow/2, 320, C["comp"][0], dashed=True)   # remote_state -> VM
 arrow(ox + ow/2, 480, ox + ow/2, 420, C["opc"][0])                 # cloud_init -> VM (up)
 arrow(ox + ow/2, 390, ox + ow/2, 510, C["opc"][0])                 # VM -> dns
 arrow(ox + ow/2, 574, ox + ow/2, 604, C["opc"][0])                 # dns -> ansible_host
-arrow(ox + ow/2, 762, ox + ow/2, 800, C["opc"][0])                 # tls key -> 1Password
 
 # ---------- COMPUTE column ----------
 cx, cw = 1130, 810
@@ -168,7 +166,6 @@ arrow(cx + 615, 286, cx + 545, 320, C["op1p"][0], dashed=True)     # 1P key -> c
 # ---------- cross-state arrows ----------
 arrow(NET_OUT[0] + NET_OUT[2], 700, ox, 250, C["net"][0], sw=3)            # network outputs -> opconnect remote_state
 arrow(NET_OUT[0] + NET_OUT[2], 715, cx, 250, C["net"][0], sw=3)           # network outputs -> compute remote_state
-arrow(OPC_1P[0] + OPC_1P[2], 835, COMP_1PKEY[0] + 50, 286, C["op1p"][0], dashed=True, sw=3)  # 1P writeback -> compute 1P-key
 text(1000, 250, 130, "remote_state\n(stable IDs)", size=12, color=C["net"][0], tid="lbl-rs")
 text(1010, 560, 180, "via 1Password\nConnect", size=12, color=C["op1p"][0], tid="lbl-1p")
 
@@ -204,7 +201,7 @@ tags: [excalidraw, homelab, iac, opentofu, ansible]
 
 # Infrastructure as Code Dependency Graph
 
-As-built dependency graph of the FusionCloudX onprem-infra repo (OpenTofu 3-state), regenerated 2026-06-12 from `tofu graph` + `tofu state list`. States: tofu/network -> tofu/opconnect -> tofu/compute. See [[VM-Inventory]] and the repo's `docs/terraform-to-tofu-parity-matrix.md`.
+As-built dependency graph of the FusionCloudX onprem-infra repo (OpenTofu 3-state), as-built 2026-06-14 (derived 2026-06-12 from `tofu graph` + `tofu state list`; opconnect node updated to Direction A 2026-06-14). States: tofu/network -> tofu/opconnect -> tofu/compute. See [[VM-Inventory]] and the repo's `docs/terraform-to-tofu-parity-matrix.md`.
 
 # Excalidraw Data
 
