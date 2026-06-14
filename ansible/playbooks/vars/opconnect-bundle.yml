@@ -1,0 +1,9 @@
+---
+# The AWS Secrets Manager bundle that bootstraps opconnect (Direction A, #68).
+# Loaded via `vars_files` by BOTH playbooks/opconnect_credentials.yml (seed, runs
+# `-i 'localhost,'`) and playbooks/opconnect.yml (consumer, runs `-i opconnect.inventory.yml`).
+# group_vars is NOT used: neither runner loads ansible/inventory/group_vars/.
+opconnect_bundle_secret_name: "tmpx/onprem/opconnect-credentials"
+opconnect_bundle_region: "us-east-2"
+opconnect_bundle_assume_role_arn: "arn:aws:iam::065094257518:role/OrganizationAccountAccessRole"
+opconnect_bundle_sso_profile: "fcx-sso" # AWS CLI SSO profile (passed as a PARAM, never AWS_PROFILE env)

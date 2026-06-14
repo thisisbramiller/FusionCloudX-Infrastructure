@@ -1,24 +1,27 @@
 ---
 # ==============================================================================
-# opconnect_credentials role — Phase C: 1P generates the dedicated SSH key;
-# the seed reads it back + distributes (escrow + SSM + 1P creds item) (D9/D10/D11)
+# opconnect_credentials role — Phase C (Direction A): the seed GENERATES the
+# dedicated SSH key locally + distributes it (AWS bundle + SSM pubkey) (D9/D10/D11'/D12)
 # ==============================================================================
 # STANDALONE role (NO meta dependencies — deliberately, so it runs on localhost
 # without pulling the docker role the way the opconnect deploy role does).
-# Invoked ONLY by playbooks/opconnect_credentials.yml (localhost, account-mode op).
+# Invoked ONLY by playbooks/opconnect_credentials.yml (localhost).
 #
-# Key generation moved to 1Password (the `op` CLI generates but cannot import, so
-# 1P is the canonical generator). The seed reads the keypair back and mirrors it to:
-#   - the AWS Secrets Manager escrow bundle (break-glass)
+# Direction A: the seed GENERATES the dedicated keypair LOCALLY (community.crypto.
+# openssh_keypair), NOT via `op` (op item create would make a 1P item; opconnect's
+# key is AWS-only). It mirrors the material to:
+#   - the AWS Secrets Manager bundle (authoritative bootstrap source: privkey +
+#     creds.json + token) — read by the opconnect consumer via amazon.aws.aws_secret
 #   - an SSM String param (pubkey only — tofu/opconnect reads this for cloud-init)
-#   - a 1P Secure Note (creds.json + token, Direction-B day-2 source)
+# 1Password holds NOTHING for opconnect (no SSH-Key item, no creds item). The seed
+# still uses account-mode `op` ONLY for `op connect server/token create`.
 #
 # Idempotent + expiry-aware:
-#   - SSH-Key item absent -> 1P GENERATES it (Step 1; idempotent on title)
-#   - secret absent        -> SEED  (op connect server create + token create)
-#   - token near expiry    -> ROTATE (token only; server identity + key kept)
-#   - otherwise            -> NO-OP on the token; distribution (SSM/escrow) still
-#                             runs (always-run + idempotent) so adoption is safe.
+#   - bundle absent / no key -> GENERATE the keypair locally + SEED (op connect
+#                               server create + token create)
+#   - token near expiry      -> ROTATE (token only; server identity + key kept)
+#   - otherwise              -> NO-OP on the token; distribution (SSM/bundle) still
+#                               runs (always-run + idempotent) so adoption is safe.
 #
 # Account-mode op: the op tasks use `env -u OP_CONNECT_HOST -u OP_CONNECT_TOKEN`
 # to TRULY unset the Connect env vars (setting them to "" leaves them set-but-empty,
@@ -69,83 +72,12 @@
       (rotate threshold {{ opconnect_creds_rotate_threshold_days }}d) — no token mint; SSM/escrow re-asserted.
   when: not (_need_seed | bool) and not (_need_rotate | bool)
 
-# ------------------------------------------------------------------------------
-# Step 1 — ensure the native 1P SSH-Key item (1P generates; idempotent on title)
-# ------------------------------------------------------------------------------
-- name: Check whether the dedicated 1P SSH-Key item exists
-  ansible.builtin.command:
-    argv:
-      - env
-      - -u
-      - OP_CONNECT_HOST
-      - -u
-      - OP_CONNECT_TOKEN
-      - op
-      - item
-      - get
-      - "{{ opconnect_creds_1p_ssh_item }}"
-      - --vault
-      - "{{ opconnect_creds_vault }}"
-      - --format
-      - json
-  register: _ssh_item_check
-  changed_when: false
-  failed_when: false
-  no_log: true
-
-- name: Generate the dedicated Ed25519 SSH key in 1Password if absent
-  ansible.builtin.command:
-    argv:
-      - env
-      - -u
-      - OP_CONNECT_HOST
-      - -u
-      - OP_CONNECT_TOKEN
-      - op
-      - item
-      - create
-      - --category
-      - ssh
-      - --ssh-generate-key=ed25519
-      - --title
-      - "{{ opconnect_creds_1p_ssh_item }}"
-      - --vault
-      - "{{ opconnect_creds_vault }}"
-  when: _ssh_item_check.rc != 0
-  no_log: true
-
-# ------------------------------------------------------------------------------
-# Step 2 — read the keypair back (always-run; op read formats correctly, no escaping)
-# ------------------------------------------------------------------------------
-- name: Read dedicated public key from 1Password
-  ansible.builtin.command:
-    argv:
-      - env
-      - -u
-      - OP_CONNECT_HOST
-      - -u
-      - OP_CONNECT_TOKEN
-      - op
-      - read
-      - "op://{{ opconnect_creds_vault }}/{{ opconnect_creds_1p_ssh_item }}/public key"
-  register: _eff_pub
-  changed_when: false
-  no_log: true
-
-- name: Read dedicated private key from 1Password (OpenSSH)
-  ansible.builtin.command:
-    argv:
-      - env
-      - -u
-      - OP_CONNECT_HOST
-      - -u
-      - OP_CONNECT_TOKEN
-      - op
-      - read
-      - "op://{{ opconnect_creds_vault }}/{{ opconnect_creds_1p_ssh_item }}/private key?ssh-format=openssh"
-  register: _eff_priv
-  changed_when: false
-  no_log: true
+# Direction A (D12): the dedicated keypair is GENERATED LOCALLY inside the Distribute
+# block below (community.crypto.openssh_keypair, in the 0700 scratch dir) — NOT via
+# `op item create` (that would make a 1P item; opconnect's key is AWS-only). 1Password
+# holds nothing for opconnect. The seed still uses account-mode `op` ONLY for
+# `op connect server/token create` (the only way to mint Connect creds), then escrows
+# them to the AWS bundle.
 
 # ------------------------------------------------------------------------------
 # Scratch dir — shared by the seed/rotate token flow + the always-run creds item.
@@ -161,6 +93,44 @@
         suffix: opconnect-seed
       register: _tmp
       no_log: true
+
+    # --------------------------------------------------------------------------
+    # Step 1/2 (Direction A) — GENERATE the dedicated keypair locally. First seed
+    # OR adoption (bundle present but no key) -> generate; else reuse the current
+    # bundle's keypair (rotation re-mints the TOKEN only, never the key).
+    # --------------------------------------------------------------------------
+    - name: Generate the dedicated Ed25519 keypair locally (first seed / adoption)
+      community.crypto.openssh_keypair:
+        path: "{{ _tmp.path }}/opconnect_ed25519"
+        type: ed25519
+        comment: "opconnect-bootstrap"
+      register: _keygen
+      when: _need_seed | bool or (_cur.ansible_private_key | default('') | length == 0)
+      no_log: true
+
+    - name: Read the generated keypair back (first seed / adoption only)
+      ansible.builtin.slurp:
+        src: "{{ item }}"
+      loop:
+        - "{{ _tmp.path }}/opconnect_ed25519"
+        - "{{ _tmp.path }}/opconnect_ed25519.pub"
+      register: _keyfiles
+      when: _keygen.changed | default(false)
+      no_log: true
+
+    - name: Compute effective keypair (generated this run, else current bundle)
+      ansible.builtin.set_fact:
+        _eff_priv: "{{ (_keyfiles.results[0].content | b64decode) if (_keygen.changed | default(false)) else _cur.ansible_private_key }}"
+        _eff_pub: "{{ (_keyfiles.results[1].content | b64decode | trim) if (_keygen.changed | default(false)) else _cur.ansible_public_key }}"
+      no_log: true
+
+    - name: Assert the effective keypair is non-empty (never escrow an empty key)
+      ansible.builtin.assert:
+        that:
+          - _eff_priv | length > 0
+          - _eff_pub | length > 0
+        fail_msg: "Refusing to write the bundle with an empty SSH key (would orphan the running opconnect VM)."
+        quiet: true
 
     # --------------------------------------------------------------------------
     # Step 3 — token / creds (TOKEN-scoped: server create on seed, token mint on
@@ -230,7 +200,7 @@
     - name: Publish dedicated ansible public key to SSM
       community.aws.ssm_parameter:
         name: "{{ opconnect_creds_ssm_pubkey_name }}"
-        value: "{{ _eff_pub.stdout | trim }}"
+        value: "{{ _eff_pub }}"
         string_type: String
         overwrite_value: changed
         region: "{{ opconnect_creds_region }}"
@@ -238,64 +208,8 @@
         secret_key: "{{ _assumed.sts_creds.secret_key }}"
         session_token: "{{ _assumed.sts_creds.session_token }}"
 
-    # --------------------------------------------------------------------------
-    # Step 5 — ensure the 1P creds item via a JSON TEMPLATE written to the 0600
-    # scratch (NOT CLI-arg [concealed]= assignments — they leak to process lists).
-    # --------------------------------------------------------------------------
-    - name: Build the Connect-creds item JSON (Secure Note, concealed fields)
-      ansible.builtin.copy:
-        dest: "{{ _tmp.path }}/creds-item.json"
-        mode: '0600'
-        content: "{{ { 'title': opconnect_creds_1p_creds_item, 'category': 'SECURE_NOTE',
-                       'vault': {'id': opconnect_creds_vault},
-                       'fields': [ {'label': 'credentials_json', 'type': 'CONCEALED', 'value': _eff_creds_b64},
-                                   {'label': 'connect_token', 'type': 'CONCEALED', 'value': _eff_token} ] } | to_json }}"
-      no_log: true
-
-    - name: Check whether the 1P creds item exists
-      ansible.builtin.command:
-        argv:
-          - env
-          - -u
-          - OP_CONNECT_HOST
-          - -u
-          - OP_CONNECT_TOKEN
-          - op
-          - item
-          - get
-          - "{{ opconnect_creds_1p_creds_item }}"
-          - --vault
-          - "{{ opconnect_creds_vault }}"
-          - --format
-          - json
-      register: _creds_item_check
-      changed_when: false
-      failed_when: false
-      no_log: true
-
-    - name: Create the 1P creds item if absent
-      ansible.builtin.command:
-        argv:
-          - env
-          - -u
-          - OP_CONNECT_HOST
-          - -u
-          - OP_CONNECT_TOKEN
-          - op
-          - item
-          - create
-          - --vault
-          - "{{ opconnect_creds_vault }}"
-          - --template
-          - "{{ _tmp.path }}/creds-item.json"
-      when: _creds_item_check.rc != 0
-      no_log: true
-
-    - name: Update the 1P creds item if present (token rotated / creds changed)
-      ansible.builtin.shell:
-        cmd: "env -u OP_CONNECT_HOST -u OP_CONNECT_TOKEN op item edit '{{ opconnect_creds_1p_creds_item }}' --vault '{{ opconnect_creds_vault }}' < '{{ _tmp.path }}/creds-item.json'"
-      when: _creds_item_check.rc == 0 and (_need_seed or _need_rotate | default(false) | bool)
-      no_log: true
+    # Direction A: creds.json + token go ONLY into the AWS bundle (Step 6). No 1P
+    # creds item is created (1Password holds nothing for opconnect).
 
     # --------------------------------------------------------------------------
     # Step 6 — assemble + write the escrow bundle (always-run; idempotent;
@@ -308,11 +222,11 @@
             'connect_credentials_json': _eff_creds_b64,
             'connect_token': _eff_token,
             'connect_host': opconnect_creds_connect_host,
-            'ansible_public_key': (_eff_pub.stdout | trim),
-            'ansible_private_key': _eff_priv.stdout,
+            'ansible_public_key': _eff_pub,
+            'ansible_private_key': _eff_priv,
             'token_expires': _eff_token_expires,
             'created': ('%Y-%m-%dT%H:%M:%SZ' | strftime),
-            'notes': 'off-site opconnect credentials. proxmox/gitlab restore pointers in the runbook. NO AWS-root break-glass here (offline).'
+            'notes': 'off-site opconnect credentials (Direction A: authoritative bootstrap source). proxmox/gitlab restore pointers in the runbook. NO AWS-root break-glass here (offline).'
           } | to_json }}
       no_log: true
 

@@ -14,3 +14,17 @@ collections:
 
   # Community General collection (for ufw module and other utilities)
   - name: community.general
+
+  # AWS — sts_assume_role + the aws_secret / ssm_parameter lookups (opconnect bundle
+  # seed + Direction-A consumer reads). #68 Phase C.
+  - name: amazon.aws
+  - name: community.aws
+
+  # openssh_keypair — the opconnect_credentials seed generates the dedicated key locally.
+  - name: community.crypto
+
+  # docker_compose_v2 / docker_image (opconnect deploy + handler + the docker role).
+  - name: community.docker
+
+  # cloud.terraform dynamic inventory (opconnect.inventory.yml — the consumer runner).
+  - name: cloud.terraform
