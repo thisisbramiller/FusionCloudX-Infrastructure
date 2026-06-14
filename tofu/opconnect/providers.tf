@@ -77,6 +77,11 @@ provider "aws" {
   region      = "us-east-2"
   max_retries = 10
 
+  # Base creds via the SSO profile in-config (matches backend.tf + encryption.tf)
+  # so the provider self-authenticates without AWS_PROFILE env (#68 / #76). The
+  # profile lands in mgmt (452424739751); assume_role steps into shared-services.
+  profile = "fcx-sso"
+
   assume_role {
     role_arn     = "arn:aws:iam::065094257518:role/OrganizationAccountAccessRole"
     session_name = "tmpx-opconnect-read"
